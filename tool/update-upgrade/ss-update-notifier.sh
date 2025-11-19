@@ -80,6 +80,18 @@ if [ "$update_app_number" -le 0 ]; then
     exit 0
 fi
 
+# 读取忽略列表到数组
+declare -A ignored_apps
+if [ -f "/etc/spark-store/ignored_apps.conf" ]; then
+    while IFS='|' read -r pkg_name pkg_version || [ -n "$pkg_name" ]; do
+        # 去除前后空白字符
+        pkg_name=$(echo "$pkg_name" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+        if [ -n "$pkg_name" ]; then
+            ignored_apps["$pkg_name"]=1
+        fi
+    done < "/etc/spark-store/ignored_apps.conf"
+fi
+
 # 获取用户选择的要更新的应用
 PKG_LIST="$(/opt/durapps/spark-store/bin/update-upgrade/ss-do-upgrade-worker.sh upgradable-list)"
 # 指定分隔符为 \n
@@ -102,6 +114,13 @@ for line in $PKG_LIST; do
     PKG_STA=$(dpkg-query -W -f='${db:Status-Want}' $PKG_NAME)
     if [ "$PKG_STA" = "hold" ]; then
         let update_app_number=$update_app_number-1
+        continue
+    fi
+
+    # 检测是否在忽略列表中
+    if [ -n "${ignored_apps[$PKG_NAME]}" ]; then
+        let update_app_number=$update_app_number-1
+        continue
     fi
 done
 
