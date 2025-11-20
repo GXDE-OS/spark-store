@@ -42,7 +42,7 @@ IgnoreConfig::IgnoreConfig(QObject *parent)
     if (!dir.exists()) {
         dir.mkpath(".");
     }
-    m_configFilePath = dir.filePath("spark-update-tool/ignored_apps.conf");
+    m_configFilePath = dir.filePath("spark-store/ignored_apps.conf");
     
     // 确保目录存在
     QFileInfo fileInfo(m_configFilePath);
