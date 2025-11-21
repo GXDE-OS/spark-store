@@ -25,7 +25,6 @@ Application::Application(int &argc, char **argv)
     if (!DPlatformWindowHandle::pluginVersion().isEmpty()) {
         setAttribute(Qt::AA_DontCreateNativeWidgetSiblings, true);
     }
-    setAttribute(Qt::AA_UseHighDpiPixmaps);
 
     setQuitOnLastWindowClosed(false); // 启用托盘图标时，关闭窗口程序仍然运行
 
@@ -89,12 +88,25 @@ void Application::checkAppConfigLocation()
 void Application::setBuildDateTime(const QString &buildDateTime)
 {
     QSettings config(QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation) + "/config.ini", QSettings::IniFormat);
+    
+    // 确保 UUID 存在
+    if (!config.contains("info/uuid")) {
+        QUuid uuid = QUuid::createUuid();
+        config.setValue("info/uuid", uuid.toString());
+    }
+    
+    QString currentUuid = config.value("info/uuid").toString();
+
     if (config.value("build/version").toString() != QString(APP_VERSION)) {
         qDebug() << "Spark Store has been updated!";
 
         config.setValue("build/version", QString(APP_VERSION));
         config.setValue("build/branch", QString(APP_BRANCH));
         config.setValue("build/time", buildDateTime);
+        
+        // 恢复原有的 UUID
+        config.setValue("info/uuid", currentUuid);
+        
         config.sync();
     }
 
@@ -164,7 +176,10 @@ void Application::loadTranslator()
 
     if (QLocale::system().language() == QLocale::Chinese) {
         QTranslator *webengineTranslator = new QTranslator(this);
-        webengineTranslator->load(QLocale(QLocale::Chinese), "qtwebengine", "_", ":/translations");
+        bool loaded = webengineTranslator->load(QLocale(QLocale::Chinese), "qtwebengine", "_", ":/translations");
+        if (!loaded) {
+            qWarning() << "Failed to load webengine translator";
+        }
         installTranslator(webengineTranslator);
     }
 }
