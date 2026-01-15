@@ -73,8 +73,9 @@ void AppIntoPage::openUrl(const QUrl &url)
         iconRequest.setUrl(QUrl(pkgUrlBase + "/icon.png"));
         iconRequest.setHeader(QNetworkRequest::UserAgentHeader, m_userAgent);
         iconRequest.setHeader(QNetworkRequest::ContentTypeHeader, "charset='utf-8'");
+#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
         iconRequest.setAttribute(QNetworkRequest::FollowRedirectsAttribute, true);
-
+#endif // QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
 
         iconManager->get(iconRequest);
         QObject::connect(iconManager, &QNetworkAccessManager::finished, [=](QNetworkReply *reply)
@@ -97,7 +98,9 @@ void AppIntoPage::openUrl(const QUrl &url)
             QNetworkAccessManager *manager = new QNetworkAccessManager(this);
             request.setUrl(QUrl(imgUrl));
             request.setHeader(QNetworkRequest::UserAgentHeader, m_userAgent);
+#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
             request.setAttribute(QNetworkRequest::FollowRedirectsAttribute, true);
+#endif // QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
             request.setHeader(QNetworkRequest::ContentTypeHeader, "charset='utf-8'");
             manager->get(request);
             QObject::connect(manager, &QNetworkAccessManager::finished, [=](QNetworkReply *reply)

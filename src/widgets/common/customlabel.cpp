@@ -10,8 +10,7 @@ CustomLabel::CustomLabel(QWidget *parent,
 
 QPixmap CustomLabel::pixmap() const
 {
-    const QPixmap* p = QLabel::pixmap();
-    return p ? *p : QPixmap();
+    return QLabel::pixmap();
 }
 
 void CustomLabel::setPixmap(const QPixmap &pixmap)
