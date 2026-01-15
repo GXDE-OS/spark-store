@@ -180,6 +180,9 @@ int main(int argc, char *argv[])
     }
     int fakeArgc = argc + 2; // QCoreApplication 的 argc 要用引用，避免 c++ 编译器优化
     Application a(fakeArgc, fakeArgs.data());
+#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
+    a.setAttribute(Qt::ApplicationAttribute::AA_UseHighDpiPixmaps);
+#endif // QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
     // 设置版本和构建时间
     a.setBuildDateTime(buildDateTime);
 
