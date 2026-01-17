@@ -1,3 +1,7 @@
+spark-update-tool (1.0.4) unstable; urgency=low
+
+  * 修复点击更新全部按钮后，会更新被忽略应用的问题。
+
 spark-update-tool (1.0.3) unstable; urgency=low
 
   * 修复默认图标加载失败的问题

@@ -21,6 +21,7 @@ class AppDelegate : public QStyledItemDelegate {
     Q_OBJECT
 public:
     explicit AppDelegate(QObject *parent = nullptr);
+    ~AppDelegate();
 
     void setModel(QAbstractItemModel *model);
 

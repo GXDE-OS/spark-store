@@ -10,6 +10,20 @@ DownloadManager::DownloadManager(QObject *parent) : QObject(parent)
     cleanupTempFiles();
 }
 
+DownloadManager::~DownloadManager()
+{
+    // 终止并清理所有正在运行的下载进程
+    for (auto it = m_processes.begin(); it != m_processes.end(); ) {
+        QProcess *process = it.value();
+        if (process->state() != QProcess::NotRunning) {
+            process->kill(); // 立即终止进程
+            process->waitForFinished(3000); // 最多等待3秒
+        }
+        process->deleteLater();
+        it = m_processes.erase(it);
+    }
+}
+
 void DownloadManager::startDownload(const QString &packageName, const QString &url, const QString &outputPath)
 {
     if (m_processes.contains(packageName)) {
