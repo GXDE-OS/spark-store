@@ -30,7 +30,7 @@ linkDir() {
 
         ensureTargetDir "$targetFile"
 	sourceFile=$(realpath --relative-to="$(dirname $targetFile)" "$sourceFile" )
-	if [  ! -e ${targetFile} ];then
+	if [  ! -e "${targetFile}" ];then
         ln -sv "$sourceFile" "$targetFile"
         fi
     done

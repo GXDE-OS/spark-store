@@ -12,6 +12,7 @@
 AppDelegate::AppDelegate(QObject *parent)
     : QStyledItemDelegate(parent), m_downloadManager(new DownloadManager(this)), m_installProcess(nullptr) {
     connect(m_downloadManager, &DownloadManager::downloadFinished, this,
+
             [this](const QString &packageName, bool success) {
         if (m_downloads.contains(packageName)) {
             m_downloads[packageName].isDownloading = false;
@@ -37,6 +38,17 @@ AppDelegate::AppDelegate(QObject *parent)
     // 新增：初始化和连接 QTimer
     m_spinnerUpdateTimer.setInterval(20); // 刷新间隔，可以调整
     connect(&m_spinnerUpdateTimer, &QTimer::timeout, this, &AppDelegate::updateSpinner);
+}
+
+AppDelegate::~AppDelegate()
+{
+    // 终止并清理安装进程
+    if (m_installProcess && m_installProcess->state() != QProcess::NotRunning) {
+        m_installProcess->kill();
+        m_installProcess->waitForFinished(3000);
+        m_installProcess->deleteLater();
+        m_installProcess = nullptr;
+    }
 }
 
 void AppDelegate::setModel(QAbstractItemModel *model) {
@@ -311,6 +323,14 @@ void AppDelegate::startDownloadForAll() {
     if (!m_model) return;
     for (int row = 0; row < m_model->rowCount(); ++row) {
         QModelIndex index = m_model->index(row, 0);
+        
+        // 检查应用是否被忽略
+        bool isIgnored = index.data(Qt::UserRole + 8).toBool();
+        if (isIgnored) {
+            qDebug() << "跳过被忽略的应用:" << index.data(Qt::UserRole + 1).toString();
+            continue;
+        }
+        
         QString packageName = index.data(Qt::UserRole + 1).toString();
         if (m_downloads.contains(packageName) && (m_downloads[packageName].isDownloading || m_downloads[packageName].isInstalled))
             continue;
@@ -473,6 +493,13 @@ void AppDelegate::startDownloadForSelected() {
     for (int row = 0; row < m_model->rowCount(); ++row) {
         QModelIndex index = m_model->index(row, 0);
         QString packageName = index.data(Qt::UserRole + 1).toString();
+        
+        // 检查应用是否被忽略
+        bool isIgnored = index.data(Qt::UserRole + 8).toBool();
+        if (isIgnored) {
+            qDebug() << "跳过被忽略的应用:" << packageName;
+            continue;
+        }
         
         // 只下载选中的应用
         if (m_selectedPackages.contains(packageName)) {
