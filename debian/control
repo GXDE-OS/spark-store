@@ -6,10 +6,10 @@ Build-Depends:
  debhelper (>= 9),
  pkg-config,
  qtchooser (>= 55-gc9562a1-1~) | qt5-default,
- qtbase5-dev,
- libqt5svg5-dev,
- qttools5-dev-tools,
- qtwebengine5-dev,
+ qtbase5-dev | qtbase6-dev,
+ libqt5svg5-dev | libqt6svg6-dev,
+ qttools5-dev-tools | qt6-tools-dev,
+ qtwebengine5-dev | qt6-webengine-dev,
  libdtkcore-dev (>= 5.0),
  libdtkgui-dev (>= 5.0),
  libdtkwidget-dev (>= 5.0)
@@ -20,7 +20,7 @@ Package: spark-store
 Architecture: any
 Provides: spark-store-console-in-container
 Depends: ${shlibs:Depends}, ${misc:Depends},
- dde-qt5integration,
+ dde-qt5integration | dde-qt6integration,
  curl,
  openssl,
  aria2,
