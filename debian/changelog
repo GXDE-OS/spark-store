@@ -1,3 +1,11 @@
+spark-store (4.8.4) UNRELEASED; urgency=medium
+
+  * 修复 软件更新器更新无法正确处理忽略的软件包
+  * 修复 在高分屏下 左侧的分类图标模糊问题，感谢 @Blumia
+  * 合并 qt5和qt6分支
+  
+ -- shenmo <shenmo@spark-app.store>  Tue, 28 Aug 2025 01:03:08 +0800
+
 spark-store (4.8.3) UNRELEASED; urgency=medium
 
   * 更新软件主图标

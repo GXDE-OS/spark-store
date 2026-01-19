@@ -10,8 +10,11 @@ CustomLabel::CustomLabel(QWidget *parent,
 
 QPixmap CustomLabel::pixmap() const
 {
-    const QPixmap* p = QLabel::pixmap();
-    return p ? *p : QPixmap();
+#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
+    return *QLabel::pixmap();
+#else
+    return QLabel::pixmap();
+#endif // QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
 }
 
 void CustomLabel::setPixmap(const QPixmap &pixmap)

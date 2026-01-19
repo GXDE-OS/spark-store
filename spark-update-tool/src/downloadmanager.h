@@ -10,6 +10,7 @@ class DownloadManager : public QObject
     Q_OBJECT
 public:
     explicit DownloadManager(QObject *parent = nullptr);
+    ~DownloadManager();
     void startDownload(const QString &packageName, const QString &url, const QString &outputPath);
     void cancelDownload(const QString &packageName);
     bool isDownloading(const QString &packageName) const;

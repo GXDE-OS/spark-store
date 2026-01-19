@@ -31,7 +31,8 @@ DEFINES += APP_BRANCH=\\\"'$$system(git symbolic-ref --short -q HEAD)'\\\"
 # We want to capture all logs (INFO, DEBUG, WARNING, ERROR) for export to /tmp/spark-store
 
 CONFIG += c++11 link_pkgconfig
-PKGCONFIG += dtkcore dtkgui dtkwidget
+equals(QT_MAJOR_VERSION, 6): PKGCONFIG += dtk6core dtk6gui dtk6widget
+equals(QT_MAJOR_VERSION, 5): PKGCONFIG += dtkcore dtkgui dtkwidget
 
 SOURCES += \
         backend/DataCollectorAndUploader.cpp \
