@@ -5,14 +5,14 @@ Priority: optional
 Build-Depends:
  debhelper (>= 9),
  pkg-config,
- qtchooser (>= 55-gc9562a1-1~) | qt5-default,
- qtbase5-dev | qtbase6-dev,
+ qtchooser (>= 55-gc9562a1-1~) | qt5-default | qt6-base-dev,
+ qtbase5-dev | qt6-base-dev,
  libqt5svg5-dev | libqt6svg6-dev,
  qttools5-dev-tools | qt6-tools-dev,
  qtwebengine5-dev | qt6-webengine-dev,
- libdtkcore-dev (>= 5.0),
- libdtkgui-dev (>= 5.0),
- libdtkwidget-dev (>= 5.0)
+ libdtkcore-dev (>= 5.0) | libdtk6core-dev (>= 6.0),
+ libdtkgui-dev (>= 5.0) | libdtk6gui-dev (>= 6.0),
+ libdtkwidget-dev (>= 5.0) | libdtk6widget-dev (>= 6.0)
 Standards-Version: 4.1.7
 Homepage: https://www.spark-app.store/
 
@@ -20,6 +20,9 @@ Package: spark-store
 Architecture: any
 Provides: spark-store-console-in-container
 Depends: ${shlibs:Depends}, ${misc:Depends},
+ libdtkcore5 (>= 5.0) | libdtk6core (>= 6.0),
+ libdtkgui5 (>= 5.0) | libdtk6gui (>= 6.0),
+ libdtkwidget5 (>= 5.0) | libdtk6widget (>= 6.0),
  dde-qt5integration | dde-qt6integration,
  curl,
  openssl,
@@ -28,9 +31,10 @@ Depends: ${shlibs:Depends}, ${misc:Depends},
  zenity,
  policykit-1 | pkexec,
  libnotify-bin,
- qtwayland5,
+ qtwayland5 | qt6-wayland,
  desktop-file-utils,
  dpkg-dev,
  lsb-release,
 Description: Spark Store
  A community powered app store, based on DTK.
+ Supports both Qt5 and Qt6 versions.

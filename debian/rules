@@ -1,6 +1,18 @@
 #!/usr/bin/make -f
 
-export QT_SELECT = qt5
+# Determine Qt version based on QT_VERSION environment variable
+# Default to Qt5 if not specified
+# Usage: QT_VERSION=qt6 dpkg-buildpackage -us -uc -b
+QT_VERSION ?= qt5
+
+ifeq ($(QT_VERSION),qt6)
+    export QT_SELECT = qt6
+    QMAKE_CMD = qmake6
+else
+    export QT_SELECT = qt5
+    QMAKE_CMD = qmake
+endif
+
 export DEB_BUILD_MAINT_OPTIONS = hardening=+all
 include /usr/share/dpkg/default.mk
 
@@ -22,7 +34,7 @@ override_dh_auto_clean:
 override_dh_auto_configure:
 	mkdir -p $(CURDIR)/build-$(DEB_HOST_MULTIARCH)
 
-	qmake BUILD_VERSION=$(DEB_VERSION_UPSTREAM) spark-store-project.pro \
+	$(QMAKE_CMD) BUILD_VERSION=$(DEB_VERSION_UPSTREAM) spark-store-project.pro \
 	-spec linux-g++ CONFIG+=force_debug_info \
 	-o $(CURDIR)/build-$(DEB_HOST_MULTIARCH)/
 
@@ -34,7 +46,7 @@ override_dh_auto_install:
 	INSTALL_ROOT=$(CURDIR)/debian/spark-store
 
 # Ignore the dpkg-shlibdeps: warning (it uses none of the library's symbols)
-# Qt Mutidedia lib will ref to network libraray.
+# Qt Multimedia lib will ref to network library.
 override_dh_shlibdeps:
 	dh_shlibdeps --dpkg-shlibdeps-params=--warnings=0 --exclude=opt/durapps/spark-store/bin/ss-feedback/
 override_dh_strip:

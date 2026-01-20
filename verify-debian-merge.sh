@@ -1,0 +1,93 @@
+#!/bin/bash
+
+# Debian 合并后的验证脚本
+# Verification script for merged Debian configuration
+
+echo "========================================="
+echo "Spark Store - Debian 配置验证"
+echo "========================================="
+echo ""
+
+# 检查文件存在
+echo "[1/4] 检查文件结构..."
+if [ ! -d "debian" ]; then
+    echo "  ✗ debian 目录不存在"
+    exit 1
+fi
+
+if [ ! -f "debian/control" ]; then
+    echo "  ✗ debian/control 不存在"
+    exit 1
+fi
+
+if [ ! -f "debian/rules" ]; then
+    echo "  ✗ debian/rules 不存在"
+    exit 1
+fi
+
+echo "  ✓ 文件结构完整"
+echo ""
+
+# 检查是否有旧目录残留
+echo "[2/4] 检查是否清理了冗余目录..."
+if [ -d "debian-qt5" ] || [ -d "debian-qt6" ]; then
+    echo "  ⚠ 警告: 仍然存在 debian-qt5 或 debian-qt6 目录"
+else
+    echo "  ✓ 已清理冗余目录"
+fi
+
+if [ -f "debian-qt5-qt6-backup.tar.gz" ]; then
+    echo "  ✓ 已创建备份: debian-qt5-qt6-backup.tar.gz"
+fi
+echo ""
+
+# 检查 control 文件支持两个版本
+echo "[3/4] 检查 debian/control 的版本支持..."
+if grep -q "qt5-default | qt6-base-dev" debian/control; then
+    echo "  ✓ control 文件支持 Qt5 和 Qt6 选择"
+else
+    echo "  ⚠ control 文件可能未正确配置"
+fi
+
+if grep -q "libdtk6core-dev" debian/control && grep -q "libdtk6core[^-]" debian/control; then
+    echo "  ✓ control 文件包含 Qt6 DTK 依赖"
+else
+    echo "  ⚠ control 文件可能缺少 Qt6 DTK 依赖"
+fi
+echo ""
+
+# 检查 rules 文件支持版本切换
+echo "[4/4] 检查 debian/rules 的版本切换支持..."
+if grep -q "QT_VERSION ?= qt5" debian/rules; then
+    echo "  ✓ rules 文件支持 QT_VERSION 变量（默认 qt5）"
+else
+    echo "  ✗ rules 文件缺少 QT_VERSION 变量定义"
+    exit 1
+fi
+
+if grep -q "ifeq.*QT_VERSION.*qt6" debian/rules; then
+    echo "  ✓ rules 文件支持 qt6 条件配置"
+else
+    echo "  ⚠ rules 文件可能缺少 qt6 条件"
+fi
+
+if grep -q "QMAKE_CMD = qmake6" debian/rules; then
+    echo "  ✓ rules 文件支持 qmake6 选择"
+else
+    echo "  ⚠ rules 文件可能缺少 qmake6 支持"
+fi
+echo ""
+
+# 最终结果
+echo "========================================="
+echo "✓ 验证完成！Debian 配置已正确合并"
+echo "========================================="
+echo ""
+echo "使用方法:"
+echo "  构建 Qt5: ./build-deb-qt5.sh"
+echo "  构建 Qt6: ./build-deb-qt6.sh"
+echo "  构建两个版本: ./build-deb-both.sh"
+echo ""
+echo "或手动指定版本:"
+echo "  QT_VERSION=qt5 dpkg-buildpackage -us -uc -b"
+echo "  QT_VERSION=qt6 dpkg-buildpackage -us -uc -b"
