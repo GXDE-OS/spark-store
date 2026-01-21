@@ -57,6 +57,7 @@ fi
 echo ""
 
 # 检查 rules 文件支持版本切换
+
 echo "[4/4] 检查 debian/rules 的版本切换支持..."
 if grep -q "QT_VERSION ?= qt5" debian/rules; then
     echo "  ✓ rules 文件支持 QT_VERSION 变量（默认 qt5）"
@@ -75,6 +76,60 @@ if grep -q "QMAKE_CMD = qmake6" debian/rules; then
     echo "  ✓ rules 文件支持 qmake6 选择"
 else
     echo "  ⚠ rules 文件可能缺少 qmake6 支持"
+fi
+echo ""
+
+# 检查Qt5版本
+
+echo "[5/5] 检查Qt5版本..."
+QT5_VERSION=""
+if command -v qmake &> /dev/null; then
+    QT5_VERSION=$(qmake --version | grep -oP 'Qt\s+\K[0-9]+\.[0-9]+')
+    echo "  当前Qt5版本: $QT5_VERSION"
+elif command -v qmake5 &> /dev/null; then
+    QT5_VERSION=$(qmake5 --version | grep -oP 'Qt\s+\K[0-9]+\.[0-9]+')
+    echo "  当前Qt5版本: $QT5_VERSION"
+else
+    echo "  ✗ 未检测到Qt5 (qmake或qmake5)"
+    QT5_VERSION="0.0"
+fi
+
+# 检查是否需要安装Qt5.11
+if [ "$QT5_VERSION" != "5.11" ]; then
+    echo "  ⚠ Qt5版本不是5.11，尝试安装Qt5.11..."
+    
+    # 询问用户是否继续
+    read -p "  要继续尝试自动安装吗？(Y/N): " user_choice
+    if [[ "$user_choice" =~ ^[Yy]$ ]]; then
+        # 尝试通过系统源安装Qt5.11
+        if command -v apt-get &> /dev/null; then
+            sudo apt-get update
+            sudo apt-get install -y qt5-default
+            
+            # 重新检查版本
+            if command -v qmake &> /dev/null; then
+                QT5_VERSION=$(qmake --version | grep -oP 'Qt\s+\K[0-9]+\.[0-9]+')
+                echo "  安装后Qt5版本: $QT5_VERSION"
+            elif command -v qmake5 &> /dev/null; then
+                QT5_VERSION=$(qmake5 --version | grep -oP 'Qt\s+\K[0-9]+\.[0-9]+')
+                echo "  安装后Qt5版本: $QT5_VERSION"
+            fi
+        else
+            echo "  ⚠ 不支持的包管理器，无法自动安装"
+        fi
+    else
+        echo "  用户选择不进行自动安装"
+    fi
+    
+    # 再次检查版本
+    if [ "$QT5_VERSION" != "5.11" ]; then
+        echo "  ✗ 环境不通过：Qt5版本仍不是5.11"
+        echo "  请访问以下链接自行安装Qt5.11.3："
+        echo "  https://download.qt.io/new_archive/qt/5.11/5.11.3/"
+        exit 1
+    fi
+else
+    echo "  ✓ Qt5版本为5.11，符合要求"
 fi
 echo ""
 
