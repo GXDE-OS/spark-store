@@ -42,7 +42,11 @@ case "$1" in
 		ln -s -f /opt/durapps/spark-store/bin/aptss /usr/local/bin/ss-apt-fast
 
 		ln -s -f /opt/durapps/spark-store/bin/aptss /usr/bin/aptss
-		ln -sf /usr/lib/qt5/bin/spark-update-tool /usr/bin/spark-update-tool
+        if [ -f "/usr/lib/qt5/bin/spark-update-tool" ]; then
+            ln -sf /usr/lib/qt5/bin/spark-update-tool /usr/bin/spark-update-tool
+        else
+            ln -sf /usr/lib/qt6/bin/spark-update-tool /usr/bin/spark-update-tool
+        fi
 
 
 		# Install key
