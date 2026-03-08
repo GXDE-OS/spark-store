@@ -345,7 +345,7 @@ function create_desktop_in_ace() {
     fi
     
     # 如果是强制创建，或者没有配置禁止创建
-    if [ "$FORCE_CREATE_DESKTOP" -eq 1 ] || ! $ace_cmd "[ -e ~/.config/spark-union/spark-store/ssshell-config-do-not-create-desktop ]"; then
+    if [ "$FORCE_CREATE_DESKTOP" -eq 1 ] || !  [ -e ~/.config/spark-union/spark-store/ssshell-config-do-not-create-desktop ]; then
         echo "在ACE环境中创建桌面快捷方式..."
         export -f exec_create_desktop_file 
         export package_name
