@@ -38,9 +38,14 @@ RESOURCES += \
 
 # Linux-specific settings
 unix:!macx {
-    # Installation paths for Linux
-    target.path = $$[QT_INSTALL_BINS]
+    # 安装到 /usr/bin 目录
+    target.path = /usr/bin
     INSTALLS += target
+    
+    # 如果需要安装其他文件（如桌面文件、图标等），可以添加
+    # desktop.path = /usr/share/applications
+    # desktop.files = spark-update-tool.desktop
+    # INSTALLS += desktop
     
     # Additional Linux specific configurations if needed
     QMAKE_CXXFLAGS += -Wall -Wextra
