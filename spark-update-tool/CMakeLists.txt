@@ -69,12 +69,30 @@ set_target_properties(spark-update-tool PROPERTIES
     WIN32_EXECUTABLE TRUE
 )
 
-include(GNUInstallDirs)
-install(TARGETS spark-update-tool
-    BUNDLE DESTINATION .
-    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-)
+# 安装配置
+# 对于Linux，安装到/usr/bin目录
+if(UNIX AND NOT APPLE)
+    # 直接指定安装路径为 /usr/bin
+    install(TARGETS spark-update-tool
+        RUNTIME DESTINATION /usr/bin
+    )
+    
+    # 可选：安装桌面文件和应用图标
+    # install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/spark-update-tool.desktop
+    #     DESTINATION /usr/share/applications
+    # )
+    # install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/icons/spark-update-tool.png
+    #     DESTINATION /usr/share/icons/hicolor/256x256/apps
+    # )
+else()
+    # 对于其他系统，使用GNU标准安装路径
+    include(GNUInstallDirs)
+    install(TARGETS spark-update-tool
+        BUNDLE DESTINATION .
+        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+    )
+endif()
 
 if(QT_VERSION_MAJOR EQUAL 6)
     qt_finalize_executable(spark-update-tool)
