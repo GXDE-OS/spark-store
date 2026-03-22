@@ -120,8 +120,11 @@ _create_lock()
 # unlock and remove the lock file
 _remove_lock()
 {
-    flock -u "$LCK_FD" 2>/dev/null
-    rm -f "$LCK_FILE.lock"
+    # Only unlock if lock file exists (was created by _create_lock)
+    if [ -f "$LCK_FILE.lock" ]; then
+        flock -u "$LCK_FD" 2>/dev/null
+        rm -f "$LCK_FILE.lock"
+    fi
 }
 
 # Search for known options and decide if root privileges are needed.
@@ -821,6 +824,9 @@ elif [ "$option" == "download" ]; then
     "${_APTMGR}" "$@"
   fi
 
+  # Clean up temporary directory for download command
+  cleanup_aptfast
+
 elif [ "$option" == "source" ]; then
   msg
   msg "Working... this may take a while." "normal"
@@ -846,6 +852,9 @@ elif [ "$option" == "source" ]; then
   #  echo "$srcfile" | grep -q '\.dsc$' || continue
   #  dpkg-source -x "$(basename "$srcfile")"
   #done < "$DLLIST"
+
+  # Clean up temporary directory for source command
+  cleanup_aptfast
 
 # Execute package manager directly if unknown options are passed.
 else
