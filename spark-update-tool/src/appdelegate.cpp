@@ -8,6 +8,7 @@
 #include <QPainter>
 #include <QMouseEvent>
 #include <QFile>
+#include <QEventLoop>
 
 AppDelegate::AppDelegate(QObject *parent)
     : QStyledItemDelegate(parent), m_downloadManager(new DownloadManager(this)), m_installProcess(nullptr) {
@@ -21,6 +22,35 @@ AppDelegate::AppDelegate(QObject *parent)
             qDebug() << (success ? "下载完成:" : "下载失败:") << packageName;
             if (success) {
                 enqueueInstall(packageName); // 安装完成后再设置 isInstalled
+            } else {
+                // 下载失败，删除已存在的deb包并重新下载
+                QDir tempDir(QDir::tempPath());
+                QStringList debs = tempDir.entryList(QStringList() << QString("%1_*.deb").arg(packageName) << QString("%1*.deb").arg(packageName), QDir::Files);
+                for (const QString &deb : debs) {
+                    QString debPath = tempDir.absoluteFilePath(deb);
+                    if (QFile::exists(debPath)) {
+                        if (QFile::remove(debPath)) {
+                            qDebug() << "已删除下载失败的软件包:" << debPath;
+                        } else {
+                            qWarning() << "删除下载失败的软件包失败:" << debPath;
+                        }
+                    }
+                }
+                
+                // 重新开始下载
+                if (m_model) {
+                    for (int row = 0; row < m_model->rowCount(); ++row) {
+                        QModelIndex index = m_model->index(row, 0);
+                        if (index.data(Qt::UserRole + 1).toString() == packageName) {
+                            QString downloadUrl = index.data(Qt::UserRole + 7).toString();
+                            QString outputPath = QString("%1/%2.metalink").arg(QDir::tempPath(), packageName);
+                            m_downloads[packageName] = {0, true};
+                            m_downloadManager->startDownload(packageName, downloadUrl, outputPath);
+                            emit updateDisplay(packageName);
+                            break;
+                        }
+                    }
+                }
             }
         }
     });
@@ -95,6 +125,7 @@ void AppDelegate::paint(QPainter *painter, const QStyleOptionViewItem &option, c
     QString iconPath = index.data(Qt::UserRole + 4).toString();
     QString size = index.data(Qt::UserRole + 5).toString();
     QString description = index.data(Qt::UserRole + 6).toString();
+    QString source = index.data(Qt::UserRole + 9).toString();
 
     QRect rect = option.rect;
     int margin = 10, spacing = 6, iconSize = 40;
@@ -121,11 +152,51 @@ void AppDelegate::paint(QPainter *painter, const QStyleOptionViewItem &option, c
     int textX = iconRect.right() + margin;
     int textWidth = rect.width() - textX - 100;
 
+    // 绘制应用名称
     QRect nameRect(textX, rect.top() + margin, textWidth, 20);
     painter->setFont(boldFont);
     QColor nameColor = isIgnored ? QColor("#999999") : QColor("#333333");
     painter->setPen(nameColor);
+    
+    // 计算名称宽度
+    QFontMetrics fontMetrics(boldFont);
+    int nameWidth = fontMetrics.horizontalAdvance(name);
+    
+    // 绘制名称
     painter->drawText(nameRect, Qt::AlignLeft | Qt::AlignVCenter, name);
+    
+    // 绘制来源Tag
+    if (!source.isEmpty()) {
+        int tagX = textX + nameWidth + 10;
+        QString tagText;
+        QColor bgColor;
+        QColor textColor;
+        
+        if (source == "apm") {
+            tagText = "APM";
+            bgColor = QColor("#3B82F6"); // 蓝色
+            textColor = QColor("#FFFFFF");
+        } else {
+            tagText = "传统deb";
+            bgColor = QColor("#F97316"); // 橙色
+            textColor = QColor("#FFFFFF");
+        }
+        
+        int tagWidth = fontMetrics.horizontalAdvance(tagText) + 12;
+        int tagHeight = 18;
+        
+        QRect tagRect(tagX, rect.top() + margin + 1, tagWidth, tagHeight);
+        
+        // 绘制Tag背景
+        painter->setBrush(bgColor);
+        painter->setPen(Qt::NoPen);
+        painter->drawRoundedRect(tagRect, 9, 9);
+        
+        // 绘制Tag文本
+        painter->setFont(normalFont);
+        painter->setPen(textColor);
+        painter->drawText(tagRect, Qt::AlignCenter, tagText);
+    }
 
     QRect versionRect(textX, nameRect.bottom() + spacing, textWidth, 20);
     painter->setFont(normalFont);
@@ -161,15 +232,24 @@ void AppDelegate::paint(QPainter *painter, const QStyleOptionViewItem &option, c
         painter->setPen(QColor("#6B7280"));
         painter->drawText(unignoreButtonRect, Qt::AlignCenter, "取消忽略");
     } else if (isDownloading) {
+        // 绘制灰底蓝色进度条
         QRect progressRect(rect.right() - 270, rect.top() + (rect.height() - 20) / 2, 150, 20);
-        QStyleOptionProgressBar progressBarOption;
-        progressBarOption.rect = progressRect;
-        progressBarOption.minimum = 0;
-        progressBarOption.maximum = 100;
-        progressBarOption.progress = progress;
-        progressBarOption.text = QString("%1%").arg(progress);
-        progressBarOption.textVisible = true;
-        QApplication::style()->drawControl(QStyle::CE_ProgressBar, &progressBarOption, painter);
+        
+        // 绘制背景
+        painter->setPen(Qt::NoPen);
+        painter->setBrush(QColor("#E5E7EB"));
+        painter->drawRoundedRect(progressRect, 10, 10);
+        
+        // 绘制进度
+        int progressWidth = progressRect.width() * progress / 100;
+        QRect progressFillRect(progressRect.left(), progressRect.top(), progressWidth, progressRect.height());
+        painter->setBrush(QColor("#3B82F6"));
+        painter->drawRoundedRect(progressFillRect, 10, 10);
+        
+        // 绘制进度文本
+        painter->setPen(Qt::white);
+        painter->setFont(option.font);
+        painter->drawText(progressRect, Qt::AlignCenter, QString("%1%").arg(progress));
         
         QRect cancelButtonRect(rect.right() - 80, rect.top() + (rect.height() - 30) / 2, 70, 30);
         painter->setPen(Qt::NoPen);
@@ -266,6 +346,21 @@ bool AppDelegate::editorEvent(QEvent *event, QAbstractItemModel *model,
             if (cancelButtonRect.contains(mouseEvent->pos())) {
                 m_downloadManager->cancelDownload(packageName);
                 m_downloads.remove(packageName);
+                
+                // 删除未下载完成的软件包
+                QDir tempDir(QDir::tempPath());
+                QStringList debs = tempDir.entryList(QStringList() << QString("%1_*.deb").arg(packageName) << QString("%1*.deb").arg(packageName), QDir::Files);
+                for (const QString &deb : debs) {
+                    QString debPath = tempDir.absoluteFilePath(deb);
+                    if (QFile::exists(debPath)) {
+                        if (QFile::remove(debPath)) {
+                            qDebug() << "已删除未下载完成的软件包:" << debPath;
+                        } else {
+                            qWarning() << "删除未下载完成的软件包失败:" << debPath;
+                        }
+                    }
+                }
+                
                 emit updateDisplay(packageName);
                 return true;
             }
@@ -298,19 +393,13 @@ bool AppDelegate::editorEvent(QEvent *event, QAbstractItemModel *model,
                     }
                 }
                 
-                // 如果存在deb包，直接进行安装
-                if (!debPath.isEmpty() && QFile::exists(debPath)) {
-                    qDebug() << "发现已存在的deb包，直接进行安装:" << debPath;
-                    enqueueInstall(packageName);
-                } else {
-                    // 否则触发下载流程
-                    QString downloadUrl = index.data(Qt::UserRole + 7).toString();
-                    QString outputPath = QString("%1/%2.metalink").arg(QDir::tempPath(), packageName);
+                // 触发下载流程（无论是否存在deb包，都尝试续传）
+                QString downloadUrl = index.data(Qt::UserRole + 7).toString();
+                QString outputPath = QString("%1/%2.metalink").arg(QDir::tempPath(), packageName);
 
-                    m_downloads[packageName] = {0, true};
-                    m_downloadManager->startDownload(packageName, downloadUrl, outputPath);
-                    emit updateDisplay(packageName);
-                }
+                m_downloads[packageName] = {0, true};
+                m_downloadManager->startDownload(packageName, downloadUrl, outputPath);
+                emit updateDisplay(packageName);
                 return true;
             }
         }
@@ -384,6 +473,47 @@ void AppDelegate::startNextInstall() {
         return;
     }
 
+    // 获取包的来源信息
+    QString source = "aptss"; // 默认来源
+    if (m_model) {
+        for (int row = 0; row < m_model->rowCount(); ++row) {
+            QModelIndex index = m_model->index(row, 0);
+            if (index.data(Qt::UserRole + 1).toString() == packageName) {
+                source = index.data(Qt::UserRole + 9).toString();
+                break;
+            }
+        }
+    }
+
+    // 如果是APM包，先检查APM中是否存在对应的包，再卸载APTSS版本
+    if (source == "apm") {
+        // 检查APM中是否存在对应的包
+        QProcess checkProcess;
+        QStringList checkArgs;
+        checkArgs << "list" << packageName;
+        checkProcess.start("apm", checkArgs);
+        checkProcess.waitForFinished(30000); // 30秒超时
+        
+        QString checkOutput = checkProcess.readAllStandardOutput();
+        if (checkOutput.contains(packageName)) {
+            // APM中存在对应的包，卸载APTSS版本
+            QProcess removeProcess;
+            QStringList removeArgs;
+            removeArgs << "remove" << "--purge" << "-y" << packageName;
+            removeProcess.start("aptss", removeArgs);
+            removeProcess.waitForFinished(30000); // 30秒超时
+            qDebug() << "卸载APTSS版本" << packageName << "退出码:" << removeProcess.exitCode();
+        } else {
+            // APM中不存在对应的包，安装失败
+            qWarning() << "APM中不存在对应的包:" << packageName;
+            m_downloads[packageName].isInstalling = false;
+            emit updateDisplay(packageName);
+            m_installingPackage.clear();
+            startNextInstall();
+            return;
+        }
+    }
+
     m_installProcess = new QProcess(this);
 
     QString logPath = QString("/tmp/%1_install.log").arg(packageName);
@@ -411,7 +541,7 @@ void AppDelegate::startNextInstall() {
             qDebug().noquote() << QString::fromLocal8Bit(err);
         });
         connect(m_installProcess, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
-                this, [this, packageName, logFile, debPath](int exitCode, QProcess::ExitStatus status) {
+                this, [this, packageName, logFile, debPath, source](int exitCode, QProcess::ExitStatus status) {
             if (logFile) logFile->close();
             m_downloads[packageName].isInstalling = false;
             if (exitCode == 0) { 
@@ -423,6 +553,117 @@ void AppDelegate::startNextInstall() {
                         qDebug() << "已删除deb包:" << debPath;
                     } else {
                         qWarning() << "删除deb包失败:" << debPath;
+                    }
+                }
+            } else {
+                // 安装失败，尝试从APM安装
+                if (source == "aptss") {
+                    qDebug() << "APTSS安装失败，尝试从APM安装:" << packageName;
+                    
+                    // 检查apm命令是否存在
+                    QProcess whichProcess;
+                    whichProcess.start("which", QStringList() << "apm");
+                    whichProcess.waitForFinished(5000);
+                    
+                    if (whichProcess.exitCode() != 0) {
+                        // apm命令不存在，先安装apm
+                        qDebug() << "apm命令不存在，先安装apm";
+                        QProcess installApmProcess;
+                        installApmProcess.start("aptss", QStringList() << "install" << "apm" << "-y");
+                        installApmProcess.waitForFinished(60000); // 60秒超时
+                        
+                        if (installApmProcess.exitCode() != 0) {
+                            qWarning() << "安装apm失败:" << packageName;
+                            emit updateDisplay(packageName);
+                            m_installProcess->deleteLater();
+                            m_installProcess = nullptr;
+                            m_installingPackage.clear();
+                            startNextInstall();
+                            return;
+                        }
+                        qDebug() << "apm安装成功";
+                    }
+                    
+                    // 检查APM中是否存在对应的包
+                    QProcess checkProcess;
+                    QStringList checkArgs;
+                    checkArgs << "list" << packageName;
+                    checkProcess.start("apm", checkArgs);
+                    checkProcess.waitForFinished(30000); // 30秒超时
+                    
+                    QString checkOutput = checkProcess.readAllStandardOutput();
+                    if (checkOutput.contains(packageName)) {
+                        // APM中存在对应的包，卸载当前版本
+                        QProcess removeProcess;
+                        QStringList removeArgs;
+                        removeArgs << "remove" << "--purge" << "-y" << packageName;
+                        removeProcess.start("aptss", removeArgs);
+                        removeProcess.waitForFinished(30000);
+                        
+                        // 从APM获取下载URL，使用与aptssupdater相同的方法
+                        QString downloadUrl;
+                        QProcess process;
+                        QString command = QString("amber-pm-debug /usr/bin/apt -c /opt/durapps/spark-store/bin/apt-fast-conf/aptss-apt.conf download %1 --print-uris").arg(packageName);
+                        
+                        process.start("bash", QStringList() << "-c" << command);
+                        if (process.waitForFinished(30000)) { // 30秒超时
+                            QString output = process.readAllStandardOutput();
+                            // 解析输出格式：'URL' 文件名 大小 SHA512:哈希值
+                            QRegularExpression regex(R"('([^']+)'\s+\S+\s+(\d+)\s+SHA512:([^\s]+))");
+                            QRegularExpressionMatch match = regex.match(output);
+                            
+                            if (match.hasMatch()) {
+                                downloadUrl = match.captured(1);
+                            }
+                        }
+                        
+                        if (!downloadUrl.isEmpty()) {
+                            // 使用更新器的下载功能下载APM包
+                            QString outputPath = QString("%1/%2.metalink").arg(QDir::tempPath(), packageName);
+                            m_downloads[packageName] = {0, true};
+                            m_downloadManager->startDownload(packageName, downloadUrl, outputPath);
+                            
+                            // 等待下载完成后再安装
+                            QEventLoop loop;
+                            connect(m_downloadManager, &DownloadManager::downloadFinished, &loop, [&loop](const QString &, bool) {
+                                loop.quit();
+                            });
+                            loop.exec();
+                            
+                            // 下载完成后，使用APM安装
+                            QDir tempDir(QDir::tempPath());
+                            QStringList debs = tempDir.entryList(QStringList() << QString("%1_*.deb").arg(packageName) << QString("%1*.deb").arg(packageName), QDir::Files);
+                            if (!debs.isEmpty()) {
+                                QString apmDebPath = tempDir.absoluteFilePath(debs.first());
+                                QProcess apmProcess;
+                                QStringList apmArgs;
+                                apmArgs << "ssaudit" << apmDebPath;
+                                apmProcess.start("apm", apmArgs);
+                                apmProcess.waitForFinished(60000); // 60秒超时
+                                int apmExitCode = apmProcess.exitCode();
+                                qDebug() << "APM安装" << packageName << "退出码:" << apmExitCode;
+                                
+                                // APM安装成功后设置状态
+                                if (apmExitCode == 0) {
+                                    m_downloads[packageName].isInstalling = false;
+                                    m_downloads[packageName].isInstalled = true;
+                                    
+                                    // 安装成功后删除deb包
+                                    if (QFile::exists(apmDebPath)) {
+                                        if (QFile::remove(apmDebPath)) {
+                                            qDebug() << "已删除deb包:" << apmDebPath;
+                                        } else {
+                                            qWarning() << "删除deb包失败:" << apmDebPath;
+                                        }
+                                    }
+                                }
+                            }
+                        } else {
+                            qWarning() << "无法获取APM包的下载URL:" << packageName;
+                        }
+                    } else {
+                        // APM中不存在对应的包，不卸载aptss包
+                        qWarning() << "APM中不存在对应的包，安装失败:" << packageName;
                     }
                 }
             }
@@ -458,13 +699,124 @@ void AppDelegate::startNextInstall() {
             qDebug().noquote() << QString::fromLocal8Bit(err);
         });
         connect(m_installProcess, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
-                this, [this, packageName, debPath](int exitCode, QProcess::ExitStatus /*status*/) {
+                this, [this, packageName, debPath, source](int exitCode, QProcess::ExitStatus /*status*/) {
             // 如果通过退出码判断安装成功，也删除deb包
             if (exitCode == 0 && QFile::exists(debPath)) {
                 if (QFile::remove(debPath)) {
                     qDebug() << "已删除deb包:" << debPath;
                 } else {
                     qWarning() << "删除deb包失败:" << debPath;
+                }
+            } else {
+                // 安装失败，尝试从APM安装
+                if (source == "aptss") {
+                    qDebug() << "APTSS安装失败，尝试从APM安装:" << packageName;
+                    
+                    // 检查apm命令是否存在
+                    QProcess whichProcess;
+                    whichProcess.start("which", QStringList() << "apm");
+                    whichProcess.waitForFinished(5000);
+                    
+                    if (whichProcess.exitCode() != 0) {
+                        // apm命令不存在，先安装apm
+                        qDebug() << "apm命令不存在，先安装apm";
+                        QProcess installApmProcess;
+                        installApmProcess.start("aptss", QStringList() << "install" << "apm" << "-y");
+                        installApmProcess.waitForFinished(60000); // 60秒超时
+                        
+                        if (installApmProcess.exitCode() != 0) {
+                            qWarning() << "安装apm失败:" << packageName;
+                            emit updateDisplay(packageName);
+                            m_installProcess->deleteLater();
+                            m_installProcess = nullptr;
+                            m_installingPackage.clear();
+                            startNextInstall();
+                            return;
+                        }
+                        qDebug() << "apm安装成功";
+                    }
+                    
+                    // 检查APM中是否存在对应的包
+                    QProcess checkProcess;
+                    QStringList checkArgs;
+                    checkArgs << "list" << packageName;
+                    checkProcess.start("apm", checkArgs);
+                    checkProcess.waitForFinished(30000); // 30秒超时
+                    
+                    QString checkOutput = checkProcess.readAllStandardOutput();
+                    if (checkOutput.contains(packageName)) {
+                        // APM中存在对应的包，卸载当前版本
+                        QProcess removeProcess;
+                        QStringList removeArgs;
+                        removeArgs << "remove" << "--purge" << "-y" << packageName;
+                        removeProcess.start("aptss", removeArgs);
+                        removeProcess.waitForFinished(30000);
+                        
+                        // 从APM获取下载URL，使用与aptssupdater相同的方法
+                        QString downloadUrl;
+                        QProcess process;
+                        QString command = QString("amber-pm-debug /usr/bin/apt -c /opt/durapps/spark-store/bin/apt-fast-conf/aptss-apt.conf download %1 --print-uris").arg(packageName);
+                        
+                        process.start("bash", QStringList() << "-c" << command);
+                        if (process.waitForFinished(30000)) { // 30秒超时
+                            QString output = process.readAllStandardOutput();
+                            // 解析输出格式：'URL' 文件名 大小 SHA512:哈希值
+                            QRegularExpression regex(R"('([^']+)'\s+\S+\s+(\d+)\s+SHA512:([^\s]+))");
+                            QRegularExpressionMatch match = regex.match(output);
+                            
+                            if (match.hasMatch()) {
+                                downloadUrl = match.captured(1);
+                            }
+                        }
+                        
+                        if (!downloadUrl.isEmpty()) {
+                            // 使用更新器的下载功能下载APM包
+                            QString outputPath = QString("%1/%2.metalink").arg(QDir::tempPath(), packageName);
+                            m_downloads[packageName] = {0, true};
+                            m_downloadManager->startDownload(packageName, downloadUrl, outputPath);
+                            
+                            // 等待下载完成后再安装
+                            QEventLoop loop;
+                            connect(m_downloadManager, &DownloadManager::downloadFinished, &loop, [&loop](const QString &, bool) {
+                                loop.quit();
+                            });
+                            loop.exec();
+                            
+                            // 下载完成后，使用APM安装
+                            QDir tempDir(QDir::tempPath());
+                            QStringList debs = tempDir.entryList(QStringList() << QString("%1_*.deb").arg(packageName) << QString("%1*.deb").arg(packageName), QDir::Files);
+                            if (!debs.isEmpty()) {
+                                QString apmDebPath = tempDir.absoluteFilePath(debs.first());
+                                QProcess apmProcess;
+                                QStringList apmArgs;
+                                apmArgs << "ssaudit" << apmDebPath;
+                                apmProcess.start("apm", apmArgs);
+                                apmProcess.waitForFinished(60000); // 60秒超时
+                                int apmExitCode = apmProcess.exitCode();
+                                qDebug() << "APM安装" << packageName << "退出码:" << apmExitCode;
+                                
+                                // APM安装成功后设置状态
+                                if (apmExitCode == 0) {
+                                    m_downloads[packageName].isInstalling = false;
+                                    m_downloads[packageName].isInstalled = true;
+                                    
+                                    // 安装成功后删除deb包
+                                    if (QFile::exists(apmDebPath)) {
+                                        if (QFile::remove(apmDebPath)) {
+                                            qDebug() << "已删除deb包:" << apmDebPath;
+                                        } else {
+                                            qWarning() << "删除deb包失败:" << apmDebPath;
+                                        }
+                                    }
+                                }
+                            }
+                        } else {
+                            qWarning() << "无法获取APM包的下载URL:" << packageName;
+                        }
+                    } else {
+                        // APM中不存在对应的包，不卸载aptss包
+                        qWarning() << "APM中不存在对应的包，安装失败:" << packageName;
+                    }
                 }
             }
             
@@ -477,8 +829,15 @@ void AppDelegate::startNextInstall() {
     }
 
     QStringList args;
-    args << debPath << "--no-create-desktop-entry" << "--delete-after-install";
-    m_installProcess->start("ssinstall", args);
+    if (source == "apm") {
+        // APM 包使用 apm ssaudit 安装
+        args << "ssaudit" << debPath;
+        m_installProcess->start("apm", args);
+    } else {
+        // APTSS 包使用 ssinstall 安装
+        args << debPath << "--no-create-desktop-entry" << "--delete-after-install" << "--native";
+        m_installProcess->start("/usr/bin/ssinstall", args);
+    }
 }
 
 // 新增槽函数，用于更新旋转角度并触发刷新

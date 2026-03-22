@@ -229,7 +229,7 @@ void MainWindow::initStyle()
 void MainWindow::checkUpdates()
 {
     aptssUpdater updater;
-    QJsonArray updateInfo = updater.getUpdateInfoAsJson();
+    QJsonArray updateInfo = updater.mergeUpdateInfo();
     
     // 分离正常应用和忽略应用
     QJsonArray normalApps;
@@ -265,7 +265,7 @@ void MainWindow::checkUpdates()
 
     for (const auto &item : finalApps) {
         QJsonObject obj = item.toObject();
-        qDebug() << "模型设置的包名:" << obj["package"].toString() << "忽略状态:" << obj["ignored"].toBool();
+        qDebug() << "模型设置的包名:" << obj["package"].toString() << "忽略状态:" << obj["ignored"].toBool() << "来源:" << obj["source"].toString();
         qDebug() << "模型设置的下载 URL:" << obj["download_url"].toString(); // 检查模型数据
     }
 }

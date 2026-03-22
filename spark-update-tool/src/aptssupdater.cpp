@@ -3,12 +3,14 @@
 #include <QTextStream>
 #include <QRegularExpression>
 #include <QFile>
+#include <QDir>
 #include <qdebug.h>
 
 aptssUpdater::aptssUpdater(QWidget *parent)
     : QWidget(parent)
 {
     packageName = getUpdateablePackages();
+    apmPackageName = getApmUpdateablePackages();
 }
 
 QStringList aptssUpdater::getUpdateablePackages()
@@ -433,4 +435,220 @@ QJsonArray aptssUpdater::getUpdateInfoAsJson()
     }
     qDebug()<<jsonArray;
     return jsonArray;
+}
+
+QStringList aptssUpdater::getApmUpdateablePackages()
+{
+    QStringList packageDetails;
+    
+    // 检查apm命令是否存在
+    QProcess checkProcess;
+    checkProcess.start("which", QStringList() << "apm");
+    if (!checkProcess.waitForFinished(5000) || checkProcess.exitCode() != 0) {
+        qDebug() << "apm命令不存在，跳过APM更新检查";
+        return packageDetails;
+    }
+    
+    QProcess process;
+    QString command = R"(env LANGUAGE=en_US /usr/bin/apm list --upgradable | awk 'NR>1')";
+    
+    process.start("bash", QStringList() << "-c" << command);
+    if (!process.waitForFinished(30000)) { // 30秒超时
+        qWarning() << "APM process failed to finish within 30 seconds.";
+        process.kill();
+        return packageDetails;
+    }
+
+    QString output = process.readAllStandardOutput();
+#if QT_VERSION >= QT_VERSION_CHECK(5, 14, 0)
+        QStringList lines = output.split('\n', Qt::SkipEmptyParts);
+#else
+        QStringList lines = output.split('\n', QString::SkipEmptyParts);
+#endif
+
+    for (const QString &line : lines) {
+        QRegularExpression regex(R"(([\w\-\+\.]+)/\S+\s+([^\s]+)\s+\S+\s+\[upgradable from: ([^\]]+)\])");
+        QRegularExpressionMatch match = regex.match(line);
+        if (match.hasMatch()) {
+            QString name = match.captured(1);
+            QString newVersion = match.captured(2);
+            QString oldVersion = match.captured(3);
+            
+            // 检查版本是否相同，相同则跳过
+            if (newVersion == oldVersion) {
+                qDebug() << "跳过版本相同的APM包:" << name << "(" << oldVersion << "→" << newVersion << ")";
+                continue;
+            }
+            
+            // 写入内存列表
+            packageDetails << QString("%1: %2 → %3").arg(name, oldVersion, newVersion);
+        }
+    }
+
+    return packageDetails;
+}
+
+QJsonArray aptssUpdater::getApmUpdateInfoAsJson()
+{
+    QJsonArray jsonArray;
+    
+    // 解析APM包版本信息
+    QHash<QString, QHash<QString, QString>> packageInfo;
+    for (const QString &pkg : apmPackageName) {
+        QStringList parts = pkg.split(": ");
+        if (parts.size() >= 2) {
+            QString packageName = parts[0];
+            QStringList versions = parts[1].split(" → ");
+            if (versions.size() == 2) {
+                packageInfo[packageName]["current_version"] = versions[0];
+                packageInfo[packageName]["new_version"] = versions[1];
+                packageInfo[packageName]["source"] = "apm";
+            }
+        }
+    }
+    
+    // 构建JSON数组
+    for (const QString &packageName : packageInfo.keys()) {
+        QJsonObject jsonObj;
+        jsonObj["package"] = packageName;
+        
+        // 从APM桌面文件中解析应用名称和图标
+        QString displayName = packageName; // 默认使用包名
+        QString iconPath = ":/resources/default_icon.png"; // 默认图标
+        
+        // APM应用的desktop文件路径
+        QString apmDesktopPath = QString("/var/lib/apm/apm/files/ace-env/var/lib/apm/%1/entries/applications").arg(packageName);
+        QDir desktopDir(apmDesktopPath);
+        if (desktopDir.exists()) {
+            // 查找desktop文件
+            QStringList desktopFiles = desktopDir.entryList(QStringList() << "*.desktop", QDir::Files);
+            if (!desktopFiles.isEmpty()) {
+                QString desktopFile = desktopDir.absoluteFilePath(desktopFiles.first());
+                QFile file(desktopFile);
+                if (file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+                    QTextStream in(&file);
+                    while (!in.atEnd()) {
+                        QString line = in.readLine().trimmed();
+                        if (line.startsWith("Name=")) {
+                            displayName = line.mid(5).trimmed();
+                        } else if (line.startsWith("Icon=")) {
+                            QString iconName = line.mid(5).trimmed();
+                            // 处理图标路径
+                            if (!iconName.contains('/')) {
+                                // 查找APM包中的图标
+                                QString apmIconPath = QString("/var/lib/apm/apm/files/ace-env/var/lib/apm/%1/entries/icons/hicolor/48x48/apps/%2.png").arg(packageName, iconName);
+                                if (QFile::exists(apmIconPath)) {
+                                    iconPath = apmIconPath;
+                                }
+                            } else {
+                                // 已经是绝对路径
+                                if (QFile::exists(iconName)) {
+                                    iconPath = iconName;
+                                }
+                            }
+                        }
+                    }
+                    file.close();
+                }
+            }
+        }
+        
+        // 获取APM包大小和下载信息
+        QString size = "0";
+        QString url = "";
+        QString sha512 = "";
+        
+        QProcess process;
+        QString command = QString("amber-pm-debug /usr/bin/apt -c /opt/durapps/spark-store/bin/apt-fast-conf/aptss-apt.conf download %1 --print-uris").arg(packageName);
+        
+        process.start("bash", QStringList() << "-c" << command);
+        if (process.waitForFinished(30000)) { // 30秒超时
+            QString output = process.readAllStandardOutput();
+            // 解析输出格式：'URL' 文件名 大小 SHA512:哈希值
+            QRegularExpression regex(R"('([^']+)'\s+\S+\s+(\d+)\s+SHA512:([^\s]+))");
+            QRegularExpressionMatch match = regex.match(output);
+            
+            if (match.hasMatch()) {
+                url = match.captured(1);
+                size = match.captured(2);
+                sha512 = match.captured(3);
+            }
+        }
+        
+        jsonObj["name"] = displayName;
+        jsonObj["current_version"] = packageInfo[packageName]["current_version"];
+        jsonObj["new_version"] = packageInfo[packageName]["new_version"];
+        jsonObj["icon"] = iconPath;
+        jsonObj["ignored"] = false; // 默认不忽略
+        jsonObj["source"] = "apm";
+        jsonObj["size"] = size;
+        jsonObj["download_url"] = url;
+        jsonObj["sha512"] = sha512;
+        jsonArray.append(jsonObj);
+    }
+    qDebug()<<"APM更新信息:"<<jsonArray;
+    return jsonArray;
+}
+
+QJsonArray aptssUpdater::mergeUpdateInfo()
+{
+    QJsonArray aptssInfo = getUpdateInfoAsJson();
+    QJsonArray apmInfo = getApmUpdateInfoAsJson();
+    
+    // 创建包名到更新信息的映射
+    QHash<QString, QJsonObject> aptssMap;
+    for (const QJsonValue &value : aptssInfo) {
+        QJsonObject obj = value.toObject();
+        QString packageName = obj["package"].toString();
+        obj["source"] = "aptss";
+        aptssMap[packageName] = obj;
+    }
+    
+    QHash<QString, QJsonObject> apmMap;
+    for (const QJsonValue &value : apmInfo) {
+        QJsonObject obj = value.toObject();
+        QString packageName = obj["package"].toString();
+        obj["source"] = "apm";
+        apmMap[packageName] = obj;
+    }
+    
+    QJsonArray mergedArray;
+    
+    // 处理只在aptss中存在的包
+    for (const QString &packageName : aptssMap.keys()) {
+        if (!apmMap.contains(packageName)) {
+            mergedArray.append(aptssMap[packageName]);
+        }
+    }
+    
+    // 处理只在apm中存在的包
+    for (const QString &packageName : apmMap.keys()) {
+        if (!aptssMap.contains(packageName)) {
+            mergedArray.append(apmMap[packageName]);
+        }
+    }
+    
+    // 处理在两者中都存在的包
+    for (const QString &packageName : aptssMap.keys()) {
+        if (apmMap.contains(packageName)) {
+            QJsonObject aptssObj = aptssMap[packageName];
+            QJsonObject apmObj = apmMap[packageName];
+            
+            // 比较版本
+            QString aptssVersion = aptssObj["new_version"].toString();
+            QString apmVersion = apmObj["new_version"].toString();
+            
+            // 这里简化处理，实际应该使用版本比较函数
+            if (apmVersion > aptssVersion) {
+                // APM版本更高，使用APM版本
+                mergedArray.append(apmObj);
+            } else {
+                // APTSS版本更高或相同，不展示该包
+                qDebug() << "APTSS版本更高，不展示APM包:" << packageName;
+            }
+        }
+    }
+    
+    qDebug()<<"合并后的更新信息:"<<mergedArray;
+    return mergedArray;
 }

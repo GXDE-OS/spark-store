@@ -39,6 +39,8 @@ void DownloadManager::startDownload(const QString &packageName, const QString &u
         "--console-log-level=warn",
         "--summary-interval=1",
         "--allow-overwrite=true",
+        "--connect-timeout=30",
+        "--max-tries=3",
         "--dir=" + fileInfo.absolutePath(),
         "--out=" + fileInfo.fileName(),
         metalinkUrl
