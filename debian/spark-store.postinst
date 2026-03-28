@@ -3,7 +3,24 @@
 case "$1" in
 	configure)
 
+		case `arch` in
+   			x86_64)
+				echo "Enabling i386 arch..."
+				dpkg --add-architecture i386
+			;;
 
+        		aarch64)
+        			echo "Will not enable armhf since 4271"
+			;;
+            loongarch64)
+				echo "Nope we DO NOT WANT ABI1 now"
+				dpkg --remove-architecture loongarch64
+			;;
+
+ 			*)
+				echo "Unknown architecture, skip enable 32-bit arch"
+			;;
+		esac
 
 		mkdir -p /var/lib/aptss/lists
 
