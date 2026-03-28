@@ -29,11 +29,10 @@ Depends: ${shlibs:Depends}, ${misc:Depends},
  aria2,
  gnupg,
  zenity,
- policykit-1 | pkexec,
+ policykit-1 | pkexec | polkit,
  libnotify-bin,
- qtwayland5 | qt6-wayland,
+ qtwayland5 | qt6-wayland | qt-5,
  desktop-file-utils,
- dpkg-dev,
  lsb-release,
 Description: Spark Store
  A community powered app store, based on DTK.
