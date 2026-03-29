@@ -85,8 +85,8 @@ case $(arch) in
 	STORE_LIST_URL=""
 	;;
    aarch64)
-	STORE_URL="aarch64-apm"
-	STORE_LIST_URL="-aarch64"
+	STORE_URL="arm64-apm"
+	STORE_LIST_URL="-arm64"
 	;;
    loongarch64)
    	STORE_URL="loong64-apm"
