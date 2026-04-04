@@ -1,0 +1,17 @@
+#!/bin/bash
+
+HERE=$(dirname $0)
+
+case `uname -m` in
+   x86_64)
+	sender_appendix="amd64"
+	;;
+   aarch64)
+	sender_appendix="arm64"
+	;;
+   loongarch64)
+   	sender_appendix="loong64"
+   	;;
+esac
+
+${HERE}/sender-d-${sender_appendix} $@

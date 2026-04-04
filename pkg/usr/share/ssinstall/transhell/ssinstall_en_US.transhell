@@ -1,0 +1,6 @@
+#!/bin/bash
+TRANSHELL_CONTENT_HASH_CHECK_FAILED="An unexpected error caused the package verification to fail, and the installation process has been terminated.\n\nPossible causes include:\nNetwork or storage issues resulting in a corrupted package; The Spark Store repository has not yet completed synchronization; In extreme cases, malware may be attempting to tamper with the installation package to compromise the system.\n\nFor normal users: please run the following command in the terminal and then try installing again:\nsudo aptss update\n\nIf the problem persists, click 'App Feedback' button in the application information page to submit the issue.\n\nFor auditors: please use ssaudit instead of ssinstall for auditing, as ssinstall is now reserved for password-free installation.\nThe ssaudit command can also be used to attempt installation of applications that have been removed from the Spark Store."
+TRANSHELL_CONTENT_PLEASE_RUN_AS_ROOT="Please run the ssinstall command with Root privileges."
+TRANSHELL_CONTENT_FILE_NOT_EXIST="The specified file does not exist."
+TRANSHELL_CONTENT_WILL_NOT_DELETE_DEB="No --delete-after-install option specified or installation failed. The Deb package will not be deleted."
+TRANSHELL_CONTENT_DEB_IS_DELETED="The --delete-after-install option was used and the installation succeeded. The Deb package has been deleted."
