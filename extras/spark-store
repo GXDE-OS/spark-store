@@ -17,9 +17,9 @@ if [ "$IS_ACE_ENV" = "1" ]; then
     ARGS="$ARGS --no-apm"
 fi
 
-# 检查是否存在 dpkg 指令
-if ! command -v dpkg >/dev/null 2>&1; then
-    echo "未检测到 dpkg 指令"
+# 检查是否存在 apt 指令
+if ! command -v apt >/dev/null 2>&1; then
+    echo "未检测到 apt 指令"
     ARGS="$ARGS --no-spark"
 fi
 
