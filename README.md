@@ -48,7 +48,7 @@ Linux 应用的数量相对有限，Wine 软件的可获取性也颇为困难。
 
 * Arch Linux
 
-1. paru -S spark-store
+1. `paru -S spark-store`
 
 ---
 <div align="center">
