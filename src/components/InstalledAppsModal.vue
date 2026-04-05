@@ -28,6 +28,7 @@
           </div>
           <div class="flex items-center gap-3">
             <div
+              v-if="storeFilter === 'both'"
               class="flex items-center rounded-2xl border border-slate-200/70 p-1 dark:border-slate-800/70"
             >
               <button
@@ -181,6 +182,7 @@ defineProps<{
   loading: boolean;
   error: string;
   activeOrigin: "apm" | "spark";
+  storeFilter: "spark" | "apm" | "both";
 }>();
 
 defineEmits<{
