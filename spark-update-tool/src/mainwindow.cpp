@@ -330,7 +330,7 @@ void MainWindow::runAptssUpgrade()
         }
 
         if (!process.waitForStarted(5000)) {
-            QMessageBox::warning(this, "升级失败", "无法启动 aptss ssupdate");
+            qDebug() << "无法启动 aptss ssupdate";
             return;
         }
         process.write("n\n");
@@ -344,7 +344,7 @@ void MainWindow::runAptssUpgrade()
         }
 
         if (process.exitCode() != 0) {
-            QMessageBox::warning(this, "升级失败", "执行 aptss ssupdate 失败，请检查系统环境或稍后再试。");
+            qDebug() << "执行 aptss ssupdate 失败，请检查系统环境或稍后再试。";
         }
     } else {
         qDebug() << "aptss命令不存在，跳过aptss ssupdate";
