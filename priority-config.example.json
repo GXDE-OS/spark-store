@@ -1,0 +1,27 @@
+{
+  "_comment": "优先级配置文件 - 放在服务器 ${arch}-store/ 目录下，文件名为 priority-config.json",
+  "_comment2": "默认 APM 优先，此文件配置例外规则",
+  "_comment3": "判断优先级（从高到低）：apmPriority.pkgnames > sparkPriority.pkgnames > apmPriority.categories > sparkPriority.categories > apmPriority.tags > sparkPriority.tags > 默认APM",
+  "_comment4": "如果服务器没有这个文件，所有应用都默认优先 APM",
+
+  "sparkPriority": {
+    "_comment": "优先使用 Spark 的规则（例外于默认 APM 优先）",
+    "pkgnames": [],
+    "categories": [
+      "development"
+    ],
+    "tags": [
+      "prefer-spark"
+    ]
+  },
+
+  "apmPriority": {
+    "_comment": "优先使用 APM 的规则（例外于 sparkPriority，具有更高优先级）",
+    "_comment2": "例如：games 分类默认优先 Spark，但其中的某些应用仍优先 APM",
+    "pkgnames": [],
+    "categories": [],
+    "tags": [
+      "prefer-apm"
+    ]
+  }
+}

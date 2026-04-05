@@ -169,6 +169,8 @@ import {
   currentAppSparkInstalled,
   currentAppApmInstalled,
   currentStoreMode,
+  getHybridDefaultOrigin,
+  loadPriorityConfig,
 } from "./global/storeConfig";
 import {
   downloads,
@@ -473,12 +475,14 @@ const openDetail = async (app: App | Record<string, unknown>) => {
     if (sparkApp || apmApp) {
       // 如果两个仓库都有这个应用，创建合并对象
       if (sparkApp && apmApp) {
+        // 根据优先级配置决定默认显示哪个版本
+        const defaultOrigin = getHybridDefaultOrigin(sparkApp);
         finalApp = {
-          ...sparkApp, // 默认使用 Spark 的信息作为主显示
+          ...(defaultOrigin === "spark" ? sparkApp : apmApp), // 根据优先级选择主显示
           isMerged: true,
           sparkApp: sparkApp,
           apmApp: apmApp,
-          viewingOrigin: "spark", // 默认查看 Spark 版本
+          viewingOrigin: defaultOrigin, // 默认查看优先级高的版本
         };
       } else if (sparkApp) {
         finalApp = sparkApp;
@@ -559,8 +563,10 @@ const openDetail = async (app: App | Record<string, unknown>) => {
       finalApp.viewingOrigin = "spark";
     } else if (apmInstalled && !sparkInstalled) {
       finalApp.viewingOrigin = "apm";
+    } else {
+      // 若都安装或都未安装，根据优先级配置决定默认展示
+      finalApp.viewingOrigin = getHybridDefaultOrigin(finalApp.sparkApp || finalApp);
     }
-    // 若都安装或都未安装，默认展示 spark
   }
 
   const displayAppForScreenshots =
@@ -1113,6 +1119,9 @@ const loadCategories = async () => {
       }
     }
     categories.value = categoryData;
+
+    // 加载优先级配置（从 spark 目录）
+    await loadPriorityConfig(arch);
   } catch (error) {
     logger.error(`读取 categories 失败: ${error}`);
   }

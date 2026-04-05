@@ -441,7 +441,7 @@
 import { computed, useAttrs, ref, watch } from "vue";
 import axios from "axios";
 import { useInstallFeedback, downloads } from "../global/downloadStatus";
-import { APM_STORE_BASE_URL } from "../global/storeConfig";
+import { APM_STORE_BASE_URL, getHybridDefaultOrigin } from "../global/storeConfig";
 import type { App } from "../global/typedefinition";
 
 const attrs = useAttrs();
@@ -482,13 +482,20 @@ const closeMetaModal = () => {
 
 watch(
   () => props.app,
-  (newApp) => {
+  (newApp: App | null) => {
     isIconLoaded.value = false;
     if (newApp) {
       if (newApp.isMerged) {
-        // 若父组件已根据安装状态设置了优先展示的版本，则使用；否则默认 Spark
-        viewingOrigin.value =
-          newApp.viewingOrigin ?? (newApp.sparkApp ? "spark" : "apm");
+        // 若父组件已根据安装状态设置了优先展示的版本，则使用
+        // 否则根据优先级配置决定默认来源
+        if (newApp.viewingOrigin) {
+          viewingOrigin.value = newApp.viewingOrigin;
+        } else if (newApp.sparkApp) {
+          // 使用优先级配置决定默认来源
+          viewingOrigin.value = getHybridDefaultOrigin(newApp.sparkApp);
+        } else {
+          viewingOrigin.value = "apm";
+        }
       } else {
         viewingOrigin.value = newApp.origin;
       }
