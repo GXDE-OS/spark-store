@@ -1,8 +1,8 @@
-# APM 应用商店 - AI 编码指南
+# 星火应用商店 - AI 编码指南
 
-**仓库:** elysia-best/apm-app-store
-**项目类型:** Electron + Vue 3 + Vite 桌面应用
-**用途:** APM (AmberPM) 包管理器的桌面应用商店客户端
+**仓库:** spark-store-project/spark-store
+**项目类型:** Electron + Vue 3 + Vite + Qt 桌面应用
+**用途:** 星火应用商店的桌面应用商店客户端
 **许可证:** GPL-3.0
 
 ---
@@ -14,7 +14,7 @@
 ### 技术栈
 
 - **前端框架:** Vue 3 with Composition API (`<script setup>`)
-- **构建工具:** Vite 6.4.1
+- **构建工具:** Vite 6.4.1 + Qt5
 - **桌面框架:** Electron 40.0.0
 - **UI 框架:** Tailwind CSS 4.1.18
 - **语言:** TypeScript (严格模式已启用)
@@ -25,7 +25,7 @@
 ### 目录结构
 
 ```
-apm-app-store/
+spark-store/
 ├── electron/                    # Electron 主进程
 │   ├── main/
 │   │   ├── backend/             # 后端逻辑 (如安装管理器)
@@ -47,6 +47,17 @@ apm-app-store/
 │   ├── assets/                  # CSS/图片
 │   ├── App.vue                  # 根组件
 │   └── main.ts                  # 渲染进程入口
+├── spark-update-tool/           # Qt 软件更新工具
+│   ├── src/                     # C++ 源代码
+│   │   ├── mainwindow.cpp/h/ui  # 主窗口
+│   │   ├── applistmodel.cpp/h   # 应用列表模型
+│   │   ├── appdelegate.cpp/h    # 应用列表委托
+│   │   ├── downloadmanager.cpp/h # 下载管理器
+│   │   ├── aptssupdater.cpp/h   # APTSS 更新器
+│   │   └── ignoreconfig.cpp/h   # 忽略配置管理
+│   ├── resources/               # 图标和资源文件
+│   ├── debian/                  # Debian 打包文件
+│   └── CMakeLists.txt           # CMake 构建配置
 ├── extras/                      # Shell 脚本和策略文件
 ├── icons/                       # 应用图标
 ├── scripts/                     # 维护脚本
@@ -58,6 +69,54 @@ apm-app-store/
 └── package.json                 # 依赖和脚本
 ```
 
+---
+
+## 🔧 配套工具
+
+### Spark Update Tool (spark-update-tool/)
+
+**技术栈:** Qt6 + C++
+
+**用途:** 独立的软件更新工具，用于检查和安装系统软件更新。
+
+**主要组件:**
+
+| 文件 | 用途 |
+|------|------|
+| `mainwindow.cpp/h/ui` | 主窗口界面，包含应用列表视图、搜索框、更新按钮 |
+| `applistmodel.cpp/h` | 应用列表数据模型，管理可更新应用的数据 |
+| `appdelegate.cpp/h` | 应用列表视图委托，负责绘制每个应用项的UI（图标、进度条、复选框等） |
+| `downloadmanager.cpp/h` | 下载管理器，基于 aria2c 实现多线程下载 |
+| `aptssupdater.cpp/h` | APTSS 更新器，调用 `aptss` 命令获取更新列表 |
+| `ignoreconfig.cpp/h` | 忽略配置管理，管理用户选择忽略更新的应用 |
+
+**核心功能:**
+
+1. **获取更新列表:** 调用 `aptss list --upgradable` 获取可更新应用
+2. **应用名识别:** 基于 `ss-do-upgrade.sh` 部分代码实现
+3. **包大小识别:** 通过 dpkg 获取包大小信息
+4. **多线程下载:** 基于 aptss 方案，使用 aria2c 进行多线程下载
+5. **忽略更新:** 用户可以忽略特定应用的更新
+6. **批量更新:** 支持选择多个应用进行批量更新
+
+**构建方式:**
+
+```bash
+cd spark-update-tool
+mkdir build && cd build
+cmake ..
+make
+```
+
+**支持的发行版:**
+- GXDE OS
+- Ubuntu
+- deepin
+- Debian 10+
+- UOS
+- 银河麒麟
+- Arch Linux
+- Fedora
 ---
 
 ## 🎯 核心概念
