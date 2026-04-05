@@ -1025,7 +1025,7 @@ ipcMain.handle("show-apm-install-dialog", async (event) => {
     title: "APM 安装成功",
     message: "恭喜您，APM 已成功安装",
     detail:
-      "恭喜您，APM 已成功安装！\n首次安装APM后，需要重启电脑后方可在启动器展示应用。您可在应用安装完毕后择机重启电脑\n若您需要立即使用应用，可在应用安装后先在应用商店中打开您的应用。",
+      "恭喜您，APM 已成功安装！\n首次安装APM后，需要重启电脑后方可使用全部功能。您可在应用安装完毕后择机重启电脑。",
     buttons: ["确定"],
     defaultId: 0,
   });
