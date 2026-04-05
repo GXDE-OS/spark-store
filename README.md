@@ -43,8 +43,8 @@ Linux 应用的数量相对有限，Wine 软件的可获取性也颇为困难。
 
 * Fedora
 
-1. sudo dnf enable xmp360/spark-store
-2. sudo dnf install spark-store
+1. `sudo dnf enable xmp360/spark-store`
+2. `sudo dnf install spark-store`
 
 * Arch Linux
 
@@ -54,7 +54,7 @@ Linux 应用的数量相对有限，Wine 软件的可获取性也颇为困难。
 <div align="center">
 <img src="./galleries/image.png" alt="APM Screenshot" width="90%"  />
 </div>
-##
+
 ## 📦 关于 APM
 
 **APM (AmberPM)** 是基于 `fuse-overlayfs` + `dpkg` + `AmberCE` 的容器化兼容层，为多发行版提供轻量级的应用运行方案。星火的 Arch Linux 版本和 Fedora 版本基于APM实现支持。
