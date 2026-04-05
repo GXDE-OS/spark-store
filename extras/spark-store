@@ -33,7 +33,7 @@ exit_code=$?
 # 若程序退出码非0，使用 zenity 弹出友好提示
 if [ $exit_code -ne 0 ]; then
     if command -v zenity >/dev/null 2>&1; then
-        zenity --warning --text="检测到您可能无法正确打开商店，可手动回退到旧版。\n在终端中执行  sudo aptss install spark-store-legacy -y 即可降级。\n您也可以尝试 APM 网页版商店 https://amber-pm.spark-app.store/"
+        zenity --warning --width=600 --text="检测到您可能无法正确打开商店，可手动回退到旧版。\n在终端中执行  sudo aptss install spark-store-legacy -y 即可降级。\n\n对于银河麒麟，您可以尝试 APM 网页版商店 https://amber-pm.spark-app.store/"
     else
         # 降级方案：若 zenity 不可用，至少输出错误信息到终端
         echo "警告: 程序异常退出（退出码 $exit_code），但无法显示图形提示。您可以尝试手动降级：" >&2
