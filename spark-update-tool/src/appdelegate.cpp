@@ -9,6 +9,7 @@
 #include <QMouseEvent>
 #include <QFile>
 #include <QEventLoop>
+#include <QMessageBox>
 
 AppDelegate::AppDelegate(QObject *parent)
     : QStyledItemDelegate(parent), m_downloadManager(new DownloadManager(this)), m_installProcess(nullptr) {
@@ -379,7 +380,24 @@ bool AppDelegate::editorEvent(QEvent *event, QAbstractItemModel *model,
                 if (m_downloads.contains(packageName) && !m_downloads[packageName].isDownloading) {
                     return false;
                 }
-                
+
+                // 检查是否为迁移项
+                bool isMigration = index.data(Qt::UserRole + 10).toBool();
+                if (isMigration) {
+                    QString migrationTarget = index.data(Qt::UserRole + 12).toString();
+                    QMessageBox::StandardButton reply = QMessageBox::question(
+                        nullptr,
+                        "确认迁移",
+                        QString("此更新将把应用替换为 %1 版本，是否继续？").arg(migrationTarget.toUpper()),
+                        QMessageBox::Yes | QMessageBox::No
+                    );
+                    if (reply != QMessageBox::Yes) {
+                        return true; // 用户取消，不执行更新
+                    }
+                    // 用户确认，标记为迁移安装
+                    m_migrationPackages.insert(packageName);
+                }
+
                 // 检查/tmp目录下是否已经存在deb包
                 QDir tempDir(QDir::tempPath());
                 QStringList debs = tempDir.entryList(QStringList() << QString("%1_*.deb").arg(packageName), QDir::Files);
@@ -392,7 +410,7 @@ bool AppDelegate::editorEvent(QEvent *event, QAbstractItemModel *model,
                         debPath = tempDir.absoluteFilePath(debs.first());
                     }
                 }
-                
+
                 // 触发下载流程（无论是否存在deb包，都尝试续传）
                 QString downloadUrl = index.data(Qt::UserRole + 7).toString();
                 QString outputPath = QString("%1/%2.metalink").arg(QDir::tempPath(), packageName);
@@ -410,17 +428,77 @@ bool AppDelegate::editorEvent(QEvent *event, QAbstractItemModel *model,
 
 void AppDelegate::startDownloadForAll() {
     if (!m_model) return;
+
+    // 收集所有迁移项，准备批量提示
+    QStringList migrationPackages;
     for (int row = 0; row < m_model->rowCount(); ++row) {
         QModelIndex index = m_model->index(row, 0);
-        
+
+        // 检查应用是否被忽略
+        bool isIgnored = index.data(Qt::UserRole + 8).toBool();
+        if (isIgnored) {
+            continue;
+        }
+
+        // 检查是否为迁移项
+        bool isMigration = index.data(Qt::UserRole + 10).toBool();
+        if (isMigration) {
+            QString packageName = index.data(Qt::UserRole + 1).toString();
+            QString migrationTarget = index.data(Qt::UserRole + 12).toString();
+            migrationPackages.append(QString("%1 → %2").arg(packageName, migrationTarget.toUpper()));
+        }
+    }
+
+    // 如果有迁移项，弹出批量确认对话框
+    if (!migrationPackages.isEmpty()) {
+        QString message = "以下应用更新后将替换为新的版本来源：\n\n";
+        message += migrationPackages.join("\n");
+        message += "\n\n是否继续更新这些应用？";
+
+        QMessageBox::StandardButton reply = QMessageBox::question(
+            nullptr,
+            "确认迁移",
+            message,
+            QMessageBox::Yes | QMessageBox::No | QMessageBox::Cancel
+        );
+
+        if (reply == QMessageBox::Cancel) {
+            return; // 完全取消更新全部
+        }
+
+        // 如果用户点击 Yes，将所有迁移项加入迁移集合
+        if (reply == QMessageBox::Yes) {
+            for (int row = 0; row < m_model->rowCount(); ++row) {
+                QModelIndex index = m_model->index(row, 0);
+                bool isMigration = index.data(Qt::UserRole + 10).toBool();
+                if (isMigration) {
+                    QString packageName = index.data(Qt::UserRole + 1).toString();
+                    m_migrationPackages.insert(packageName);
+                }
+            }
+        }
+        // 如果用户点击 No，跳过迁移项，继续更新其他应用
+    }
+
+    for (int row = 0; row < m_model->rowCount(); ++row) {
+        QModelIndex index = m_model->index(row, 0);
+
         // 检查应用是否被忽略
         bool isIgnored = index.data(Qt::UserRole + 8).toBool();
         if (isIgnored) {
             qDebug() << "跳过被忽略的应用:" << index.data(Qt::UserRole + 1).toString();
             continue;
         }
-        
+
         QString packageName = index.data(Qt::UserRole + 1).toString();
+
+        // 检查是否为迁移项且用户未确认
+        bool isMigration = index.data(Qt::UserRole + 10).toBool();
+        if (isMigration && !m_migrationPackages.contains(packageName)) {
+            qDebug() << "跳过未确认的迁移项:" << packageName;
+            continue;
+        }
+
         if (m_downloads.contains(packageName) && (m_downloads[packageName].isDownloading || m_downloads[packageName].isInstalled))
             continue;
         QString downloadUrl = index.data(Qt::UserRole + 7).toString();
@@ -485,15 +563,18 @@ void AppDelegate::startNextInstall() {
         }
     }
 
-    // 如果是APM包，先检查APM中是否存在对应的包，再卸载APTSS版本
-    if (source == "apm") {
+    // 检查是否为迁移场景
+    bool isMigration = m_migrationPackages.contains(packageName);
+
+    // 如果是APM包或者是迁移场景，先检查APM中是否存在对应的包，再卸载APTSS版本
+    if (source == "apm" || isMigration) {
         // 检查APM中是否存在对应的包
         QProcess checkProcess;
         QStringList checkArgs;
         checkArgs << "list" << packageName;
         checkProcess.start("apm", checkArgs);
         checkProcess.waitForFinished(30000); // 30秒超时
-        
+
         QString checkOutput = checkProcess.readAllStandardOutput();
         if (checkOutput.contains(packageName)) {
             // APM中存在对应的包，卸载APTSS版本
@@ -849,19 +930,75 @@ void AppDelegate::updateSpinner() {
 // 新增：更新选中应用的方法
 void AppDelegate::startDownloadForSelected() {
     if (!m_model) return;
+
+    // 首先检查选中的应用中是否有迁移项
+    QStringList selectedMigrationPackages;
     for (int row = 0; row < m_model->rowCount(); ++row) {
         QModelIndex index = m_model->index(row, 0);
         QString packageName = index.data(Qt::UserRole + 1).toString();
-        
+
+        if (m_selectedPackages.contains(packageName)) {
+            bool isMigration = index.data(Qt::UserRole + 10).toBool();
+            if (isMigration && !m_migrationPackages.contains(packageName)) {
+                QString migrationTarget = index.data(Qt::UserRole + 12).toString();
+                selectedMigrationPackages.append(QString("%1 → %2").arg(packageName, migrationTarget.toUpper()));
+            }
+        }
+    }
+
+    // 如果有未确认的迁移项，弹出确认对话框
+    if (!selectedMigrationPackages.isEmpty()) {
+        QString message = "以下选中的应用更新后将替换为新的版本来源：\n\n";
+        message += selectedMigrationPackages.join("\n");
+        message += "\n\n是否继续更新这些应用？";
+
+        QMessageBox::StandardButton reply = QMessageBox::question(
+            nullptr,
+            "确认迁移",
+            message,
+            QMessageBox::Yes | QMessageBox::No | QMessageBox::Cancel
+        );
+
+        if (reply == QMessageBox::Cancel) {
+            return; // 完全取消更新
+        }
+
+        // 如果用户点击 Yes，将选中的迁移项加入迁移集合
+        if (reply == QMessageBox::Yes) {
+            for (int row = 0; row < m_model->rowCount(); ++row) {
+                QModelIndex index = m_model->index(row, 0);
+                QString packageName = index.data(Qt::UserRole + 1).toString();
+                if (m_selectedPackages.contains(packageName)) {
+                    bool isMigration = index.data(Qt::UserRole + 10).toBool();
+                    if (isMigration) {
+                        m_migrationPackages.insert(packageName);
+                    }
+                }
+            }
+        }
+        // 如果用户点击 No，继续更新其他应用，跳过未确认的迁移项
+    }
+
+    for (int row = 0; row < m_model->rowCount(); ++row) {
+        QModelIndex index = m_model->index(row, 0);
+        QString packageName = index.data(Qt::UserRole + 1).toString();
+
         // 检查应用是否被忽略
         bool isIgnored = index.data(Qt::UserRole + 8).toBool();
         if (isIgnored) {
             qDebug() << "跳过被忽略的应用:" << packageName;
             continue;
         }
-        
+
         // 只下载选中的应用
         if (m_selectedPackages.contains(packageName)) {
+            // 检查是否为迁移项且用户未确认
+            bool isMigration = index.data(Qt::UserRole + 10).toBool();
+            if (isMigration && !m_migrationPackages.contains(packageName)) {
+                qDebug() << "跳过未确认的迁移项:" << packageName;
+                continue;
+            }
+
             if (m_downloads.contains(packageName) && (m_downloads[packageName].isDownloading || m_downloads[packageName].isInstalled))
                 continue;
             QString downloadUrl = index.data(Qt::UserRole + 7).toString();

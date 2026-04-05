@@ -58,6 +58,9 @@ private:
     // 复选框相关成员变量
     QSet<QString> m_selectedPackages;
 
+    // 迁移包集合（用户确认要迁移的包）
+    QSet<QString> m_migrationPackages;
+
     QQueue<QString> m_installQueue;
     bool m_isInstalling = false;
     QProcess *m_installProcess = nullptr;

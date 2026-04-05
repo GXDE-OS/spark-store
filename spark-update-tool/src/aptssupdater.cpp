@@ -603,7 +603,7 @@ QJsonArray aptssUpdater::mergeUpdateInfo()
 {
     QJsonArray aptssInfo = getUpdateInfoAsJson();
     QJsonArray apmInfo = getApmUpdateInfoAsJson();
-    
+
     // 创建包名到更新信息的映射
     QHash<QString, QJsonObject> aptssMap;
     for (const QJsonValue &value : aptssInfo) {
@@ -612,7 +612,7 @@ QJsonArray aptssUpdater::mergeUpdateInfo()
         obj["source"] = "aptss";
         aptssMap[packageName] = obj;
     }
-    
+
     QHash<QString, QJsonObject> apmMap;
     for (const QJsonValue &value : apmInfo) {
         QJsonObject obj = value.toObject();
@@ -620,44 +620,54 @@ QJsonArray aptssUpdater::mergeUpdateInfo()
         obj["source"] = "apm";
         apmMap[packageName] = obj;
     }
-    
+
     QJsonArray mergedArray;
-    
+
     // 处理只在aptss中存在的包
     for (const QString &packageName : aptssMap.keys()) {
         if (!apmMap.contains(packageName)) {
             mergedArray.append(aptssMap[packageName]);
         }
     }
-    
+
     // 处理只在apm中存在的包
     for (const QString &packageName : apmMap.keys()) {
         if (!aptssMap.contains(packageName)) {
             mergedArray.append(apmMap[packageName]);
         }
     }
-    
+
     // 处理在两者中都存在的包
     for (const QString &packageName : aptssMap.keys()) {
         if (apmMap.contains(packageName)) {
             QJsonObject aptssObj = aptssMap[packageName];
             QJsonObject apmObj = apmMap[packageName];
-            
+
             // 比较版本
             QString aptssVersion = aptssObj["new_version"].toString();
             QString apmVersion = apmObj["new_version"].toString();
-            
-            // 这里简化处理，实际应该使用版本比较函数
+
+            // 检查是否为迁移场景：APM版本更新，且当前包是通过aptss安装的
+            // 通过检查aptss中是否有当前版本号来判断是否通过aptss安装
             if (apmVersion > aptssVersion) {
-                // APM版本更高，使用APM版本
-                mergedArray.append(apmObj);
+                // 迁移场景：Spark -> APM
+                QJsonObject migrationObj = apmObj;
+                migrationObj["is_migration"] = true;
+                migrationObj["migration_source"] = "aptss";
+                migrationObj["migration_target"] = "apm";
+                migrationObj["aptss_version"] = aptssVersion;
+                mergedArray.append(migrationObj);
+
+                // 同时保留aptss的更新项（如果aptss也有更新）
+                mergedArray.append(aptssObj);
             } else {
-                // APTSS版本更高或相同，不展示该包
-                qDebug() << "APTSS版本更高，不展示APM包:" << packageName;
+                // 非迁移场景：同时展示两个来源的更新
+                mergedArray.append(aptssObj);
+                mergedArray.append(apmObj);
             }
         }
     }
-    
+
     qDebug()<<"合并后的更新信息:"<<mergedArray;
     return mergedArray;
 }

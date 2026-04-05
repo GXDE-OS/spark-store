@@ -36,6 +36,12 @@ QVariant AppListModel::data(const QModelIndex &index, int role) const
         return map.value("ignored");
     case Qt::UserRole + 9: // 包来源
         return map.value("source");
+    case Qt::UserRole + 10: // 是否为迁移项
+        return map.value("is_migration");
+    case Qt::UserRole + 11: // 迁移源
+        return map.value("migration_source");
+    case Qt::UserRole + 12: // 迁移目标
+        return map.value("migration_target");
     default:
         return QVariant();
     }
@@ -58,6 +64,9 @@ void AppListModel::setUpdateData(const QJsonArray &updateInfo)
         map["download_url"] = obj["download_url"].toString(); // 确保设置下载 URL
         map["ignored"] = obj["ignored"].toBool(); // 设置忽略状态
         map["source"] = obj["source"].toString(); // 设置包来源
+        map["is_migration"] = obj["is_migration"].toBool(); // 设置是否为迁移项
+        map["migration_source"] = obj["migration_source"].toString(); // 设置迁移源
+        map["migration_target"] = obj["migration_target"].toString(); // 设置迁移目标
         m_data.append(map); // 添加到 QList<QVariantMap>
 
         qDebug() << "设置到模型的包名:" << map["package"].toString() << "忽略状态:" << map["ignored"].toBool() << "来源:" << map["source"].toString();
