@@ -313,33 +313,76 @@ void MainWindow::filterAppsByKeyword(const QString &keyword)
 
 void MainWindow::runAptssUpgrade()
 {
-    QProcess process;
-    
-    // 检查是否已经是root用户，如果是则直接执行命令，否则使用sudo
-    if (geteuid() == 0) {
-        // root用户直接执行
-        process.start("aptss", QStringList() << "ssupdate");
+    // 检查aptss命令是否存在
+    QProcess checkProcess;
+    checkProcess.start("which", QStringList() << "aptss");
+    if (checkProcess.waitForFinished(5000) && checkProcess.exitCode() == 0) {
+        // aptss存在，执行aptss ssupdate
+        QProcess process;
+
+        // 检查是否已经是root用户，如果是则直接执行命令，否则使用sudo
+        if (geteuid() == 0) {
+            // root用户直接执行
+            process.start("aptss", QStringList() << "ssupdate");
+        } else {
+            // 非root用户使用sudo
+            process.start("sudo", QStringList() << "aptss" << "ssupdate");
+        }
+
+        if (!process.waitForStarted(5000)) {
+            QMessageBox::warning(this, "升级失败", "无法启动 aptss ssupdate");
+            return;
+        }
+        process.write("n\n");
+        process.closeWriteChannel();
+
+        // 设置超时时间，避免无限等待
+        if (!process.waitForFinished(30000)) { // 30秒超时
+            qDebug() << "aptss ssupdate 执行超时";
+            process.kill(); // 强制终止进程
+            return;
+        }
+
+        if (process.exitCode() != 0) {
+            QMessageBox::warning(this, "升级失败", "执行 aptss ssupdate 失败，请检查系统环境或稍后再试。");
+        }
     } else {
-        // 非root用户使用sudo
-        process.start("sudo", QStringList() << "aptss" << "ssupdate");
+        qDebug() << "aptss命令不存在，跳过aptss ssupdate";
     }
-    
-    if (!process.waitForStarted(5000)) {
-        QMessageBox::warning(this, "升级失败", "无法启动 aptss ssupdate");
-        return;
-    }
-    process.write("n\n");
-    process.closeWriteChannel();
-    
-    // 设置超时时间，避免无限等待
-    if (!process.waitForFinished(30000)) { // 30秒超时
-        qDebug() << "aptss ssupdate 执行超时";
-        process.kill(); // 强制终止进程
-        return;
-    }
-    
-    if (process.exitCode() != 0) {
-        QMessageBox::warning(this, "升级失败", "执行 aptss ssupdate 失败，请检查系统环境或稍后再试。");
+
+    // 检查apm命令是否存在，如果存在则执行apm update
+    QProcess checkApmProcess;
+    checkApmProcess.start("which", QStringList() << "apm");
+    if (checkApmProcess.waitForFinished(5000) && checkApmProcess.exitCode() == 0) {
+        qDebug() << "apm命令存在，执行apm update";
+        QProcess apmProcess;
+
+        // 检查是否已经是root用户，如果是则直接执行命令，否则使用sudo
+        if (geteuid() == 0) {
+            // root用户直接执行
+            apmProcess.start("apm", QStringList() << "update");
+        } else {
+            // 非root用户使用sudo
+            apmProcess.start("sudo", QStringList() << "apm" << "update");
+        }
+
+        if (!apmProcess.waitForStarted(5000)) {
+            qDebug() << "无法启动 apm update";
+            return;
+        }
+
+        // 设置超时时间，避免无限等待
+        if (!apmProcess.waitForFinished(30000)) { // 30秒超时
+            qDebug() << "apm update 执行超时";
+            apmProcess.kill(); // 强制终止进程
+            return;
+        }
+
+        if (apmProcess.exitCode() != 0) {
+            qDebug() << "执行 apm update 失败";
+        }
+    } else {
+        qDebug() << "apm命令不存在，跳过apm update";
     }
 }
 void MainWindow::closeEvent(QCloseEvent *event)

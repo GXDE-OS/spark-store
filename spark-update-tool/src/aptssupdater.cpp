@@ -16,9 +16,18 @@ aptssUpdater::aptssUpdater(QWidget *parent)
 QStringList aptssUpdater::getUpdateablePackages()
 {
     QStringList packageDetails;
+
+    // 检查aptss命令是否存在
+    QProcess checkProcess;
+    checkProcess.start("which", QStringList() << "aptss");
+    if (!checkProcess.waitForFinished(5000) || checkProcess.exitCode() != 0) {
+        qDebug() << "aptss命令不存在，跳过Spark更新检查";
+        return packageDetails;
+    }
+
     QProcess process;
     QString command = R"(env LANGUAGE=en_US /usr/bin/apt -c /opt/durapps/spark-store/bin/apt-fast-conf/aptss-apt.conf list --upgradable -o Dir::Etc::sourcelist="/opt/durapps/spark-store/bin/apt-fast-conf/sources.list.d/aptss.list" -o Dir::Etc::sourceparts="/dev/null" -o APT::Get::List-Cleanup="0" | awk 'NR>1')";
-    
+
     process.start("bash", QStringList() << "-c" << command);
     if (!process.waitForFinished(30000)) { // 30秒超时
         qWarning() << "Process failed to finish within 30 seconds.";
