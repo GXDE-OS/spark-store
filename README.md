@@ -43,7 +43,7 @@ Linux 应用的数量相对有限，Wine 软件的可获取性也颇为困难。
 
 * Fedora
 
-1. `sudo dnf enable xmp360/spark-store`
+1. `sudo dnf copr enable xmp360/spark-store`
 2. `sudo dnf install spark-store`
 
 * Arch Linux
