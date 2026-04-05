@@ -39,6 +39,7 @@
                     ? 'bg-brand/10 text-brand dark:bg-brand/15'
                     : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
                 "
+                :disabled="!apmAvailable"
                 @click="$emit('switch-origin', 'apm')"
               >
                 APM 软件
@@ -183,6 +184,7 @@ defineProps<{
   error: string;
   activeOrigin: "apm" | "spark";
   storeFilter: "spark" | "apm" | "both";
+  apmAvailable: boolean;
 }>();
 
 defineEmits<{

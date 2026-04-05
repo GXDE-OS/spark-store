@@ -119,6 +119,7 @@
       :error="installedError"
       :active-origin="activeInstalledOrigin"
       :store-filter="storeFilter"
+      :apm-available="apmAvailable"
       @close="closeInstalledModal"
       @refresh="refreshInstalledApps"
       @uninstall="uninstallInstalledApp"
@@ -885,6 +886,10 @@ const upgradeSelectedApps = async () => {
 
 const openInstalledModal = () => {
   showInstalledModal.value = true;
+  // 如果没有 APM 可用，默认切换到 Spark 应用管理
+  if (!apmAvailable.value && activeInstalledOrigin.value === "apm") {
+    activeInstalledOrigin.value = "spark";
+  }
   refreshInstalledApps();
 };
 

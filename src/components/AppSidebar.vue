@@ -89,7 +89,7 @@
 
     <div class="border-t border-slate-200 pt-4 dark:border-slate-800">
       <button
-        v-if="apmAvailable && storeFilter !== 'spark'"
+        v-if="storeFilter !== 'spark'"
         type="button"
         class="flex w-full items-center gap-3 rounded-2xl border border-transparent px-4 py-3 text-left text-sm font-medium text-slate-600 transition hover:border-brand/30 hover:bg-brand/5 hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 dark:text-slate-300 dark:hover:bg-slate-800"
         @click="$emit('list')"
