@@ -146,7 +146,7 @@ case "$command_type" in
                 fi
                 # 2) 执行安装（带进度条）
                 echo "正在安装软件包..."
-                if ! run_with_progress "安装软件包" "正在安装: $packages，请稍候..." "/usr/bin/aptss ${@:2} -y"; then
+                if ! run_with_progress "安装软件包" "正在安装: $packages，请稍候..." "/usr/bin/aptss install $packages -y"; then
                     echo "错误：软件包安装失败。"
                     exit 1
                 fi
