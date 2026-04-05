@@ -241,6 +241,7 @@
               <div
                 v-if="displayApp?.website"
                 class="flex items-center justify-between px-1 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 rounded px-1 -mx-1 transition-colors"
+                @click.stop="openWebsite(displayApp.website)"
               >
                 <span class="text-xs text-slate-400">网站</span>
                 <span
@@ -478,6 +479,12 @@ const showAllMetaData = () => {
 
 const closeMetaModal = () => {
   showMetaModal.value = false;
+};
+
+const openWebsite = (url: string) => {
+  if (url) {
+    window.open(url, "_blank");
+  }
 };
 
 watch(
