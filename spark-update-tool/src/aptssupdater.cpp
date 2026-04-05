@@ -647,9 +647,14 @@ QJsonArray aptssUpdater::mergeUpdateInfo()
             QString aptssVersion = aptssObj["new_version"].toString();
             QString apmVersion = apmObj["new_version"].toString();
 
-            // 检查是否为迁移场景：APM版本更新，且当前包是通过aptss安装的
-            // 通过检查aptss中是否有当前版本号来判断是否通过aptss安装
-            if (apmVersion > aptssVersion) {
+            // 检查包在两个源中的安装状态
+            bool installedInAptss = isPackageInstalledInAptss(packageName);
+            bool installedInApm = isPackageInstalledInApm(packageName);
+
+            // 判断是否为迁移场景：
+            // 1. 只在 aptss 中安装了包（不在 apm 中安装）
+            // 2. APM 版本更新
+            if (installedInAptss && !installedInApm && apmVersion > aptssVersion) {
                 // 迁移场景：Spark -> APM
                 QJsonObject migrationObj = apmObj;
                 migrationObj["is_migration"] = true;
@@ -661,7 +666,11 @@ QJsonArray aptssUpdater::mergeUpdateInfo()
                 // 同时保留aptss的更新项（如果aptss也有更新）
                 mergedArray.append(aptssObj);
             } else {
-                // 非迁移场景：同时展示两个来源的更新
+                // 非迁移场景（共存场景）：同时展示两个来源的更新
+                // 包括以下情况：
+                // 1. 同时在 aptss 和 apm 中都安装了包
+                // 2. 只在 apm 中安装了包
+                // 3. APM 版本不更新
                 mergedArray.append(aptssObj);
                 mergedArray.append(apmObj);
             }
@@ -670,4 +679,31 @@ QJsonArray aptssUpdater::mergeUpdateInfo()
 
     qDebug()<<"合并后的更新信息:"<<mergedArray;
     return mergedArray;
+}
+
+bool aptssUpdater::isPackageInstalledInAptss(const QString &packageName)
+{
+    QProcess process;
+    QString command = QString("dpkg -s '%1' 2>/dev/null | grep -q 'Status: install ok installed'").arg(packageName);
+    process.start("bash", QStringList() << "-c" << command);
+    if (!process.waitForFinished(5000)) {
+        process.kill();
+        return false;
+    }
+    return process.exitCode() == 0;
+}
+
+bool aptssUpdater::isPackageInstalledInApm(const QString &packageName)
+{
+    QProcess process;
+    process.start("apm", QStringList() << "list" << "--installed");
+    if (!process.waitForFinished(30000)) {
+        process.kill();
+        return false;
+    }
+    QString output = process.readAllStandardOutput();
+    // 解析格式: pkgname/repo,section version arch [flags]
+    // 或: pkgname/repo version arch [flags]
+    QRegularExpression regex(QString("^%1/\\S+(?:,\\S+)?\\s+\\S+\\s+\\S+\\s+\\[").arg(QRegularExpression::escape(packageName)));
+    return regex.match(output).hasMatch();
 }

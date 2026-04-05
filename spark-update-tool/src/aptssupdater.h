@@ -30,6 +30,10 @@ private:
     bool checkDesktopFiles(const QStringList &desktopFiles, QString &appName, const QString &lang, const QString &packageName);
     QStringList packageName;
     QStringList apmPackageName; // APM 包列表
+
+    // 检查包安装状态的方法
+    bool isPackageInstalledInAptss(const QString &packageName); // 检查包是否在 aptss 中已安装
+    bool isPackageInstalledInApm(const QString &packageName);   // 检查包是否在 apm 中已安装
 };
 
 #endif // APTSSUPDATER_H
