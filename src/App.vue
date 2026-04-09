@@ -126,17 +126,18 @@
       @switch-origin="handleSwitchOrigin"
     />
 
-    <UpdateAppsModal
-      :show="showUpdateModal"
-      :apps="upgradableApps"
-      :loading="updateLoading"
-      :error="updateError"
-      :has-selected="hasSelectedUpgrades"
-      @close="closeUpdateModal"
-      @refresh="refreshUpgradableApps"
-      @toggle-all="toggleAllUpgrades"
-      @upgrade-selected="upgradeSelectedApps"
-      @upgrade-one="upgradeSingleApp"
+    <UpdateCenterModal
+      :show="updateCenterStore.isOpen.value"
+      :store="updateCenterStore"
+      @update:search-query="updateCenterStore.searchQuery.value = $event"
+      @toggle-selection="updateCenterStore.toggleSelection"
+      @request-start-selected="handleStartSelectedUpdates"
+      @confirm-migration-start="confirmMigrationStart"
+      @dismiss-migration-confirm="
+        updateCenterStore.showMigrationConfirm.value = false
+      "
+      @confirm-close="updateCenterStore.closeNow()"
+      @dismiss-close-confirm="updateCenterStore.showCloseConfirm.value = false"
     />
 
     <UninstallConfirmModal
@@ -151,7 +152,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch, nextTick } from "vue";
+import { ref, computed, onMounted, onUnmounted, watch, nextTick } from "vue";
 import axios from "axios";
 import pino from "pino";
 import AppSidebar from "./components/AppSidebar.vue";
@@ -163,7 +164,7 @@ import ScreenPreview from "./components/ScreenPreview.vue";
 import DownloadQueue from "./components/DownloadQueue.vue";
 import DownloadDetail from "./components/DownloadDetail.vue";
 import InstalledAppsModal from "./components/InstalledAppsModal.vue";
-import UpdateAppsModal from "./components/UpdateAppsModal.vue";
+import UpdateCenterModal from "./components/UpdateCenterModal.vue";
 import UninstallConfirmModal from "./components/UninstallConfirmModal.vue";
 import AboutModal from "./components/AboutModal.vue";
 import {
@@ -180,20 +181,17 @@ import {
   removeDownloadItem,
   watchDownloadsChange,
 } from "./global/downloadStatus";
-import {
-  handleInstall,
-  handleRetry,
-  handleUpgrade,
-} from "./modules/processInstall";
+import { handleInstall, handleRetry } from "./modules/processInstall";
+import { createUpdateCenterStore } from "./modules/updateCenter";
 import type {
   App,
   AppJson,
   DownloadItem,
-  UpdateAppItem,
   ChannelPayload,
   CategoryInfo,
   HomeLink,
   HomeList,
+  UpdateCenterItem,
 } from "./global/typedefinition";
 import type { Ref } from "vue";
 import type { IpcRendererEvent } from "electron";
@@ -251,12 +249,7 @@ const activeInstalledOrigin = ref<"apm" | "spark">("apm");
 const installedApps = ref<App[]>([]);
 const installedLoading = ref(false);
 const installedError = ref("");
-const showUpdateModal = ref(false);
-const upgradableApps = ref<(App & { selected: boolean; upgrading: boolean })[]>(
-  [],
-);
-const updateLoading = ref(false);
-const updateError = ref("");
+const updateCenterStore = createUpdateCenterStore();
 const showUninstallModal = ref(false);
 const uninstallTargetApp: Ref<App | null> = ref(null);
 const showAboutModal = ref(false);
@@ -343,10 +336,6 @@ const categoryCounts = computed(() => {
     counts[app.category]++;
   });
   return counts;
-});
-
-const hasSelectedUpgrades = computed(() => {
-  return upgradableApps.value.some((app) => app.selected);
 });
 
 // 方法
@@ -568,7 +557,9 @@ const openDetail = async (app: App | Record<string, unknown>) => {
       finalApp.viewingOrigin = "apm";
     } else {
       // 若都安装或都未安装，根据优先级配置决定默认展示
-      finalApp.viewingOrigin = getHybridDefaultOrigin(finalApp.sparkApp || finalApp);
+      finalApp.viewingOrigin = getHybridDefaultOrigin(
+        finalApp.sparkApp || finalApp,
+      );
     }
   }
 
@@ -769,14 +760,7 @@ const nextScreen = () => {
 };
 
 const handleUpdate = async () => {
-  try {
-    const result = await window.ipcRenderer.invoke("run-update-tool");
-    if (!result || !result.success) {
-      logger.warn(`启动更新工具失败: ${result?.message || "未知错误"}`);
-    }
-  } catch (error) {
-    logger.error(`调用更新工具时出错: ${error}`);
-  }
+  await openUpdateModal();
 };
 
 const handleOpenInstallSettings = async () => {
@@ -794,94 +778,35 @@ const handleList = () => {
   openInstalledModal();
 };
 
-const openUpdateModal = () => {
-  showUpdateModal.value = true;
-  refreshUpgradableApps();
-};
-
-const closeUpdateModal = () => {
-  showUpdateModal.value = false;
-};
-
-const refreshUpgradableApps = async () => {
-  updateLoading.value = true;
-  updateError.value = "";
+const openUpdateModal = async () => {
   try {
-    const result = await window.ipcRenderer.invoke("list-upgradable");
-    if (!result?.success) {
-      upgradableApps.value = [];
-      updateError.value = result?.message || "检查更新失败";
-      return;
-    }
-
-    upgradableApps.value = (result.apps || []).map(
-      (app: Record<string, string>) => ({
-        ...app,
-        // Map properties if needed or assume main matches App interface except field names might differ
-        // For now assuming result.apps returns objects compatible with App for core fields,
-        // but let's normalize just in case if main returns different structure.
-        name: app.name || app.Name || "",
-        pkgname: app.pkgname || app.Pkgname || "",
-        version: app.newVersion || app.version || "",
-        category: app.category || "unknown",
-        selected: false,
-        upgrading: false,
-      }),
-    );
-  } catch (error: unknown) {
-    upgradableApps.value = [];
-    updateError.value = (error as Error)?.message || "检查更新失败";
-  } finally {
-    updateLoading.value = false;
+    await updateCenterStore.open();
+  } catch (error) {
+    logger.error(`打开更新中心失败: ${error}`);
   }
 };
 
-const toggleAllUpgrades = () => {
-  const shouldSelectAll =
-    !hasSelectedUpgrades.value ||
-    upgradableApps.value.some((app) => !app.selected);
-  upgradableApps.value = upgradableApps.value.map((app) => ({
-    ...app,
-    selected: shouldSelectAll ? true : false,
-  }));
+const hasMigrationSelection = (items: UpdateCenterItem[]): boolean => {
+  return items.some((item) => item.isMigration === true);
 };
 
-const upgradeSingleApp = async (app: UpdateAppItem) => {
-  if (!app?.pkgname) return;
-  const target = apps.value.find((a) => a.pkgname === app.pkgname);
-  if (target) {
-    await handleUpgrade(target);
-  } else {
-    // If we can't find it in the list (e.g. category not loaded?), use the info we have
-    // But handleUpgrade expects App. Let's try to construct minimal App
-    let minimalApp: App = {
-      name: app.pkgname,
-      pkgname: app.pkgname,
-      version: app.newVersion || "",
-      category: "unknown",
-      tags: "",
-      more: "",
-      filename: "",
-      torrent_address: "",
-      author: "",
-      contributor: "",
-      website: "",
-      update: "",
-      size: "",
-      img_urls: [],
-      icons: "",
-      origin: "apm", // Default to APM if unknown, or try to guess
-      currentStatus: "installed",
-    };
-    await handleUpgrade(minimalApp);
+const handleStartSelectedUpdates = async () => {
+  const selectedItems = updateCenterStore.getSelectedItems();
+  if (selectedItems.length === 0) {
+    return;
   }
+
+  if (hasMigrationSelection(selectedItems)) {
+    updateCenterStore.showMigrationConfirm.value = true;
+    return;
+  }
+
+  await updateCenterStore.startSelected();
 };
 
-const upgradeSelectedApps = async () => {
-  const selectedApps = upgradableApps.value.filter((app) => app.selected);
-  for (const app of selectedApps) {
-    await upgradeSingleApp(app);
-  }
+const confirmMigrationStart = async () => {
+  updateCenterStore.showMigrationConfirm.value = false;
+  await updateCenterStore.startSelected();
 };
 
 const openInstalledModal = () => {
@@ -1224,6 +1149,7 @@ const handleSearchFocus = () => {
 // 生命周期钩子
 onMounted(async () => {
   initTheme();
+  updateCenterStore.bind();
 
   // 从主进程获取启动参数（--no-apm / --no-spark），再加载数据
   storeFilter.value = await window.ipcRenderer.invoke("get-store-filter");
@@ -1363,6 +1289,10 @@ onMounted(async () => {
 
   window.ipcRenderer.send("renderer-ready", { status: true });
   logger.info("Renderer process is ready!");
+});
+
+onUnmounted(() => {
+  updateCenterStore.unbind();
 });
 
 // 观察器

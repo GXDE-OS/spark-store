@@ -31,7 +31,7 @@ export const tasks = new Map<number, InstallTask>();
 
 let idle = true; // Indicates if the installation manager is idle
 
-const checkSuperUserCommand = async (): Promise<string> => {
+export const checkSuperUserCommand = async (): Promise<string> => {
   let superUserCmd = "";
   const execAsync = promisify(exec);
   if (process.getuid && process.getuid() !== 0) {
@@ -251,8 +251,9 @@ ipcMain.on("queue-install", async (event, download_json) => {
   if (origin === "spark") {
     // Spark Store logic
     if (upgradeOnly) {
-      execCommand = "pkexec";
-      execParams.push("spark-update-tool", pkgname);
+      execCommand = superUserCmd || SHELL_CALLER_PATH;
+      if (superUserCmd) execParams.push(SHELL_CALLER_PATH);
+      execParams.push("aptss", "install", "-y", pkgname, "--only-upgrade");
     } else {
       execCommand = superUserCmd || SHELL_CALLER_PATH;
       if (superUserCmd) execParams.push(SHELL_CALLER_PATH);

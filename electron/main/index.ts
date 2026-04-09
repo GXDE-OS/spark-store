@@ -18,6 +18,11 @@ import { handleCommandLine } from "./deeplink.js";
 import { isLoaded } from "../global.js";
 import { tasks } from "./backend/install-manager.js";
 import { sendTelemetryOnce } from "./backend/telemetry.js";
+import { initializeUpdateCenter } from "./backend/update-center/index.js";
+import {
+  getMainWindowCloseAction,
+  type MainWindowCloseGuardState,
+} from "./window-close-guard.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 process.env.APP_ROOT = path.join(__dirname, "../..");
@@ -81,6 +86,7 @@ if (!app.requestSingleInstanceLock()) {
 }
 
 let win: BrowserWindow | null = null;
+let allowAppExit = false;
 const preload = path.join(__dirname, "../preload/index.mjs");
 const indexHtml = path.join(RENDERER_DIST, "index.html");
 
@@ -106,6 +112,44 @@ ipcMain.handle("get-store-filter", (): "spark" | "apm" | "both" =>
 );
 
 ipcMain.handle("get-app-version", (): string => getAppVersion());
+
+const getMainWindowCloseGuardState = (): MainWindowCloseGuardState => ({
+  installTaskCount: tasks.size,
+  hasRunningUpdateCenterTasks:
+    initializeUpdateCenter().getState().hasRunningTasks,
+});
+
+const applyMainWindowCloseAction = (): void => {
+  if (!win) {
+    return;
+  }
+
+  const action = getMainWindowCloseAction(getMainWindowCloseGuardState());
+  if (action === "hide") {
+    win.hide();
+    win.setSkipTaskbar(true);
+    return;
+  }
+
+  win.destroy();
+};
+
+const requestApplicationExit = (): void => {
+  if (!win) {
+    allowAppExit = true;
+    app.quit();
+    return;
+  }
+
+  if (getMainWindowCloseAction(getMainWindowCloseGuardState()) === "hide") {
+    win.hide();
+    win.setSkipTaskbar(true);
+    return;
+  }
+
+  allowAppExit = true;
+  app.quit();
+};
 
 async function createWindow() {
   win = new BrowserWindow({
@@ -148,16 +192,13 @@ async function createWindow() {
   // win.webContents.on('will-navigate', (event, url) => { }) #344
 
   win.on("close", (event) => {
+    if (allowAppExit) {
+      return;
+    }
+
     // 截获 close 默认行为
     event.preventDefault();
-    // 点击关闭时触发close事件，我们按照之前的思路在关闭时，隐藏窗口，隐藏任务栏窗口
-    if (tasks.size > 0) {
-      win.hide();
-      win.setSkipTaskbar(true);
-    } else {
-      // 如果没有下载任务，才允许关闭窗口
-      win.destroy();
-    }
+    applyMainWindowCloseAction();
   });
 }
 
@@ -171,26 +212,6 @@ ipcMain.on("renderer-ready", (event, args) => {
 
 ipcMain.on("set-theme-source", (event, theme: "system" | "light" | "dark") => {
   nativeTheme.themeSource = theme;
-});
-
-// 启动系统更新工具（使用 pkexec 提升权限）
-ipcMain.handle("run-update-tool", async () => {
-  try {
-    const { spawn } = await import("node:child_process");
-    const pkexecPath = "/usr/bin/pkexec";
-    const args = ["spark-update-tool"];
-    const child = spawn(pkexecPath, args, {
-      detached: true,
-      stdio: "ignore",
-    });
-    // 让子进程在后台运行且不影响主进程退出
-    child.unref();
-    logger.info("Launched pkexec spark-update-tool");
-    return { success: true };
-  } catch (err) {
-    logger.error({ err }, "Failed to launch spark-update-tool");
-    return { success: false, message: (err as Error)?.message || String(err) };
-  }
 });
 
 // 启动安装设置脚本（可能需要提升权限）
@@ -220,12 +241,14 @@ app.whenReady().then(() => {
   });
   createWindow();
   handleCommandLine(process.argv);
+  initializeUpdateCenter();
   // 启动后执行一次遥测（仅 Linux，不阻塞）
   sendTelemetryOnce(getAppVersion());
 });
 
 app.on("window-all-closed", () => {
   win = null;
+  allowAppExit = false;
   if (process.platform !== "darwin") app.quit();
 });
 
@@ -302,7 +325,7 @@ app.whenReady().then(() => {
     {
       label: "退出程序",
       click: () => {
-        win.destroy();
+        requestApplicationExit();
       },
     },
   ]);
