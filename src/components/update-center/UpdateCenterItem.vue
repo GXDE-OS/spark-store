@@ -10,6 +10,16 @@
         :disabled="item.ignored === true"
         @change="$emit('toggle-selection')"
       />
+      <div
+        class="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-500"
+      >
+        <img
+          :src="iconSrc"
+          :alt="`${item.displayName} 图标`"
+          class="h-full w-full object-cover"
+          @error="handleIconError"
+        />
+      </div>
       <div class="min-w-0 flex-1">
         <div class="flex flex-wrap items-center gap-2">
           <p class="font-semibold text-slate-900 dark:text-white">
@@ -67,7 +77,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref, watch } from "vue";
 
 import type {
   UpdateCenterItem,
@@ -80,9 +90,38 @@ const props = defineProps<{
   selected: boolean;
 }>();
 
+const PLACEHOLDER_ICON =
+  'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"%3E%3Crect width="48" height="48" rx="12" fill="%23e2e8f0"/%3E%3Cpath d="M17 31h14v2H17zm3-12h8a2 2 0 0 1 2 2v8H18v-8a2 2 0 0 1 2-2" fill="%2394a3b8"/%3E%3C/svg%3E';
+const failedIcon = ref<string | null>(null);
+
 defineEmits<{
   (e: "toggle-selection"): void;
 }>();
+
+const normalizeIconSrc = (icon?: string): string => {
+  if (!icon || failedIcon.value === icon) {
+    return PLACEHOLDER_ICON;
+  }
+
+  if (/^[a-z]+:\/\//i.test(icon)) {
+    return icon;
+  }
+
+  return icon.startsWith("/") ? `file://${icon}` : icon;
+};
+
+const handleIconError = () => {
+  failedIcon.value = props.item.icon ?? null;
+};
+
+watch(
+  () => props.item,
+  () => {
+    failedIcon.value = null;
+  },
+);
+
+const iconSrc = computed(() => normalizeIconSrc(props.item.icon));
 
 const sourceLabel = computed(() => {
   return props.item.source === "apm" ? "APM" : "传统deb";

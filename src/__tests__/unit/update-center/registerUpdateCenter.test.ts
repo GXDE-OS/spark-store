@@ -217,6 +217,36 @@ describe("update-center/ipc", () => {
     expect(snapshots.at(-1)?.items[0]).not.toHaveProperty("nextVersion");
   });
 
+  it("service task snapshots keep item icons for queued work", async () => {
+    const service = createUpdateCenterService({
+      loadItems: async () => [{ ...createItem(), icon: "/icons/weather.png" }],
+      createTaskRunner: (queue: UpdateCenterQueue) => ({
+        cancelActiveTask: vi.fn(),
+        runNextTask: async () => {
+          const task = queue.getNextQueuedTask();
+          if (!task) {
+            return null;
+          }
+
+          queue.markActiveTask(task.id, "installing");
+          queue.finishTask(task.id, "completed");
+          return task;
+        },
+      }),
+    });
+
+    await service.refresh();
+    await service.start(["aptss:spark-weather"]);
+
+    expect(service.getState().tasks).toMatchObject([
+      {
+        taskKey: "aptss:spark-weather",
+        icon: "/icons/weather.png",
+        status: "completed",
+      },
+    ]);
+  });
+
   it("concurrent start calls still serialize through one processing pipeline", async () => {
     const startedTaskIds: number[] = [];
     const releases: Array<() => void> = [];

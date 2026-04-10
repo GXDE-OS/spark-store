@@ -9,6 +9,7 @@ import {
   parseAptssUpgradableOutput,
   parsePrintUrisOutput,
 } from "./query";
+import { resolveUpdateItemIcon } from "./icons";
 import {
   createUpdateCenterService,
   type UpdateCenterIgnorePayload,
@@ -31,6 +32,15 @@ export interface UpdateCenterLoadItemsResult {
   items: UpdateCenterItem[];
   warnings: string[];
 }
+
+type StoreCategoryMap = Map<string, string>;
+
+interface RemoteCategoryAppEntry {
+  Pkgname?: string;
+}
+
+const REMOTE_STORE_BASE_URL = "https://erotica.spark-app.store";
+const categoryCache = new Map<string, Promise<StoreCategoryMap>>();
 
 const APTSS_LIST_UPGRADABLE_COMMAND = {
   command: "bash",
@@ -146,6 +156,105 @@ const enrichApmItems = async (
   };
 };
 
+const getStoreArch = (
+  item: Pick<UpdateCenterItem, "source" | "arch">,
+): string => {
+  const arch = item.arch;
+  if (!arch) {
+    return "";
+  }
+
+  if (arch.includes("-")) {
+    return arch;
+  }
+
+  return `${arch}-${item.source === "aptss" ? "store" : "apm"}`;
+};
+
+const loadJson = async <T>(url: string): Promise<T> => {
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`Request failed for ${url}`);
+  }
+
+  return (await response.json()) as T;
+};
+
+const loadStoreCategoryMap = async (
+  storeArch: string,
+): Promise<StoreCategoryMap> => {
+  const categories = await loadJson<Record<string, unknown>>(
+    `${REMOTE_STORE_BASE_URL}/${storeArch}/categories.json`,
+  );
+  const categoryEntries = await Promise.allSettled(
+    Object.keys(categories).map(async (category) => {
+      const apps = await loadJson<RemoteCategoryAppEntry[]>(
+        `${REMOTE_STORE_BASE_URL}/${storeArch}/${category}/applist.json`,
+      );
+
+      return { apps, category };
+    }),
+  );
+
+  const categoryMap: StoreCategoryMap = new Map();
+  for (const entry of categoryEntries) {
+    if (entry.status !== "fulfilled") {
+      continue;
+    }
+
+    for (const app of entry.value.apps) {
+      if (app.Pkgname && !categoryMap.has(app.Pkgname)) {
+        categoryMap.set(app.Pkgname, entry.value.category);
+      }
+    }
+  }
+
+  return categoryMap;
+};
+
+const getStoreCategoryMap = (storeArch: string): Promise<StoreCategoryMap> => {
+  const cached = categoryCache.get(storeArch);
+  if (cached) {
+    return cached;
+  }
+
+  const pending = loadStoreCategoryMap(storeArch).catch(() => {
+    categoryCache.delete(storeArch);
+    return new Map();
+  });
+  categoryCache.set(storeArch, pending);
+  return pending;
+};
+
+const enrichItemCategories = async (
+  items: UpdateCenterItem[],
+): Promise<UpdateCenterItem[]> => {
+  return await Promise.all(
+    items.map(async (item) => {
+      if (item.category) {
+        return item;
+      }
+
+      const storeArch = getStoreArch(item);
+      if (!storeArch) {
+        return item;
+      }
+
+      const categoryMap = await getStoreCategoryMap(storeArch);
+      const category = categoryMap.get(item.pkgname);
+      return category ? { ...item, category } : item;
+    }),
+  );
+};
+
+const enrichItemIcons = (items: UpdateCenterItem[]): UpdateCenterItem[] => {
+  return items.map((item) => {
+    const icon = resolveUpdateItemIcon(item);
+
+    return icon ? { ...item, icon } : item;
+  });
+};
+
 export const loadUpdateCenterItems = async (
   runCommand: UpdateCenterCommandRunner = runCommandCapture,
 ): Promise<UpdateCenterLoadItemsResult> => {
@@ -186,12 +295,19 @@ export const loadUpdateCenterItems = async (
     apmInstalledResult.code === 0 ? apmInstalledResult.stdout : "",
   );
 
-  const enrichedApmItems = await enrichApmItems(apmItems, runCommand);
+  const [categorizedAptssItems, categorizedApmItems] = await Promise.all([
+    enrichItemCategories(aptssItems),
+    enrichItemCategories(apmItems),
+  ]);
+  const enrichedApmItems = await enrichApmItems(
+    categorizedApmItems,
+    runCommand,
+  );
 
   return {
     items: mergeUpdateSources(
-      aptssItems,
-      enrichedApmItems.items,
+      enrichItemIcons(categorizedAptssItems),
+      enrichItemIcons(enrichedApmItems.items),
       installedSources,
     ),
     warnings: [...warnings, ...enrichedApmItems.warnings],

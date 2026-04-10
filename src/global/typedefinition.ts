@@ -140,6 +140,7 @@ export interface UpdateCenterItem {
   currentVersion: string;
   newVersion: string;
   source: UpdateSource;
+  icon?: string;
   ignored?: boolean;
   downloadUrl?: string;
   fileName?: string;
@@ -155,6 +156,7 @@ export interface UpdateCenterTaskState {
   taskKey: string;
   packageName: string;
   source: UpdateSource;
+  icon?: string;
   status: UpdateCenterTaskStatus;
   progress: number;
   logs: Array<{ time: number; message: string }>;

@@ -10,6 +10,9 @@ export interface UpdateCenterItem {
   source: UpdateSource;
   currentVersion: string;
   nextVersion: string;
+  arch?: string;
+  category?: string;
+  icon?: string;
   ignored?: boolean;
   downloadUrl?: string;
   fileName?: string;
