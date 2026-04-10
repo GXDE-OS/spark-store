@@ -60,6 +60,7 @@
           <AppGrid
             :apps="filteredApps"
             :loading="loading"
+            :scroll-key="activeCategory"
             :store-filter="storeFilter"
             @open-detail="openDetail"
           />
