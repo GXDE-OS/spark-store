@@ -123,6 +123,69 @@ export interface UpdateAppItem {
   upgrading?: boolean;
 }
 
+export type UpdateSource = "aptss" | "apm";
+
+export type UpdateCenterTaskStatus =
+  | "queued"
+  | "downloading"
+  | "installing"
+  | "completed"
+  | "failed"
+  | "cancelled";
+
+export interface UpdateCenterItem {
+  taskKey: string;
+  packageName: string;
+  displayName: string;
+  currentVersion: string;
+  newVersion: string;
+  source: UpdateSource;
+  ignored?: boolean;
+  downloadUrl?: string;
+  fileName?: string;
+  size?: number;
+  sha512?: string;
+  isMigration?: boolean;
+  migrationSource?: UpdateSource;
+  migrationTarget?: UpdateSource;
+  aptssVersion?: string;
+}
+
+export interface UpdateCenterTaskState {
+  taskKey: string;
+  packageName: string;
+  source: UpdateSource;
+  status: UpdateCenterTaskStatus;
+  progress: number;
+  logs: Array<{ time: number; message: string }>;
+  errorMessage: string;
+}
+
+export interface UpdateCenterSnapshot {
+  items: UpdateCenterItem[];
+  tasks: UpdateCenterTaskState[];
+  warnings: string[];
+  hasRunningTasks: boolean;
+}
+
+export interface UpdateCenterBridge {
+  open: () => Promise<UpdateCenterSnapshot>;
+  refresh: () => Promise<UpdateCenterSnapshot>;
+  ignore: (payload: {
+    packageName: string;
+    newVersion: string;
+  }) => Promise<void>;
+  unignore: (payload: {
+    packageName: string;
+    newVersion: string;
+  }) => Promise<void>;
+  start: (taskKeys: string[]) => Promise<void>;
+  cancel: (taskKey: string) => Promise<void>;
+  getState: () => Promise<UpdateCenterSnapshot>;
+  onState: (listener: (snapshot: UpdateCenterSnapshot) => void) => void;
+  offState: (listener: (snapshot: UpdateCenterSnapshot) => void) => void;
+}
+
 /**************Below are type from main process ********************/
 export interface InstalledAppInfo {
   pkgname: string;

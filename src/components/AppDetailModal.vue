@@ -442,7 +442,10 @@
 import { computed, useAttrs, ref, watch } from "vue";
 import axios from "axios";
 import { useInstallFeedback, downloads } from "../global/downloadStatus";
-import { APM_STORE_BASE_URL, getHybridDefaultOrigin } from "../global/storeConfig";
+import {
+  APM_STORE_BASE_URL,
+  getHybridDefaultOrigin,
+} from "../global/storeConfig";
 import type { App } from "../global/typedefinition";
 
 const attrs = useAttrs();

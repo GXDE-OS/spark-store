@@ -1,4 +1,47 @@
-import { ipcRenderer, contextBridge } from "electron";
+import { ipcRenderer, contextBridge, type IpcRendererEvent } from "electron";
+
+type UpdateCenterSnapshot = {
+  items: Array<{
+    taskKey: string;
+    packageName: string;
+    displayName: string;
+    currentVersion: string;
+    newVersion: string;
+    source: "aptss" | "apm";
+    ignored?: boolean;
+  }>;
+  tasks: Array<{
+    taskKey: string;
+    packageName: string;
+    source: "aptss" | "apm";
+    status:
+      | "queued"
+      | "downloading"
+      | "installing"
+      | "completed"
+      | "failed"
+      | "cancelled";
+    progress: number;
+    logs: Array<{ time: number; message: string }>;
+    errorMessage: string;
+  }>;
+  warnings: string[];
+  hasRunningTasks: boolean;
+};
+
+type IpcRendererFacade = {
+  on: typeof ipcRenderer.on;
+  off: typeof ipcRenderer.off;
+  send: typeof ipcRenderer.send;
+  invoke: typeof ipcRenderer.invoke;
+};
+
+type UpdateCenterStateListener = (snapshot: UpdateCenterSnapshot) => void;
+
+const updateCenterStateListeners = new Map<
+  UpdateCenterStateListener,
+  (_event: IpcRendererEvent, snapshot: UpdateCenterSnapshot) => void
+>();
 
 // --------- Expose some API to the Renderer process ---------
 contextBridge.exposeInMainWorld("ipcRenderer", {
@@ -23,7 +66,7 @@ contextBridge.exposeInMainWorld("ipcRenderer", {
 
   // You can expose other APTs you need here.
   // ...
-});
+} satisfies IpcRendererFacade);
 
 contextBridge.exposeInMainWorld("apm_store", {
   arch: (() => {
@@ -36,6 +79,46 @@ contextBridge.exposeInMainWorld("apm_store", {
       return arch;
     }
   })(),
+});
+
+contextBridge.exposeInMainWorld("updateCenter", {
+  open: (): Promise<UpdateCenterSnapshot> =>
+    ipcRenderer.invoke("update-center-open"),
+  refresh: (): Promise<UpdateCenterSnapshot> =>
+    ipcRenderer.invoke("update-center-refresh"),
+  ignore: (payload: {
+    packageName: string;
+    newVersion: string;
+  }): Promise<void> => ipcRenderer.invoke("update-center-ignore", payload),
+  unignore: (payload: {
+    packageName: string;
+    newVersion: string;
+  }): Promise<void> => ipcRenderer.invoke("update-center-unignore", payload),
+  start: (taskKeys: string[]): Promise<void> =>
+    ipcRenderer.invoke("update-center-start", taskKeys),
+  cancel: (taskKey: string): Promise<void> =>
+    ipcRenderer.invoke("update-center-cancel", taskKey),
+  getState: (): Promise<UpdateCenterSnapshot> =>
+    ipcRenderer.invoke("update-center-get-state"),
+  onState: (listener: UpdateCenterStateListener): void => {
+    const wrapped = (
+      _event: IpcRendererEvent,
+      snapshot: UpdateCenterSnapshot,
+    ) => {
+      listener(snapshot);
+    };
+    updateCenterStateListeners.set(listener, wrapped);
+    ipcRenderer.on("update-center-state", wrapped);
+  },
+  offState: (listener: UpdateCenterStateListener): void => {
+    const wrapped = updateCenterStateListeners.get(listener);
+    if (!wrapped) {
+      return;
+    }
+
+    ipcRenderer.off("update-center-state", wrapped);
+    updateCenterStateListeners.delete(listener);
+  },
 });
 
 // --------- Preload scripts loading ---------

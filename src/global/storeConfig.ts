@@ -102,7 +102,10 @@ export async function loadPriorityConfig(arch: string): Promise<void> {
         };
       }
       isPriorityConfigLoaded = true;
-      console.log("[PriorityConfig] 已从服务器加载优先级配置:", dynamicPriorityConfig);
+      console.log(
+        "[PriorityConfig] 已从服务器加载优先级配置:",
+        dynamicPriorityConfig,
+      );
     } else {
       // 配置文件不存在，默认优先 Spark
       console.log("[PriorityConfig] 服务器无配置文件，使用默认 Spark 优先");
@@ -134,21 +137,6 @@ function resetPriorityConfig(): void {
     },
   };
   isPriorityConfigLoaded = true;
-}
-
-/**
- * 检查配置是否为空（没有任何规则）
- */
-function isConfigEmpty(): boolean {
-  const { sparkPriority, apmPriority } = dynamicPriorityConfig;
-  return (
-    sparkPriority.pkgnames.length === 0 &&
-    sparkPriority.categories.length === 0 &&
-    sparkPriority.tags.length === 0 &&
-    apmPriority.pkgnames.length === 0 &&
-    apmPriority.categories.length === 0 &&
-    apmPriority.tags.length === 0
-  );
 }
 
 /**

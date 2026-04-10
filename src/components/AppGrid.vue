@@ -34,6 +34,7 @@
   <!-- 应用数量较多时，使用虚拟滚动 -->
   <RecycleScroller
     v-else-if="!loading"
+    ref="scrollerRef"
     class="scroller"
     :items="gridRows"
     :item-size="itemHeight"
@@ -77,16 +78,21 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, onMounted, onUnmounted } from "vue";
+import { computed, ref, onMounted, onUnmounted, nextTick, watch } from "vue";
 import { RecycleScroller } from "vue-virtual-scroller";
 import "vue-virtual-scroller/dist/vue-virtual-scroller.css";
 import AppCard from "./AppCard.vue";
 import type { App } from "../global/typedefinition";
 
+interface RecycleScrollerInstance {
+  $el: HTMLElement;
+}
+
 const props = defineProps<{
   apps: App[];
   loading: boolean;
   storeFilter?: "spark" | "apm" | "both";
+  scrollKey?: string;
 }>();
 
 defineEmits<{
@@ -95,6 +101,7 @@ defineEmits<{
 
 // 当前列数
 const columns = ref(4);
+const scrollerRef = ref<RecycleScrollerInstance | null>(null);
 
 // 根据窗口宽度更新列数
 const updateColumns = () => {
@@ -113,6 +120,19 @@ onMounted(() => {
 onUnmounted(() => {
   window.removeEventListener("resize", updateColumns);
 });
+
+watch(
+  () => props.scrollKey,
+  async (nextKey, prevKey) => {
+    if (nextKey === prevKey || prevKey === undefined) return;
+    if (props.loading || props.apps.length <= 50) return;
+
+    await nextTick();
+    if (scrollerRef.value) {
+      scrollerRef.value.$el.scrollTop = 0;
+    }
+  },
+);
 
 // 网格列数类名
 const gridColumnsClass = computed(() => {
