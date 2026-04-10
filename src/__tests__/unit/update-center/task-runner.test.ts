@@ -294,7 +294,7 @@ describe("update-center task runner", () => {
         args: [
           "/opt/spark-store/extras/shell-caller.sh",
           "apm",
-          "ssaudit",
+          "ssinstall",
           "/tmp/spark-player.deb",
         ],
       },

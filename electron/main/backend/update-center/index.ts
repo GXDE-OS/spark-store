@@ -48,6 +48,14 @@ const DPKG_QUERY_INSTALLED_COMMAND = {
   ],
 };
 
+const getApmPrintUrisCommand = (pkgname: string) => ({
+  command: "bash",
+  args: [
+    "-lc",
+    `amber-pm-debug /usr/bin/apt -c /opt/durapps/spark-store/bin/apt-fast-conf/aptss-apt.conf download ${pkgname} --print-uris`,
+  ],
+});
+
 const runCommandCapture: UpdateCenterCommandRunner = async (
   command,
   args,
@@ -93,11 +101,11 @@ const loadApmItemMetadata = async (
   | { item: UpdateCenterItem; warning?: undefined }
   | { item: null; warning: string }
 > => {
-  const metadataResult = await runCommand("apm", [
-    "info",
-    item.pkgname,
-    "--print-uris",
-  ]);
+  const printUrisCommand = getApmPrintUrisCommand(item.pkgname);
+  const metadataResult = await runCommand(
+    printUrisCommand.command,
+    printUrisCommand.args,
+  );
   const commandError = getCommandError(
     `apm metadata query for ${item.pkgname}`,
     metadataResult,

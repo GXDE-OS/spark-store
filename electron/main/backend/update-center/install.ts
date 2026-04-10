@@ -155,14 +155,14 @@ export const installUpdateItem = async ({
   }
 
   if (item.source === "apm" && filePath) {
-    const auditCommand = buildPrivilegedCommand(
+    const installCommand = buildPrivilegedCommand(
       SHELL_CALLER_PATH,
-      ["apm", "ssaudit", filePath],
+      ["apm", "ssinstall", filePath],
       superUserCmd,
     );
     await runCommand(
-      auditCommand.execCommand,
-      auditCommand.execParams,
+      installCommand.execCommand,
+      installCommand.execParams,
       onLog,
       signal,
     );

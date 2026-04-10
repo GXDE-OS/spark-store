@@ -14,6 +14,9 @@ const APTSS_LIST_UPGRADABLE_KEY =
 const DPKG_QUERY_INSTALLED_KEY =
   "dpkg-query -W -f=${Package}\t${db:Status-Want} ${db:Status-Status} ${db:Status-Eflag}\n";
 
+const APM_PRINT_URIS_KEY =
+  "bash -lc amber-pm-debug /usr/bin/apt -c /opt/durapps/spark-store/bin/apt-fast-conf/aptss-apt.conf download spark-weather --print-uris";
+
 describe("update-center load items", () => {
   it("enriches apm and migration items with download metadata needed by the runner", async () => {
     const commandResults = new Map<string, CommandResult>([
@@ -50,7 +53,7 @@ describe("update-center load items", () => {
         },
       ],
       [
-        "apm info spark-weather --print-uris",
+        APM_PRINT_URIS_KEY,
         {
           code: 0,
           stdout:
