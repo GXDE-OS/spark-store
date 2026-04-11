@@ -182,6 +182,10 @@ import {
   removeDownloadItem,
   watchDownloadsChange,
 } from "./global/downloadStatus";
+import {
+  countSearchMatchesByCategory,
+  rankAppsBySearch,
+} from "./modules/appSearch";
 import { handleInstall, handleRetry } from "./modules/processInstall";
 import { createUpdateCenterStore } from "./modules/updateCenter";
 import type {
@@ -260,7 +264,7 @@ const apmAvailable = ref(false);
 const storeFilter = ref<"spark" | "apm" | "both">("both");
 
 // 计算属性
-const filteredApps = computed(() => {
+const baseApps = computed(() => {
   let result = [...apps.value];
 
   // 合并相同包名的应用 (混合模式)
@@ -284,50 +288,27 @@ const filteredApps = computed(() => {
     result = Array.from(mergedMap.values());
   }
 
+  return result;
+});
+
+const filteredApps = computed(() => {
+  let result = [...baseApps.value];
+
   // 按分类筛选
   if (activeCategory.value !== "all") {
     result = result.filter((app) => app.category === activeCategory.value);
   }
 
-  // 按搜索关键词筛选
   if (searchQuery.value.trim()) {
-    const q = searchQuery.value.toLowerCase().trim();
-    result = result.filter((app) => {
-      // 兼容可能为 undefined 的情况，虽然类型定义是 string
-      return (
-        (app.name || "").toLowerCase().includes(q) ||
-        (app.pkgname || "").toLowerCase().includes(q) ||
-        (app.tags || "").toLowerCase().includes(q) ||
-        (app.more || "").toLowerCase().includes(q)
-      );
-    });
+    return rankAppsBySearch(result, searchQuery.value);
   }
 
   return result;
 });
 
 const categoryCounts = computed(() => {
-  // 如果有搜索关键词，显示搜索结果数量
   if (searchQuery.value.trim()) {
-    const q = searchQuery.value.toLowerCase().trim();
-    const counts: Record<string, number> = { all: 0 };
-
-    apps.value.forEach((app) => {
-      // 检查应用是否匹配搜索条件
-      const matches =
-        (app.name || "").toLowerCase().includes(q) ||
-        (app.pkgname || "").toLowerCase().includes(q) ||
-        (app.tags || "").toLowerCase().includes(q) ||
-        (app.more || "").toLowerCase().includes(q);
-
-      if (matches) {
-        counts.all++;
-        if (!counts[app.category]) counts[app.category] = 0;
-        counts[app.category]++;
-      }
-    });
-
-    return counts;
+    return countSearchMatchesByCategory(baseApps.value, searchQuery.value);
   }
 
   // 无搜索时显示总数量
