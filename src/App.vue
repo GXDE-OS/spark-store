@@ -1144,7 +1144,10 @@ const handleSearchInput = (value: string) => {
 };
 
 const handleSearchFocus = () => {
-  if (activeCategory.value === "home") activeCategory.value = "all";
+  if (activeCategory.value === "home") {
+    activeCategory.value = "all";
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
 };
 
 // 生命周期钩子
@@ -1252,6 +1255,7 @@ onMounted(async () => {
       const tryOpen = () => {
         // 先切换到"全部应用"分类
         activeCategory.value = "all";
+        window.scrollTo({ top: 0, behavior: "smooth" });
         // 使用类似 HomeView 的方式打开应用，从两个仓库获取完整信息
         const target = apps.value.find((a) => a.pkgname === data.pkgname);
         if (target) {
