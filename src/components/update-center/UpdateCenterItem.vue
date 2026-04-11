@@ -92,17 +92,13 @@ const props = defineProps<{
 
 const PLACEHOLDER_ICON =
   'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"%3E%3Crect width="48" height="48" rx="12" fill="%23e2e8f0"/%3E%3Cpath d="M17 31h14v2H17zm3-12h8a2 2 0 0 1 2 2v8H18v-8a2 2 0 0 1 2-2" fill="%2394a3b8"/%3E%3C/svg%3E';
-const failedIcon = ref<string | null>(null);
+const iconIndex = ref(0);
 
 defineEmits<{
   (e: "toggle-selection"): void;
 }>();
 
-const normalizeIconSrc = (icon?: string): string => {
-  if (!icon || failedIcon.value === icon) {
-    return PLACEHOLDER_ICON;
-  }
-
+const normalizeIconSrc = (icon: string): string => {
   if (/^[a-z]+:\/\//i.test(icon)) {
     return icon;
   }
@@ -110,18 +106,30 @@ const normalizeIconSrc = (icon?: string): string => {
   return icon.startsWith("/") ? `file://${icon}` : icon;
 };
 
+const iconCandidates = computed(() => {
+  return [props.item.localIcon, props.item.remoteIcon].filter(
+    (icon): icon is string => Boolean(icon),
+  );
+});
+
 const handleIconError = () => {
-  failedIcon.value = props.item.icon ?? null;
+  if (iconIndex.value < iconCandidates.value.length) {
+    iconIndex.value += 1;
+  }
 };
 
 watch(
-  () => props.item,
+  [() => props.item, () => props.item.localIcon, () => props.item.remoteIcon],
   () => {
-    failedIcon.value = null;
+    iconIndex.value = 0;
   },
 );
 
-const iconSrc = computed(() => normalizeIconSrc(props.item.icon));
+const iconSrc = computed(() => {
+  const icon = iconCandidates.value[iconIndex.value];
+
+  return icon ? normalizeIconSrc(icon) : PLACEHOLDER_ICON;
+});
 
 const sourceLabel = computed(() => {
   return props.item.source === "apm" ? "APM" : "传统deb";

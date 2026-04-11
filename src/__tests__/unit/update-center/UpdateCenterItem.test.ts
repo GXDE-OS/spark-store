@@ -1,5 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/vue";
 import { describe, expect, it } from "vitest";
+import { defineComponent, nextTick, reactive, ref } from "vue";
 
 import UpdateCenterItem from "@/components/update-center/UpdateCenterItem.vue";
 import type {
@@ -33,10 +34,13 @@ const createTask = (
 });
 
 describe("UpdateCenterItem", () => {
-  it("renders an icon image when item.icon exists", () => {
+  it("renders localIcon first when both icon sources exist", () => {
     render(UpdateCenterItem, {
       props: {
-        item: createItem({ icon: "/usr/share/pixmaps/spark-weather.png" }),
+        item: createItem({
+          localIcon: "/usr/share/pixmaps/spark-weather.png",
+          remoteIcon: "https://example.com/spark-weather.png",
+        }),
         task: createTask(),
         selected: false,
       },
@@ -50,10 +54,13 @@ describe("UpdateCenterItem", () => {
     );
   });
 
-  it("falls back to a placeholder icon when the image fails", async () => {
+  it("falls back to remoteIcon when localIcon fails", async () => {
     render(UpdateCenterItem, {
       props: {
-        item: createItem({ icon: "https://example.com/spark-weather.png" }),
+        item: createItem({
+          localIcon: "/usr/share/pixmaps/spark-weather.png",
+          remoteIcon: "https://example.com/spark-weather.png",
+        }),
         task: createTask(),
         selected: false,
       },
@@ -63,16 +70,42 @@ describe("UpdateCenterItem", () => {
 
     await fireEvent.error(icon);
 
+    expect(icon).toHaveAttribute(
+      "src",
+      "https://example.com/spark-weather.png",
+    );
+  });
+
+  it("falls back to the placeholder after localIcon and remoteIcon both fail", async () => {
+    render(UpdateCenterItem, {
+      props: {
+        item: createItem({
+          localIcon: "/usr/share/pixmaps/spark-weather.png",
+          remoteIcon: "https://example.com/spark-weather.png",
+        }),
+        task: createTask(),
+        selected: false,
+      },
+    });
+
+    const icon = screen.getByRole("img", { name: "Spark Weather 图标" });
+
+    await fireEvent.error(icon);
+    await fireEvent.error(icon);
+
     expect(icon.getAttribute("src")).toContain("data:image/svg+xml");
     expect(icon.getAttribute("src")).not.toContain(
       "https://example.com/spark-weather.png",
     );
   });
 
-  it("shows a new item icon again after a previous icon failure", async () => {
+  it("restarts from localIcon when a new item is rendered", async () => {
     const { rerender } = render(UpdateCenterItem, {
       props: {
-        item: createItem({ icon: "https://example.com/spark-weather.png" }),
+        item: createItem({
+          localIcon: "/usr/share/pixmaps/spark-weather.png",
+          remoteIcon: "https://example.com/spark-weather.png",
+        }),
         task: createTask(),
         selected: false,
       },
@@ -82,12 +115,16 @@ describe("UpdateCenterItem", () => {
 
     await fireEvent.error(firstIcon);
 
-    expect(firstIcon.getAttribute("src")).toContain("data:image/svg+xml");
+    expect(firstIcon).toHaveAttribute(
+      "src",
+      "https://example.com/spark-weather.png",
+    );
 
     await rerender({
       item: createItem({
         displayName: "Spark Clock",
-        icon: "/usr/share/pixmaps/spark-clock.png",
+        localIcon: "/usr/share/pixmaps/spark-clock.png",
+        remoteIcon: "https://example.com/spark-clock.png",
       }),
       task: createTask(),
       selected: false,
@@ -101,11 +138,16 @@ describe("UpdateCenterItem", () => {
     );
   });
 
-  it("retries the same icon string when a fresh item object is rendered", async () => {
-    const brokenIcon = "https://example.com/spark-weather.png";
-    const { rerender } = render(UpdateCenterItem, {
+  it("restarts from localIcon when icon sources change on the same item object", async () => {
+    const item = reactive(
+      createItem({
+        localIcon: "/usr/share/pixmaps/spark-weather.png",
+        remoteIcon: "https://example.com/spark-weather.png",
+      }),
+    );
+    render(UpdateCenterItem, {
       props: {
-        item: createItem({ icon: brokenIcon }),
+        item,
         task: createTask(),
         selected: false,
       },
@@ -114,21 +156,62 @@ describe("UpdateCenterItem", () => {
     const firstIcon = screen.getByRole("img", { name: "Spark Weather 图标" });
 
     await fireEvent.error(firstIcon);
+    await fireEvent.error(firstIcon);
 
     expect(firstIcon.getAttribute("src")).toContain("data:image/svg+xml");
 
-    await rerender({
-      item: createItem({
-        currentVersion: "1.1.0",
-        newVersion: "2.1.0",
-        icon: brokenIcon,
-      }),
-      task: createTask({ progress: 75 }),
-      selected: false,
-    });
+    item.localIcon = "/usr/share/pixmaps/spark-weather-refreshed.png";
+    item.remoteIcon = "https://example.com/spark-weather-refreshed.png";
+
+    await nextTick();
 
     const retriedIcon = screen.getByRole("img", { name: "Spark Weather 图标" });
 
-    expect(retriedIcon).toHaveAttribute("src", brokenIcon);
+    expect(retriedIcon).toHaveAttribute(
+      "src",
+      "file:///usr/share/pixmaps/spark-weather-refreshed.png",
+    );
+  });
+
+  it("restarts from localIcon for a fresh item object with the same icon sources", async () => {
+    const item = ref(
+      createItem({
+        localIcon: "/usr/share/pixmaps/spark-weather.png",
+        remoteIcon: "https://example.com/spark-weather.png",
+      }),
+    );
+    const Wrapper = defineComponent({
+      components: { UpdateCenterItem },
+      setup() {
+        return {
+          item,
+          task: createTask(),
+        };
+      },
+      template:
+        '<UpdateCenterItem :item="item" :task="task" :selected="false" />',
+    });
+
+    render(Wrapper);
+
+    const firstIcon = screen.getByRole("img", { name: "Spark Weather 图标" });
+
+    await fireEvent.error(firstIcon);
+    await fireEvent.error(firstIcon);
+
+    expect(firstIcon.getAttribute("src")).toContain("data:image/svg+xml");
+
+    item.value = createItem({
+      localIcon: "/usr/share/pixmaps/spark-weather.png",
+      remoteIcon: "https://example.com/spark-weather.png",
+    });
+    await nextTick();
+
+    const retriedIcon = screen.getByRole("img", { name: "Spark Weather 图标" });
+
+    expect(retriedIcon).toHaveAttribute(
+      "src",
+      "file:///usr/share/pixmaps/spark-weather.png",
+    );
   });
 });

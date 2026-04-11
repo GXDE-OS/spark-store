@@ -181,21 +181,31 @@ export const buildRemoteFallbackIconUrl = ({
   return `${baseUrl}/${storeArch}/${category}/${pkgname}/icon.png`;
 };
 
-export const resolveUpdateItemIcon = (item: UpdateCenterItem): string => {
+export const resolveUpdateItemIcons = (
+  item: UpdateCenterItem,
+): Pick<UpdateCenterItem, "localIcon" | "remoteIcon"> => {
   const localIcon =
     item.source === "aptss"
       ? resolveDesktopIcon(item.pkgname)
       : resolveApmIcon(item.pkgname);
-  if (localIcon) {
-    return localIcon;
+  const remoteIcon = buildRemoteFallbackIconUrl({
+    pkgname: item.pkgname,
+    source: item.source,
+    arch: item.arch,
+    category: item.category,
+  });
+
+  if (localIcon && remoteIcon) {
+    return { localIcon, remoteIcon };
   }
 
-  return (
-    buildRemoteFallbackIconUrl({
-      pkgname: item.pkgname,
-      source: item.source,
-      arch: item.arch,
-      category: item.category,
-    }) || ""
-  );
+  if (localIcon) {
+    return { localIcon };
+  }
+
+  if (remoteIcon) {
+    return { remoteIcon };
+  }
+
+  return {};
 };

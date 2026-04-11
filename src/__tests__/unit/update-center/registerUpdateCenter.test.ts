@@ -217,9 +217,16 @@ describe("update-center/ipc", () => {
     expect(snapshots.at(-1)?.items[0]).not.toHaveProperty("nextVersion");
   });
 
-  it("service task snapshots keep item icons for queued work", async () => {
+  it("service task snapshots keep localIcon and remoteIcon for queued work", async () => {
+    let releaseTask: (() => void) | undefined;
     const service = createUpdateCenterService({
-      loadItems: async () => [{ ...createItem(), icon: "/icons/weather.png" }],
+      loadItems: async () => [
+        {
+          ...createItem(),
+          localIcon: "/icons/weather.png",
+          remoteIcon: "https://example.com/weather.png",
+        },
+      ],
       createTaskRunner: (queue: UpdateCenterQueue) => ({
         cancelActiveTask: vi.fn(),
         runNextTask: async () => {
@@ -228,6 +235,9 @@ describe("update-center/ipc", () => {
             return null;
           }
 
+          await new Promise<void>((resolve) => {
+            releaseTask = resolve;
+          });
           queue.markActiveTask(task.id, "installing");
           queue.finishTask(task.id, "completed");
           return task;
@@ -236,15 +246,20 @@ describe("update-center/ipc", () => {
     });
 
     await service.refresh();
-    await service.start(["aptss:spark-weather"]);
+    const startPromise = service.start(["aptss:spark-weather"]);
+    await flushPromises();
 
     expect(service.getState().tasks).toMatchObject([
       {
         taskKey: "aptss:spark-weather",
-        icon: "/icons/weather.png",
-        status: "completed",
+        localIcon: "/icons/weather.png",
+        remoteIcon: "https://example.com/weather.png",
+        status: "queued",
       },
     ]);
+
+    releaseTask?.();
+    await startPromise;
   });
 
   it("concurrent start calls still serialize through one processing pipeline", async () => {

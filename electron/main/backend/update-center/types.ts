@@ -12,7 +12,8 @@ export interface UpdateCenterItem {
   nextVersion: string;
   arch?: string;
   category?: string;
-  icon?: string;
+  localIcon?: string;
+  remoteIcon?: string;
   ignored?: boolean;
   downloadUrl?: string;
   fileName?: string;

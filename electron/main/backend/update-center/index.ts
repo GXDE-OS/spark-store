@@ -9,7 +9,7 @@ import {
   parseAptssUpgradableOutput,
   parsePrintUrisOutput,
 } from "./query";
-import { resolveUpdateItemIcon } from "./icons";
+import { resolveUpdateItemIcons } from "./icons";
 import {
   createUpdateCenterService,
   type UpdateCenterIgnorePayload,
@@ -249,9 +249,9 @@ const enrichItemCategories = async (
 
 const enrichItemIcons = (items: UpdateCenterItem[]): UpdateCenterItem[] => {
   return items.map((item) => {
-    const icon = resolveUpdateItemIcon(item);
+    const icons = resolveUpdateItemIcons(item);
 
-    return icon ? { ...item, icon } : item;
+    return Object.keys(icons).length > 0 ? { ...item, ...icons } : item;
   });
 };
 

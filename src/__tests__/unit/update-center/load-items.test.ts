@@ -175,7 +175,8 @@ describe("update-center load items", () => {
       nextVersion: "3.0.0",
       arch: "amd64",
       category: "tools",
-      icon: "https://erotica.spark-app.store/amd64-apm/tools/spark-weather/icon.png",
+      remoteIcon:
+        "https://erotica.spark-app.store/amd64-apm/tools/spark-weather/icon.png",
       downloadUrl: "https://example.invalid/spark-weather_3.0.0_amd64.deb",
       fileName: "spark-weather_3.0.0_amd64.deb",
       size: 123456,
@@ -235,7 +236,8 @@ describe("update-center load items", () => {
         nextVersion: "2.0.0",
         arch: "amd64",
         category: "office",
-        icon: "https://erotica.spark-app.store/amd64-store/office/spark-notes/icon.png",
+        remoteIcon:
+          "https://erotica.spark-app.store/amd64-store/office/spark-notes/icon.png",
       },
     ]);
     expect(result.warnings).toEqual([
@@ -308,7 +310,8 @@ describe("update-center load items", () => {
         nextVersion: "2.0.0",
         arch: "amd64",
         category: "office",
-        icon: "https://erotica.spark-app.store/amd64-store/office/spark-notes/icon.png",
+        remoteIcon:
+          "https://erotica.spark-app.store/amd64-store/office/spark-notes/icon.png",
       },
     ]);
   });
@@ -362,7 +365,8 @@ describe("update-center load items", () => {
         nextVersion: "2.0.0",
         arch: "amd64",
         category: "office",
-        icon: "https://erotica.spark-app.store/amd64-store/office/spark-notes/icon.png",
+        remoteIcon:
+          "https://erotica.spark-app.store/amd64-store/office/spark-notes/icon.png",
       },
     ]);
     expect(result.warnings).toEqual([

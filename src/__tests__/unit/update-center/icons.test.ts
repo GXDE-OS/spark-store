@@ -87,12 +87,12 @@ afterEach(() => {
 });
 
 describe("update-center icons", () => {
-  it("prefers local desktop icon paths for aptss items", async () => {
+  it("returns both localIcon and remoteIcon when an aptss desktop icon resolves", async () => {
     const pkgname = "spark-weather";
     const applicationsDirectory = "/usr/share/applications";
     const desktopPath = `${applicationsDirectory}/weather-launcher.desktop`;
     const iconPath = `/usr/share/pixmaps/${pkgname}.png`;
-    const { resolveUpdateItemIcon } = await loadIconsModule({
+    const { resolveUpdateItemIcons } = await loadIconsModule({
       directories: {
         [applicationsDirectory]: ["weather-launcher.desktop"],
       },
@@ -106,13 +106,19 @@ describe("update-center icons", () => {
     });
 
     expect(
-      resolveUpdateItemIcon({
+      resolveUpdateItemIcons({
         pkgname,
         source: "aptss",
         currentVersion: "1.0.0",
         nextVersion: "2.0.0",
+        category: "tools",
+        arch: "amd64",
       }),
-    ).toBe(iconPath);
+    ).toEqual({
+      localIcon: iconPath,
+      remoteIcon:
+        "https://erotica.spark-app.store/amd64-store/tools/spark-weather/icon.png",
+    });
   });
 
   it("resolves APM icon names from entries/icons when desktop icon is not absolute", async () => {
@@ -120,7 +126,7 @@ describe("update-center icons", () => {
     const desktopDirectory = `/var/lib/apm/apm/files/ace-env/var/lib/apm/${pkgname}/entries/applications`;
     const desktopPath = `${desktopDirectory}/${pkgname}.desktop`;
     const iconPath = `/var/lib/apm/apm/files/ace-env/var/lib/apm/${pkgname}/entries/icons/hicolor/48x48/apps/${pkgname}.png`;
-    const { resolveUpdateItemIcon } = await loadIconsModule({
+    const { resolveUpdateItemIcons } = await loadIconsModule({
       directories: {
         [desktopDirectory]: [`${pkgname}.desktop`],
       },
@@ -131,13 +137,13 @@ describe("update-center icons", () => {
     });
 
     expect(
-      resolveUpdateItemIcon({
+      resolveUpdateItemIcons({
         pkgname,
         source: "apm",
         currentVersion: "1.0.0",
         nextVersion: "2.0.0",
       }),
-    ).toBe(iconPath);
+    ).toEqual({ localIcon: iconPath });
   });
 
   it("checks later APM desktop entries when the first one has no usable icon", async () => {
@@ -197,11 +203,11 @@ describe("update-center icons", () => {
     expect(resolveApmIcon(pkgname)).toBe(sharedIconPath);
   });
 
-  it("builds a remote fallback URL when category and arch are available", async () => {
-    const { resolveUpdateItemIcon } = await loadIconsModule({});
+  it("returns only remoteIcon when no local icon resolves", async () => {
+    const { resolveUpdateItemIcons } = await loadIconsModule({});
 
     expect(
-      resolveUpdateItemIcon({
+      resolveUpdateItemIcons({
         pkgname: "spark-clock",
         source: "apm",
         currentVersion: "1.0.0",
@@ -209,22 +215,51 @@ describe("update-center icons", () => {
         category: "utility",
         arch: "amd64",
       }),
-    ).toBe(
-      "https://erotica.spark-app.store/amd64-apm/utility/spark-clock/icon.png",
-    );
+    ).toEqual({
+      remoteIcon:
+        "https://erotica.spark-app.store/amd64-apm/utility/spark-clock/icon.png",
+    });
   });
 
-  it("returns empty string when neither local nor remote icon can be determined", async () => {
-    const { resolveUpdateItemIcon } = await loadIconsModule({});
+  it("returns only localIcon when a remote fallback URL cannot be built", async () => {
+    const pkgname = "spark-reader";
+    const applicationsDirectory = "/usr/share/applications";
+    const desktopPath = `${applicationsDirectory}/reader-launcher.desktop`;
+    const iconPath = `/usr/share/pixmaps/${pkgname}.png`;
+    const { resolveUpdateItemIcons } = await loadIconsModule({
+      directories: {
+        [applicationsDirectory]: ["reader-launcher.desktop"],
+      },
+      files: {
+        [desktopPath]: `[Desktop Entry]\nName=Spark Reader\nIcon=${iconPath}\n`,
+        [iconPath]: "png",
+      },
+      packageFiles: {
+        [pkgname]: [desktopPath],
+      },
+    });
 
     expect(
-      resolveUpdateItemIcon({
+      resolveUpdateItemIcons({
+        pkgname,
+        source: "aptss",
+        currentVersion: "1.0.0",
+        nextVersion: "2.0.0",
+      }),
+    ).toEqual({ localIcon: iconPath });
+  });
+
+  it("returns an empty object when neither local nor remote icons are available", async () => {
+    const { resolveUpdateItemIcons } = await loadIconsModule({});
+
+    expect(
+      resolveUpdateItemIcons({
         pkgname: "spark-empty",
         source: "aptss",
         currentVersion: "1.0.0",
         nextVersion: "2.0.0",
       }),
-    ).toBe("");
+    ).toEqual({});
   });
 
   it("ignores unrelated desktop files while still resolving owned non-exact filenames", async () => {
