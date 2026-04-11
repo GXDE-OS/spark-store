@@ -25,6 +25,8 @@ export interface UpdateCenterServiceItem {
   currentVersion: string;
   newVersion: string;
   source: UpdateSource;
+  localIcon?: string;
+  remoteIcon?: string;
   ignored?: boolean;
   downloadUrl?: string;
   fileName?: string;
@@ -40,6 +42,8 @@ export interface UpdateCenterServiceTask {
   taskKey: string;
   packageName: string;
   source: UpdateSource;
+  localIcon?: string;
+  remoteIcon?: string;
   status: UpdateCenterQueueSnapshot["tasks"][number]["status"];
   progress: number;
   logs: UpdateCenterQueueSnapshot["tasks"][number]["logs"];
@@ -96,6 +100,8 @@ const toState = (
     currentVersion: item.currentVersion,
     newVersion: item.nextVersion,
     source: item.source,
+    localIcon: item.localIcon,
+    remoteIcon: item.remoteIcon,
     ignored: item.ignored,
     downloadUrl: item.downloadUrl,
     fileName: item.fileName,
@@ -110,6 +116,8 @@ const toState = (
     taskKey: getTaskKey(task.item),
     packageName: task.pkgname,
     source: task.item.source,
+    localIcon: task.item.localIcon,
+    remoteIcon: task.item.remoteIcon,
     status: task.status,
     progress: task.progress,
     logs: task.logs.map((log) => ({ ...log })),

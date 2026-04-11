@@ -201,6 +201,7 @@ const parseUpgradableOutput = (
     }
 
     const [, pkgname, nextVersion, currentVersion] = match;
+    const arch = trimmed.split(/\s+/)[2];
     if (!pkgname || nextVersion === currentVersion) {
       continue;
     }
@@ -210,6 +211,7 @@ const parseUpgradableOutput = (
       source,
       currentVersion,
       nextVersion,
+      arch,
     });
   }
 

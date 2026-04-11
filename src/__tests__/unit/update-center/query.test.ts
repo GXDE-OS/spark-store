@@ -23,6 +23,7 @@ describe("update-center query", () => {
         source: "aptss",
         currentVersion: "1.9.0",
         nextVersion: "2.0.0",
+        arch: "amd64",
       },
     ]);
   });
@@ -37,6 +38,7 @@ describe("update-center query", () => {
         source: "aptss",
         currentVersion: "1.1.0",
         nextVersion: "1.2.0",
+        arch: "amd64",
       },
     ]);
 
@@ -46,6 +48,7 @@ describe("update-center query", () => {
         source: "apm",
         currentVersion: "1.5.0",
         nextVersion: "2.0.0",
+        arch: "amd64",
       },
     ]);
   });
@@ -262,6 +265,7 @@ describe("update-center query", () => {
         source: "apm",
         currentVersion: "4.5.0",
         nextVersion: "5.0.0",
+        arch: "arm64",
       },
     ]);
   });

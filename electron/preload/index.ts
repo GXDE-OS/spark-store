@@ -8,12 +8,16 @@ type UpdateCenterSnapshot = {
     currentVersion: string;
     newVersion: string;
     source: "aptss" | "apm";
+    localIcon?: string;
+    remoteIcon?: string;
     ignored?: boolean;
   }>;
   tasks: Array<{
     taskKey: string;
     packageName: string;
     source: "aptss" | "apm";
+    localIcon?: string;
+    remoteIcon?: string;
     status:
       | "queued"
       | "downloading"

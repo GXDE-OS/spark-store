@@ -1,12 +1,14 @@
-import { describe, expect, it } from "vitest";
-
-import { loadUpdateCenterItems } from "../../../../electron/main/backend/update-center";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 interface CommandResult {
   code: number;
   stdout: string;
   stderr: string;
 }
+
+type RemoteStoreResponse =
+  | Record<string, unknown>
+  | Array<Record<string, unknown>>;
 
 const APTSS_LIST_UPGRADABLE_KEY =
   "bash -lc env LANGUAGE=en_US /usr/bin/apt -c /opt/durapps/spark-store/bin/apt-fast-conf/aptss-apt.conf list --upgradable -o Dir::Etc::sourcelist=/opt/durapps/spark-store/bin/apt-fast-conf/sources.list.d/aptss.list -o Dir::Etc::sourceparts=/dev/null -o APT::Get::List-Cleanup=0";
@@ -17,8 +19,86 @@ const DPKG_QUERY_INSTALLED_KEY =
 const APM_PRINT_URIS_KEY =
   "bash -lc amber-pm-debug /usr/bin/apt -c /opt/durapps/spark-store/bin/apt-fast-conf/aptss-apt.conf download spark-weather --print-uris";
 
+const loadUpdateCenterModule = async (
+  remoteStore: Record<string, RemoteStoreResponse>,
+) => {
+  vi.resetModules();
+
+  vi.doMock("node:fs", () => {
+    const existsSync = () => false;
+    const readdirSync = () => [] as string[];
+    const readFileSync = () => {
+      throw new Error("Unexpected icon file read");
+    };
+
+    return {
+      default: {
+        existsSync,
+        readdirSync,
+        readFileSync,
+      },
+      existsSync,
+      readdirSync,
+      readFileSync,
+    };
+  });
+
+  vi.doMock("node:child_process", async () => {
+    const actual =
+      await vi.importActual<typeof import("node:child_process")>(
+        "node:child_process",
+      );
+
+    return {
+      ...actual,
+      spawnSync: (command: string, args: string[]) => {
+        if (command === "dpkg" && args[0] === "-L") {
+          return {
+            status: 1,
+            error: undefined,
+            output: null,
+            pid: 0,
+            signal: null,
+            stdout: Buffer.alloc(0),
+            stderr: Buffer.alloc(0),
+          };
+        }
+
+        return actual.spawnSync(command, args);
+      },
+    };
+  });
+
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: string | URL) => {
+      const url = String(input);
+      const body = remoteStore[url];
+
+      return {
+        ok: body !== undefined,
+        async json() {
+          if (body === undefined) {
+            throw new Error(`Unexpected fetch for ${url}`);
+          }
+
+          return body;
+        },
+      };
+    }),
+  );
+
+  return await import("../../../../electron/main/backend/update-center/index");
+};
+
+afterEach(() => {
+  vi.doUnmock("node:fs");
+  vi.doUnmock("node:child_process");
+  vi.unstubAllGlobals();
+});
+
 describe("update-center load items", () => {
-  it("enriches apm and migration items with download metadata needed by the runner", async () => {
+  it("enriches apm migration items with download metadata and remote fallback icons", async () => {
     const commandResults = new Map<string, CommandResult>([
       [
         APTSS_LIST_UPGRADABLE_KEY,
@@ -62,6 +142,20 @@ describe("update-center load items", () => {
         },
       ],
     ]);
+    const { loadUpdateCenterItems } = await loadUpdateCenterModule({
+      "https://erotica.spark-app.store/amd64-store/categories.json": {
+        tools: { zh: "Tools" },
+      },
+      "https://erotica.spark-app.store/amd64-store/tools/applist.json": [
+        { Pkgname: "spark-weather" },
+      ],
+      "https://erotica.spark-app.store/amd64-apm/categories.json": {
+        tools: { zh: "Tools" },
+      },
+      "https://erotica.spark-app.store/amd64-apm/tools/applist.json": [
+        { Pkgname: "spark-weather" },
+      ],
+    });
 
     const result = await loadUpdateCenterItems(async (command, args) => {
       const key = `${command} ${args.join(" ")}`;
@@ -79,6 +173,10 @@ describe("update-center load items", () => {
       source: "apm",
       currentVersion: "1.5.0",
       nextVersion: "3.0.0",
+      arch: "amd64",
+      category: "tools",
+      remoteIcon:
+        "https://erotica.spark-app.store/amd64-apm/tools/spark-weather/icon.png",
       downloadUrl: "https://example.invalid/spark-weather_3.0.0_amd64.deb",
       fileName: "spark-weather_3.0.0_amd64.deb",
       size: 123456,
@@ -91,6 +189,15 @@ describe("update-center load items", () => {
   });
 
   it("degrades to aptss-only results when apm commands fail", async () => {
+    const { loadUpdateCenterItems } = await loadUpdateCenterModule({
+      "https://erotica.spark-app.store/amd64-store/categories.json": {
+        office: { zh: "Office" },
+      },
+      "https://erotica.spark-app.store/amd64-store/office/applist.json": [
+        { Pkgname: "spark-notes" },
+      ],
+    });
+
     const result = await loadUpdateCenterItems(async (command, args) => {
       const key = `${command} ${args.join(" ")}`;
 
@@ -127,6 +234,139 @@ describe("update-center load items", () => {
         source: "aptss",
         currentVersion: "1.0.0",
         nextVersion: "2.0.0",
+        arch: "amd64",
+        category: "office",
+        remoteIcon:
+          "https://erotica.spark-app.store/amd64-store/office/spark-notes/icon.png",
+      },
+    ]);
+    expect(result.warnings).toEqual([
+      "apm upgradable query failed: apm: command not found",
+      "apm installed query failed: apm: command not found",
+    ]);
+  });
+
+  it("retries category lookup after an earlier fetch failure in the same process", async () => {
+    const remoteStore: Record<string, RemoteStoreResponse> = {};
+    const { loadUpdateCenterItems } = await loadUpdateCenterModule(remoteStore);
+
+    const runCommand = async (command: string, args: string[]) => {
+      const key = `${command} ${args.join(" ")}`;
+
+      if (key === APTSS_LIST_UPGRADABLE_KEY) {
+        return {
+          code: 0,
+          stdout: "spark-notes/stable 2.0.0 amd64 [upgradable from: 1.0.0]",
+          stderr: "",
+        };
+      }
+
+      if (key === DPKG_QUERY_INSTALLED_KEY) {
+        return {
+          code: 0,
+          stdout: "spark-notes\tinstall ok installed\n",
+          stderr: "",
+        };
+      }
+
+      if (key === "apm list --upgradable" || key === "apm list --installed") {
+        return {
+          code: 127,
+          stdout: "",
+          stderr: "apm: command not found",
+        };
+      }
+
+      throw new Error(`Unexpected command ${key}`);
+    };
+
+    const firstResult = await loadUpdateCenterItems(runCommand);
+
+    expect(firstResult.items).toEqual([
+      {
+        pkgname: "spark-notes",
+        source: "aptss",
+        currentVersion: "1.0.0",
+        nextVersion: "2.0.0",
+        arch: "amd64",
+      },
+    ]);
+
+    remoteStore["https://erotica.spark-app.store/amd64-store/categories.json"] =
+      {
+        office: { zh: "Office" },
+      };
+    remoteStore[
+      "https://erotica.spark-app.store/amd64-store/office/applist.json"
+    ] = [{ Pkgname: "spark-notes" }];
+
+    const secondResult = await loadUpdateCenterItems(runCommand);
+
+    expect(secondResult.items).toEqual([
+      {
+        pkgname: "spark-notes",
+        source: "aptss",
+        currentVersion: "1.0.0",
+        nextVersion: "2.0.0",
+        arch: "amd64",
+        category: "office",
+        remoteIcon:
+          "https://erotica.spark-app.store/amd64-store/office/spark-notes/icon.png",
+      },
+    ]);
+  });
+
+  it("keeps successfully loaded categories when another category applist fetch fails", async () => {
+    const { loadUpdateCenterItems } = await loadUpdateCenterModule({
+      "https://erotica.spark-app.store/amd64-store/categories.json": {
+        office: { zh: "Office" },
+        tools: { zh: "Tools" },
+      },
+      "https://erotica.spark-app.store/amd64-store/office/applist.json": [
+        { Pkgname: "spark-notes" },
+      ],
+    });
+
+    const result = await loadUpdateCenterItems(async (command, args) => {
+      const key = `${command} ${args.join(" ")}`;
+
+      if (key === APTSS_LIST_UPGRADABLE_KEY) {
+        return {
+          code: 0,
+          stdout: "spark-notes/stable 2.0.0 amd64 [upgradable from: 1.0.0]",
+          stderr: "",
+        };
+      }
+
+      if (key === DPKG_QUERY_INSTALLED_KEY) {
+        return {
+          code: 0,
+          stdout: "spark-notes\tinstall ok installed\n",
+          stderr: "",
+        };
+      }
+
+      if (key === "apm list --upgradable" || key === "apm list --installed") {
+        return {
+          code: 127,
+          stdout: "",
+          stderr: "apm: command not found",
+        };
+      }
+
+      throw new Error(`Unexpected command ${key}`);
+    });
+
+    expect(result.items).toEqual([
+      {
+        pkgname: "spark-notes",
+        source: "aptss",
+        currentVersion: "1.0.0",
+        nextVersion: "2.0.0",
+        arch: "amd64",
+        category: "office",
+        remoteIcon:
+          "https://erotica.spark-app.store/amd64-store/office/spark-notes/icon.png",
       },
     ]);
     expect(result.warnings).toEqual([
