@@ -235,3 +235,9 @@ window.ipcRenderer.on("install-complete", (_event, log: DownloadResult) => {
     }
   }
 });
+
+window.ipcRenderer.on("queue-install", (_event, payload: unknown) => {
+  const serializedPayload =
+    typeof payload === "string" ? payload : JSON.stringify(payload);
+  window.ipcRenderer.send("queue-install", serializedPayload);
+});
