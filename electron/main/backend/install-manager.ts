@@ -263,6 +263,8 @@ ipcMain.on("queue-install", async (event, download_json) => {
           "ssinstall",
           `${downloadDir}/${filename}`,
           "--delete-after-install",
+          "--no-create-desktop-entry",
+          "--native",
         );
       } else {
         execParams.push("aptss", "install", "-y", pkgname);
