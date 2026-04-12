@@ -66,6 +66,14 @@ const getApmPrintUrisCommand = (pkgname: string) => ({
   ],
 });
 
+const getAptssPrintUrisCommand = (pkgname: string) => ({
+  command: "bash",
+  args: [
+    "-lc",
+    `/usr/bin/apt download ${pkgname} --print-uris -c /opt/durapps/spark-store/bin/apt-fast-conf/aptss-apt.conf -o Dir::Etc::sourcelist=/opt/durapps/spark-store/bin/apt-fast-conf/sources.list.d/aptss.list -o Dir::Etc::sourceparts=/dev/null`,
+  ],
+});
+
 const runCommandCapture: UpdateCenterCommandRunner = async (
   command,
   args,
@@ -140,12 +148,64 @@ const loadApmItemMetadata = async (
   };
 };
 
+const loadAptssItemMetadata = async (
+  item: UpdateCenterItem,
+  runCommand: UpdateCenterCommandRunner,
+): Promise<
+  | { item: UpdateCenterItem; warning?: undefined }
+  | { item: null; warning: string }
+> => {
+  const printUrisCommand = getAptssPrintUrisCommand(item.pkgname);
+  const metadataResult = await runCommand(
+    printUrisCommand.command,
+    printUrisCommand.args,
+  );
+  const commandError = getCommandError(
+    `aptss metadata query for ${item.pkgname}`,
+    metadataResult,
+  );
+  if (commandError) {
+    return { item: null, warning: commandError };
+  }
+
+  const metadata = parsePrintUrisOutput(metadataResult.stdout);
+  if (!metadata) {
+    return {
+      item: null,
+      warning: `aptss metadata query for ${item.pkgname} returned no package metadata`,
+    };
+  }
+
+  return {
+    item: {
+      ...item,
+      ...metadata,
+    },
+  };
+};
+
 const enrichApmItems = async (
   items: UpdateCenterItem[],
   runCommand: UpdateCenterCommandRunner,
 ): Promise<UpdateCenterLoadItemsResult> => {
   const results = await Promise.all(
     items.map((item) => loadApmItemMetadata(item, runCommand)),
+  );
+
+  return {
+    items: results.flatMap((result) => (result.item ? [result.item] : [])),
+    warnings: results.flatMap((result) =>
+      result.warning ? [result.warning] : [],
+    ),
+  };
+};
+
+const enrichAptssItems = async (
+  items: UpdateCenterItem[],
+  runCommand: UpdateCenterCommandRunner,
+): Promise<UpdateCenterLoadItemsResult> => {
+  const results = await Promise.all(
+    items.map((item) => loadAptssItemMetadata(item, runCommand)),
   );
 
   return {
@@ -299,18 +359,22 @@ export const loadUpdateCenterItems = async (
     enrichItemCategories(aptssItems),
     enrichItemCategories(apmItems),
   ]);
-  const enrichedApmItems = await enrichApmItems(
-    categorizedApmItems,
-    runCommand,
-  );
+  const [enrichedAptssItems, enrichedApmItems] = await Promise.all([
+    enrichAptssItems(categorizedAptssItems, runCommand),
+    enrichApmItems(categorizedApmItems, runCommand),
+  ]);
 
   return {
     items: mergeUpdateSources(
-      enrichItemIcons(categorizedAptssItems),
+      enrichItemIcons(enrichedAptssItems.items),
       enrichItemIcons(enrichedApmItems.items),
       installedSources,
     ),
-    warnings: [...warnings, ...enrichedApmItems.warnings],
+    warnings: [
+      ...warnings,
+      ...enrichedAptssItems.warnings,
+      ...enrichedApmItems.warnings,
+    ],
   };
 };
 

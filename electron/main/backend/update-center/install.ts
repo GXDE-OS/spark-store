@@ -119,29 +119,8 @@ const buildPrivilegedCommand = (
   };
 };
 
-export const buildLegacySparkUpgradeCommand = (
-  pkgname: string,
-  superUserCmd = "",
-): UpdateCommand => {
-  if (superUserCmd) {
-    return {
-      execCommand: superUserCmd,
-      execParams: [
-        SHELL_CALLER_PATH,
-        "aptss",
-        "install",
-        "-y",
-        pkgname,
-        "--only-upgrade",
-      ],
-    };
-  }
-
-  return {
-    execCommand: SHELL_CALLER_PATH,
-    execParams: ["aptss", "install", "-y", pkgname, "--only-upgrade"],
-  };
-};
+// Removed buildLegacySparkUpgradeCommand - all updates now require downloading the deb package first
+// to avoid aptss install popup. Use ssinstall with downloaded deb file instead.
 
 export const installUpdateItem = async ({
   item,
@@ -150,11 +129,13 @@ export const installUpdateItem = async ({
   onLog,
   signal,
 }: InstallUpdateItemOptions): Promise<void> => {
-  if (item.source === "apm" && !filePath) {
-    throw new Error("APM update task requires downloaded package metadata");
+  if (!filePath) {
+    throw new Error(
+      `Update task for ${item.pkgname} requires downloaded package file`,
+    );
   }
 
-  if (item.source === "apm" && filePath) {
+  if (item.source === "apm") {
     const installCommand = buildPrivilegedCommand(
       SHELL_CALLER_PATH,
       ["apm", "ssinstall", filePath],
@@ -169,26 +150,18 @@ export const installUpdateItem = async ({
     return;
   }
 
-  if (filePath) {
-    const installCommand = buildPrivilegedCommand(
-      SSINSTALL_PATH,
-      [filePath, "--delete-after-install"],
-      superUserCmd,
-    );
-    await runCommand(
-      installCommand.execCommand,
-      installCommand.execParams,
-      onLog,
-      signal,
-    );
-    return;
-  }
-
-  const command = buildLegacySparkUpgradeCommand(
-    item.pkgname,
-    superUserCmd ?? "",
+  // APTSS (Spark Store) packages use ssinstall
+  const installCommand = buildPrivilegedCommand(
+    SSINSTALL_PATH,
+    [filePath, "--delete-after-install", "--no-create-desktop-entry", "--native"],
+    superUserCmd,
   );
-  await runCommand(command.execCommand, command.execParams, onLog, signal);
+  await runCommand(
+    installCommand.execCommand,
+    installCommand.execParams,
+    onLog,
+    signal,
+  );
 };
 
 export const createTaskRunner = (
@@ -246,30 +219,24 @@ export const createTaskRunner = (
         };
 
         try {
-          let filePath: string | undefined;
-
-          if (
-            task.item.source === "apm" &&
-            (!task.item.downloadUrl || !task.item.fileName)
-          ) {
+          // All updates require download metadata
+          if (!task.item.downloadUrl || !task.item.fileName) {
             throw new Error(
-              "APM update task requires downloaded package metadata",
+              `Update task for ${task.item.pkgname} requires download metadata (URL and filename)`,
             );
           }
 
-          if (task.item.downloadUrl && task.item.fileName) {
-            queue.markActiveTask(task.id, "downloading");
-            const result = await runDownload({
-              item: task.item,
-              task,
-              onLog,
-              signal: activeAbortController.signal,
-              onProgress: (progress) => {
-                queue.updateTaskProgress(task.id, progress);
-              },
-            });
-            filePath = result.filePath;
-          }
+          queue.markActiveTask(task.id, "downloading");
+          const result = await runDownload({
+            item: task.item,
+            task,
+            onLog,
+            signal: activeAbortController.signal,
+            onProgress: (progress) => {
+              queue.updateTaskProgress(task.id, progress);
+            },
+          });
+          const filePath = result.filePath;
 
           queue.markActiveTask(task.id, "installing");
           await installItem({

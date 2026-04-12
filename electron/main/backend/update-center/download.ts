@@ -33,13 +33,22 @@ export const runAria2Download = async ({
 
   const filePath = join(downloadDir, item.fileName);
 
+  // Use .metalink URL for download (same as Qt version)
+  const metalinkUrl = `${item.downloadUrl}.metalink`;
+
   await new Promise<void>((resolve, reject) => {
     const child = spawn("aria2c", [
       "--dir",
       downloadDir,
       "--out",
       item.fileName,
-      item.downloadUrl,
+      "--enable-rpc=false",
+      "--console-log-level=warn",
+      "--summary-interval=1",
+      "--allow-overwrite=true",
+      "--connect-timeout=30",
+      "--max-tries=3",
+      metalinkUrl,
     ]);
 
     const abortDownload = () => {
