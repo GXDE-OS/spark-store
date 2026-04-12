@@ -19,6 +19,12 @@ const DPKG_QUERY_INSTALLED_KEY =
 const APM_PRINT_URIS_KEY =
   "bash -lc amber-pm-debug /usr/bin/apt -c /opt/durapps/spark-store/bin/apt-fast-conf/aptss-apt.conf download spark-weather --print-uris";
 
+const APTSS_WEATHER_PRINT_URIS_KEY =
+  "bash -lc /usr/bin/apt download spark-weather --print-uris -c /opt/durapps/spark-store/bin/apt-fast-conf/aptss-apt.conf -o Dir::Etc::sourcelist=/opt/durapps/spark-store/bin/apt-fast-conf/sources.list.d/aptss.list -o Dir::Etc::sourceparts=/dev/null";
+
+const APTSS_NOTES_PRINT_URIS_KEY =
+  "bash -lc /usr/bin/apt download spark-notes --print-uris -c /opt/durapps/spark-store/bin/apt-fast-conf/aptss-apt.conf -o Dir::Etc::sourcelist=/opt/durapps/spark-store/bin/apt-fast-conf/sources.list.d/aptss.list -o Dir::Etc::sourceparts=/dev/null";
+
 const loadUpdateCenterModule = async (
   remoteStore: Record<string, RemoteStoreResponse>,
 ) => {
@@ -141,19 +147,28 @@ describe("update-center load items", () => {
           stderr: "",
         },
       ],
+      [
+        APTSS_WEATHER_PRINT_URIS_KEY,
+        {
+          code: 0,
+          stdout:
+            "'https://example.invalid/spark-weather_2.0.0_amd64.deb' spark-weather_2.0.0_amd64.deb 123456 SHA512:deadbeef",
+          stderr: "",
+        },
+      ],
     ]);
     const { loadUpdateCenterItems } = await loadUpdateCenterModule({
       "https://erotica.spark-app.store/amd64-store/categories.json": {
         tools: { zh: "Tools" },
       },
       "https://erotica.spark-app.store/amd64-store/tools/applist.json": [
-        { Pkgname: "spark-weather" },
+        { Name: "Spark Weather", Pkgname: "spark-weather" },
       ],
       "https://erotica.spark-app.store/amd64-apm/categories.json": {
         tools: { zh: "Tools" },
       },
       "https://erotica.spark-app.store/amd64-apm/tools/applist.json": [
-        { Pkgname: "spark-weather" },
+        { Name: "Spark Weather", Pkgname: "spark-weather" },
       ],
     });
 
@@ -175,6 +190,7 @@ describe("update-center load items", () => {
       nextVersion: "3.0.0",
       arch: "amd64",
       category: "tools",
+      name: "Spark Weather",
       remoteIcon:
         "https://erotica.spark-app.store/amd64-apm/tools/spark-weather/icon.png",
       downloadUrl: "https://example.invalid/spark-weather_3.0.0_amd64.deb",
@@ -194,7 +210,7 @@ describe("update-center load items", () => {
         office: { zh: "Office" },
       },
       "https://erotica.spark-app.store/amd64-store/office/applist.json": [
-        { Pkgname: "spark-notes" },
+        { Name: "Spark Notes", Pkgname: "spark-notes" },
       ],
     });
 
@@ -213,6 +229,15 @@ describe("update-center load items", () => {
         return {
           code: 0,
           stdout: "spark-notes\tinstall ok installed\n",
+          stderr: "",
+        };
+      }
+
+      if (key === APTSS_NOTES_PRINT_URIS_KEY) {
+        return {
+          code: 0,
+          stdout:
+            "'https://example.invalid/spark-notes_2.0.0_amd64.deb' spark-notes_2.0.0_amd64.deb 654321 SHA512:beadfeed",
           stderr: "",
         };
       }
@@ -236,8 +261,13 @@ describe("update-center load items", () => {
         nextVersion: "2.0.0",
         arch: "amd64",
         category: "office",
+        name: "Spark Notes",
         remoteIcon:
           "https://erotica.spark-app.store/amd64-store/office/spark-notes/icon.png",
+        downloadUrl: "https://example.invalid/spark-notes_2.0.0_amd64.deb",
+        fileName: "spark-notes_2.0.0_amd64.deb",
+        size: 654321,
+        sha512: "beadfeed",
       },
     ]);
     expect(result.warnings).toEqual([
@@ -289,6 +319,7 @@ describe("update-center load items", () => {
         currentVersion: "1.0.0",
         nextVersion: "2.0.0",
         arch: "amd64",
+        name: "Spark Notes",
       },
     ]);
 
@@ -298,7 +329,7 @@ describe("update-center load items", () => {
       };
     remoteStore[
       "https://erotica.spark-app.store/amd64-store/office/applist.json"
-    ] = [{ Pkgname: "spark-notes" }];
+    ] = [{ Name: "Spark Notes", Pkgname: "spark-notes" }];
 
     const secondResult = await loadUpdateCenterItems(runCommand);
 
@@ -310,6 +341,7 @@ describe("update-center load items", () => {
         nextVersion: "2.0.0",
         arch: "amd64",
         category: "office",
+        name: "Spark Notes",
         remoteIcon:
           "https://erotica.spark-app.store/amd64-store/office/spark-notes/icon.png",
       },
@@ -323,7 +355,7 @@ describe("update-center load items", () => {
         tools: { zh: "Tools" },
       },
       "https://erotica.spark-app.store/amd64-store/office/applist.json": [
-        { Pkgname: "spark-notes" },
+        { Name: "Spark Notes", Pkgname: "spark-notes" },
       ],
     });
 
@@ -342,6 +374,15 @@ describe("update-center load items", () => {
         return {
           code: 0,
           stdout: "spark-notes\tinstall ok installed\n",
+          stderr: "",
+        };
+      }
+
+      if (key === APTSS_NOTES_PRINT_URIS_KEY) {
+        return {
+          code: 0,
+          stdout:
+            "'https://example.invalid/spark-notes_2.0.0_amd64.deb' spark-notes_2.0.0_amd64.deb 654321 SHA512:beadfeed",
           stderr: "",
         };
       }
@@ -365,6 +406,7 @@ describe("update-center load items", () => {
         nextVersion: "2.0.0",
         arch: "amd64",
         category: "office",
+        name: "Spark Notes",
         remoteIcon:
           "https://erotica.spark-app.store/amd64-store/office/spark-notes/icon.png",
       },

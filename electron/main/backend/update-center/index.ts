@@ -33,14 +33,20 @@ export interface UpdateCenterLoadItemsResult {
   warnings: string[];
 }
 
-type StoreCategoryMap = Map<string, string>;
+interface RemoteAppMetadata {
+  category: string;
+  name?: string;
+}
+
+type StoreAppMetadataMap = Map<string, RemoteAppMetadata>;
 
 interface RemoteCategoryAppEntry {
+  Name?: string;
   Pkgname?: string;
 }
 
 const REMOTE_STORE_BASE_URL = "https://erotica.spark-app.store";
-const categoryCache = new Map<string, Promise<StoreCategoryMap>>();
+const categoryCache = new Map<string, Promise<StoreAppMetadataMap>>();
 
 const APTSS_LIST_UPGRADABLE_COMMAND = {
   command: "bash",
@@ -157,16 +163,22 @@ const loadAptssItemMetadata = async (
 > => {
   console.log(`[DEBUG] Loading APTSS metadata for ${item.pkgname}`);
   const printUrisCommand = getAptssPrintUrisCommand(item.pkgname);
-  console.log(`[DEBUG] APTSS command: ${printUrisCommand.command} ${printUrisCommand.args.join(' ')}`);
-  
+  console.log(
+    `[DEBUG] APTSS command: ${printUrisCommand.command} ${printUrisCommand.args.join(" ")}`,
+  );
+
   const metadataResult = await runCommand(
     printUrisCommand.command,
     printUrisCommand.args,
   );
   console.log(`[DEBUG] APTSS metadata result code: ${metadataResult.code}`);
-  console.log(`[DEBUG] APTSS metadata stdout: ${metadataResult.stdout.substring(0, 500)}`);
-  console.log(`[DEBUG] APTSS metadata stderr: ${metadataResult.stderr.substring(0, 500)}`);
-  
+  console.log(
+    `[DEBUG] APTSS metadata stdout: ${metadataResult.stdout.substring(0, 500)}`,
+  );
+  console.log(
+    `[DEBUG] APTSS metadata stderr: ${metadataResult.stderr.substring(0, 500)}`,
+  );
+
   const commandError = getCommandError(
     `aptss metadata query for ${item.pkgname}`,
     metadataResult,
@@ -178,7 +190,7 @@ const loadAptssItemMetadata = async (
 
   const metadata = parsePrintUrisOutput(metadataResult.stdout);
   console.log(`[DEBUG] APTSS parsed metadata:`, metadata);
-  
+
   if (!metadata) {
     return {
       item: null,
@@ -252,7 +264,7 @@ const loadJson = async <T>(url: string): Promise<T> => {
 
 const loadStoreCategoryMap = async (
   storeArch: string,
-): Promise<StoreCategoryMap> => {
+): Promise<StoreAppMetadataMap> => {
   const categories = await loadJson<Record<string, unknown>>(
     `${REMOTE_STORE_BASE_URL}/${storeArch}/categories.json`,
   );
@@ -266,7 +278,7 @@ const loadStoreCategoryMap = async (
     }),
   );
 
-  const categoryMap: StoreCategoryMap = new Map();
+  const categoryMap: StoreAppMetadataMap = new Map();
   for (const entry of categoryEntries) {
     if (entry.status !== "fulfilled") {
       continue;
@@ -274,7 +286,10 @@ const loadStoreCategoryMap = async (
 
     for (const app of entry.value.apps) {
       if (app.Pkgname && !categoryMap.has(app.Pkgname)) {
-        categoryMap.set(app.Pkgname, entry.value.category);
+        categoryMap.set(app.Pkgname, {
+          category: entry.value.category,
+          name: app.Name,
+        });
       }
     }
   }
@@ -282,7 +297,9 @@ const loadStoreCategoryMap = async (
   return categoryMap;
 };
 
-const getStoreCategoryMap = (storeArch: string): Promise<StoreCategoryMap> => {
+const getStoreCategoryMap = (
+  storeArch: string,
+): Promise<StoreAppMetadataMap> => {
   const cached = categoryCache.get(storeArch);
   if (cached) {
     return cached;
@@ -311,8 +328,14 @@ const enrichItemCategories = async (
       }
 
       const categoryMap = await getStoreCategoryMap(storeArch);
-      const category = categoryMap.get(item.pkgname);
-      return category ? { ...item, category } : item;
+      const metadata = categoryMap.get(item.pkgname);
+      return metadata
+        ? {
+            ...item,
+            category: metadata.category,
+            ...(metadata.name ? { name: metadata.name } : {}),
+          }
+        : item;
     }),
   );
 };

@@ -262,6 +262,27 @@ describe("update-center/ipc", () => {
     await startPromise;
   });
 
+  it("service item snapshots prefer resolved app names over package names", async () => {
+    const service = createUpdateCenterService({
+      loadItems: async () => [
+        {
+          ...createItem(),
+          name: "Spark Weather",
+        },
+      ],
+    });
+
+    const snapshot = await service.refresh();
+
+    expect(snapshot.items).toMatchObject([
+      {
+        taskKey: "aptss:spark-weather",
+        packageName: "spark-weather",
+        displayName: "Spark Weather",
+      },
+    ]);
+  });
+
   it("concurrent start calls still serialize through one processing pipeline", async () => {
     const startedTaskIds: number[] = [];
     const releases: Array<() => void> = [];

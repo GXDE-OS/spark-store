@@ -91,7 +91,7 @@ const toState = (
   items: snapshot.items.map((item) => ({
     taskKey: getTaskKey(item),
     packageName: item.pkgname,
-    displayName: item.pkgname,
+    displayName: item.name || item.pkgname,
     currentVersion: item.currentVersion,
     newVersion: item.nextVersion,
     source: item.source,
@@ -191,9 +191,7 @@ export const createUpdateCenterService = (
     async start(taskKeys) {
       const snapshot = queue.getSnapshot();
       const selectedItems = snapshot.items.filter(
-        (item) =>
-          taskKeys.includes(getTaskKey(item)) &&
-          !item.ignored,
+        (item) => taskKeys.includes(getTaskKey(item)) && !item.ignored,
       );
 
       if (selectedItems.length === 0) {
@@ -235,7 +233,9 @@ export const createUpdateCenterService = (
         webContents.send("queue-install", JSON.stringify(installTaskData));
 
         // 从更新中心的 items 中移除该应用（不再显示在更新列表中）
-        currentItems = currentItems.filter((i) => getTaskKey(i) !== getTaskKey(item));
+        currentItems = currentItems.filter(
+          (i) => getTaskKey(i) !== getTaskKey(item),
+        );
       }
 
       // 更新队列中的 items

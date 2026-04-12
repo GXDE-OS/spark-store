@@ -7,6 +7,7 @@ export interface InstalledSourceState {
 
 export interface UpdateCenterItem {
   pkgname: string;
+  name?: string;
   source: UpdateSource;
   currentVersion: string;
   nextVersion: string;
