@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createUpdateCenterStore } from "@/modules/updateCenter";
+import { downloads } from "@/global/downloadStatus";
 
 const createSnapshot = (overrides = {}) => ({
   items: [
@@ -33,6 +34,7 @@ describe("updateCenter store", () => {
     start.mockReset();
     onState.mockReset();
     offState.mockReset();
+    downloads.value = [];
 
     Object.defineProperty(window, "updateCenter", {
       configurable: true,
@@ -95,6 +97,34 @@ describe("updateCenter store", () => {
     await store.startSelected();
 
     expect(start).toHaveBeenCalledWith(["aptss:spark-weather"]);
+  });
+
+  it("uses remoteIcon when adding update tasks to the download queue", async () => {
+    const snapshot = createSnapshot({
+      items: [
+        {
+          taskKey: "aptss:spark-weather",
+          packageName: "spark-weather",
+          displayName: "Spark Weather",
+          currentVersion: "1.0.0",
+          newVersion: "2.0.0",
+          source: "aptss" as const,
+          ignored: false,
+          remoteIcon: "https://example.com/icons/spark-weather.png",
+        },
+      ],
+    });
+    open.mockResolvedValue(snapshot);
+    const store = createUpdateCenterStore();
+
+    await store.open();
+    store.toggleSelection("aptss:spark-weather");
+    await store.startSelected();
+
+    expect(downloads.value).toHaveLength(1);
+    expect(downloads.value[0]?.icon).toBe(
+      "https://example.com/icons/spark-weather.png",
+    );
   });
 
   it("blocks close requests while the snapshot reports running tasks", () => {

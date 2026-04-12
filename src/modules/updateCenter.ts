@@ -155,18 +155,31 @@ export const createUpdateCenterStore = (): UpdateCenterStore => {
 
     // 在前端创建下载项，这样用户能在下载列表中看到更新任务
     const arch = window.apm_store.arch || "amd64";
-    let downloadIdCounter = downloads.value.length > 0 ? Math.max(...downloads.value.map(d => d.id)) + 1 : 1;
+    let downloadIdCounter =
+      downloads.value.length > 0
+        ? Math.max(...downloads.value.map((d) => d.id)) + 1
+        : 1;
 
     selectedItems.forEach((item) => {
       // 检查任务是否已存在
-      if (!downloads.value.find(d => d.pkgname === item.packageName && d.origin === (item.source === "apm" ? "apm" : "spark"))) {
-        const finalArch = item.source === "apm" ? `${arch}-apm` : `${arch}-store`;
+      if (
+        !downloads.value.find(
+          (d) =>
+            d.pkgname === item.packageName &&
+            d.origin === (item.source === "apm" ? "apm" : "spark"),
+        )
+      ) {
+        const finalArch =
+          item.source === "apm" ? `${arch}-apm` : `${arch}-store`;
+        const icon =
+          item.remoteIcon ||
+          `${APM_STORE_BASE_URL}/${finalArch}/unknown/${item.packageName}/icon.png`;
         const download: DownloadItem = {
           id: downloadIdCounter++,
           name: item.displayName,
           pkgname: item.packageName,
           version: item.newVersion,
-          icon: `${APM_STORE_BASE_URL}/${finalArch}/unknown/${item.packageName}/icon.png`,
+          icon,
           origin: item.source === "apm" ? "apm" : "spark",
           status: "queued",
           progress: 0,
@@ -180,7 +193,9 @@ export const createUpdateCenterStore = (): UpdateCenterStore => {
           retry: false,
           upgradeOnly: true,
           filename: item.fileName,
-          metalinkUrl: item.downloadUrl ? `${item.downloadUrl}.metalink` : undefined,
+          metalinkUrl: item.downloadUrl
+            ? `${item.downloadUrl}.metalink`
+            : undefined,
         };
         downloads.value.push(download);
       }
