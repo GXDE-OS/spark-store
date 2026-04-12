@@ -39,3 +39,4 @@ yarn.lock
 .lock
 
 test-results.json
+.worktrees/
