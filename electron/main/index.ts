@@ -220,7 +220,7 @@ ipcMain.handle("open-install-settings", async () => {
     const { spawn } = await import("node:child_process");
     const scriptPath =
       "/opt/durapps/spark-store/bin/update-upgrade/ss-update-controler.sh";
-    const child = spawn("/opt/spark-store/extras/host-spawn", [scriptPath], {
+    const child = spawn("systemd-run", ["--user", scriptPath], {
       detached: true,
       stdio: "ignore",
     });
