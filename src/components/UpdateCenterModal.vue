@@ -36,27 +36,19 @@
           </p>
         </div>
 
-        <div
-          class="grid min-h-0 flex-1 gap-0 lg:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)]"
-        >
+        <div class="min-h-0 flex-1">
           <UpdateCenterList
             :items="store.filteredItems.value"
             :tasks="store.snapshot.value.tasks"
             :selected-task-keys="store.selectedTaskKeys.value"
             @toggle-selection="emit('toggle-selection', $event)"
           />
-          <UpdateCenterLogPanel :tasks="store.snapshot.value.tasks" />
         </div>
 
         <UpdateCenterMigrationConfirm
           :show="store.showMigrationConfirm.value"
           @close="emit('dismiss-migration-confirm')"
           @confirm="emit('confirm-migration-start')"
-        />
-        <UpdateCenterCloseConfirm
-          :show="store.showCloseConfirm.value"
-          @close="emit('dismiss-close-confirm')"
-          @confirm="emit('confirm-close')"
         />
       </div>
     </div>
@@ -68,9 +60,7 @@ import { computed } from "vue";
 
 import type { UpdateCenterStore } from "@/modules/updateCenter";
 
-import UpdateCenterCloseConfirm from "./update-center/UpdateCenterCloseConfirm.vue";
 import UpdateCenterList from "./update-center/UpdateCenterList.vue";
-import UpdateCenterLogPanel from "./update-center/UpdateCenterLogPanel.vue";
 import UpdateCenterMigrationConfirm from "./update-center/UpdateCenterMigrationConfirm.vue";
 import UpdateCenterToolbar from "./update-center/UpdateCenterToolbar.vue";
 
@@ -80,8 +70,6 @@ const emit = defineEmits<{
   (e: "request-start-selected"): void;
   (e: "confirm-migration-start"): void;
   (e: "dismiss-migration-confirm"): void;
-  (e: "confirm-close"): void;
-  (e: "dismiss-close-confirm"): void;
 }>();
 
 const props = defineProps<{

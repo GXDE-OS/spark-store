@@ -270,7 +270,9 @@ export const parsePrintUrisOutput = (
     return null;
   }
 
-  const [, downloadUrl, fileName, size, sha512] = match;
+  const [, rawDownloadUrl, fileName, size, sha512] = match;
+  // Clean up the URL: remove backticks and extra spaces
+  const downloadUrl = rawDownloadUrl.replace(/[`'"]/g, "").trim();
   return {
     downloadUrl,
     fileName,

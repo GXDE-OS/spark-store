@@ -1,3 +1,4 @@
+import { BrowserWindow, ipcMain } from "electron";
 import {
   LEGACY_IGNORE_CONFIG_PATH,
   applyIgnoredEntries,
@@ -5,7 +6,6 @@ import {
   loadIgnoredEntries,
   saveIgnoredEntries,
 } from "./ignore-config";
-import { createTaskRunner, type UpdateCenterTaskRunner } from "./install";
 import {
   createUpdateCenterQueue,
   type UpdateCenterQueue,
@@ -79,11 +79,6 @@ export interface CreateUpdateCenterServiceOptions {
   loadItems: () => Promise<UpdateCenterItem[] | UpdateCenterLoadedItems>;
   loadIgnoredEntries?: () => Promise<Set<string>>;
   saveIgnoredEntries?: (entries: ReadonlySet<string>) => Promise<void>;
-  createTaskRunner?: (
-    queue: UpdateCenterQueue,
-    superUserCmd?: string,
-  ) => UpdateCenterTaskRunner;
-  superUserCmdProvider?: () => Promise<string>;
 }
 
 const getTaskKey = (
@@ -112,19 +107,9 @@ const toState = (
     migrationTarget: item.migrationTarget,
     aptssVersion: item.aptssVersion,
   })),
-  tasks: snapshot.tasks.map((task) => ({
-    taskKey: getTaskKey(task.item),
-    packageName: task.pkgname,
-    source: task.item.source,
-    localIcon: task.item.localIcon,
-    remoteIcon: task.item.remoteIcon,
-    status: task.status,
-    progress: task.progress,
-    logs: task.logs.map((log) => ({ ...log })),
-    errorMessage: task.error ?? "",
-  })),
+  tasks: [], // 不再展示任务日志
   warnings: [...snapshot.warnings],
-  hasRunningTasks: snapshot.hasRunningTasks,
+  hasRunningTasks: false, // 任务不在更新中心执行
 });
 
 const normalizeLoadedItems = (
@@ -152,12 +137,8 @@ export const createUpdateCenterService = (
     options.saveIgnoredEntries ??
     ((entries: ReadonlySet<string>) =>
       saveIgnoredEntries(LEGACY_IGNORE_CONFIG_PATH, entries));
-  const createRunner =
-    options.createTaskRunner ??
-    ((currentQueue: UpdateCenterQueue, superUserCmd?: string) =>
-      createTaskRunner(currentQueue, { superUserCmd }));
-  let processingPromise: Promise<void> | null = null;
-  let activeRunner: UpdateCenterTaskRunner | null = null;
+
+  let nextUpdateTaskId = 1;
 
   const applyWarning = (message: string): void => {
     queue.finishRefresh([message]);
@@ -167,9 +148,9 @@ export const createUpdateCenterService = (
 
   const emit = (): UpdateCenterServiceState => {
     const snapshot = getState();
-    for (const listener of listeners) {
+    listeners.forEach((listener) => {
       listener(snapshot);
-    }
+    });
     return snapshot;
   };
 
@@ -192,47 +173,6 @@ export const createUpdateCenterService = (
     }
   };
 
-  const failQueuedTasks = (message: string): void => {
-    for (const task of queue.getSnapshot().tasks) {
-      if (task.status === "queued") {
-        queue.appendTaskLog(task.id, message);
-        queue.finishTask(task.id, "failed", message);
-      }
-    }
-  };
-
-  const ensureProcessing = async (): Promise<void> => {
-    if (processingPromise) {
-      return processingPromise;
-    }
-
-    processingPromise = (async () => {
-      let superUserCmd = "";
-
-      try {
-        superUserCmd = (await options.superUserCmdProvider?.()) ?? "";
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        failQueuedTasks(message);
-        applyWarning(message);
-        emit();
-        return;
-      }
-
-      activeRunner = createRunner(queue, superUserCmd);
-
-      while (queue.getNextQueuedTask()) {
-        await activeRunner.runNextTask();
-        emit();
-      }
-    })().finally(() => {
-      processingPromise = null;
-      activeRunner = null;
-    });
-
-    return processingPromise;
-  };
-
   return {
     open: refresh,
     refresh,
@@ -250,46 +190,62 @@ export const createUpdateCenterService = (
     },
     async start(taskKeys) {
       const snapshot = queue.getSnapshot();
-      const existingTaskKeys = new Set(
-        snapshot.tasks
-          .filter(
-            (task) =>
-              !["completed", "failed", "cancelled"].includes(task.status),
-          )
-          .map((task) => getTaskKey(task.item)),
-      );
       const selectedItems = snapshot.items.filter(
         (item) =>
           taskKeys.includes(getTaskKey(item)) &&
-          !item.ignored &&
-          !existingTaskKeys.has(getTaskKey(item)),
+          !item.ignored,
       );
 
       if (selectedItems.length === 0) {
         return;
       }
 
-      for (const item of selectedItems) {
-        queue.enqueueItem(item);
-      }
-      emit();
+      // 获取主窗口的 webContents
+      const mainWindow = BrowserWindow.getAllWindows()[0];
+      const webContents = mainWindow?.webContents;
 
-      await ensureProcessing();
-    },
-    async cancel(taskKey) {
-      const task = queue
-        .getSnapshot()
-        .tasks.find((entry) => getTaskKey(entry.item) === taskKey);
-
-      if (!task) {
+      if (!webContents) {
+        console.error("No main window found");
         return;
       }
 
-      queue.finishTask(task.id, "cancelled", "Cancelled");
-      if (["downloading", "installing"].includes(task.status)) {
-        activeRunner?.cancelActiveTask();
+      // 获取当前 items
+      let currentItems = snapshot.items;
+
+      for (const item of selectedItems) {
+        const updateTaskId = nextUpdateTaskId++;
+
+        // 构建 metalink URL
+        const metalinkUrl = item.downloadUrl
+          ? `${item.downloadUrl}.metalink`
+          : undefined;
+
+        // 发送到主下载队列
+        const installTaskData = {
+          id: updateTaskId,
+          pkgname: item.pkgname,
+          metalinkUrl,
+          filename: item.fileName,
+          upgradeOnly: true,
+          origin: item.source === "apm" ? "apm" : "spark",
+          retry: false,
+        };
+
+        // 通过 IPC 发送到主下载队列
+        webContents.send("queue-install", JSON.stringify(installTaskData));
+
+        // 从更新中心的 items 中移除该应用（不再显示在更新列表中）
+        currentItems = currentItems.filter((i) => getTaskKey(i) !== getTaskKey(item));
       }
+
+      // 更新队列中的 items
+      queue.setItems(currentItems);
+
       emit();
+    },
+    async cancel(taskKey) {
+      // 取消功能不再需要通过更新中心，直接忽略
+      console.log("Cancel not needed for task:", taskKey);
     },
     getState,
     subscribe(listener) {

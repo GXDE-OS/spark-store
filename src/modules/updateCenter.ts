@@ -3,7 +3,10 @@ import { computed, ref, type ComputedRef, type Ref } from "vue";
 import type {
   UpdateCenterItem,
   UpdateCenterSnapshot,
+  DownloadItem,
 } from "@/global/typedefinition";
+import { downloads } from "@/global/downloadStatus";
+import { APM_STORE_BASE_URL } from "@/global/storeConfig";
 
 const EMPTY_SNAPSHOT: UpdateCenterSnapshot = {
   items: [],
@@ -143,21 +146,51 @@ export const createUpdateCenterStore = (): UpdateCenterStore => {
   };
 
   const startSelected = async (): Promise<void> => {
-    const taskKeys = getSelectedItems().map((item) => item.taskKey);
+    const selectedItems = getSelectedItems();
+    const taskKeys = selectedItems.map((item) => item.taskKey);
 
     if (taskKeys.length === 0) {
       return;
     }
 
+    // 在前端创建下载项，这样用户能在下载列表中看到更新任务
+    const arch = window.apm_store.arch || "amd64";
+    let downloadIdCounter = downloads.value.length > 0 ? Math.max(...downloads.value.map(d => d.id)) + 1 : 1;
+
+    selectedItems.forEach((item) => {
+      // 检查任务是否已存在
+      if (!downloads.value.find(d => d.pkgname === item.packageName && d.origin === (item.source === "apm" ? "apm" : "spark"))) {
+        const finalArch = item.source === "apm" ? `${arch}-apm` : `${arch}-store`;
+        const download: DownloadItem = {
+          id: downloadIdCounter++,
+          name: item.displayName,
+          pkgname: item.packageName,
+          version: item.newVersion,
+          icon: `${APM_STORE_BASE_URL}/${finalArch}/unknown/${item.packageName}/icon.png`,
+          origin: item.source === "apm" ? "apm" : "spark",
+          status: "queued",
+          progress: 0,
+          downloadedSize: 0,
+          totalSize: item.size || 0,
+          speed: 0,
+          timeRemaining: 0,
+          startTime: Date.now(),
+          logs: [{ time: Date.now(), message: "开始更新..." }],
+          source: "Update Center",
+          retry: false,
+          upgradeOnly: true,
+          filename: item.fileName,
+          metalinkUrl: item.downloadUrl ? `${item.downloadUrl}.metalink` : undefined,
+        };
+        downloads.value.push(download);
+      }
+    });
+
     await window.updateCenter.start(taskKeys);
   };
 
   const requestClose = (): void => {
-    if (snapshot.value.hasRunningTasks) {
-      showCloseConfirm.value = true;
-      return;
-    }
-
+    // 直接关闭，不需要确认，因为任务在主下载队列中执行
     closeNow();
   };
 

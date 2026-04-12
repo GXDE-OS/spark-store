@@ -1,18 +1,11 @@
-import { spawn } from "node:child_process";
 import { join } from "node:path";
 
 import { runAria2Download, type Aria2DownloadResult } from "./download";
+import { installPackage } from "../shared-installer";
 import type { UpdateCenterQueue, UpdateCenterTask } from "./queue";
 import type { UpdateCenterItem } from "./types";
 
-const SHELL_CALLER_PATH = "/opt/spark-store/extras/shell-caller.sh";
-const SSINSTALL_PATH = "/usr/bin/ssinstall";
 const DEFAULT_DOWNLOAD_ROOT = "/tmp/spark-store/update-center";
-
-export interface UpdateCommand {
-  execCommand: string;
-  execParams: string[];
-}
 
 export interface InstallUpdateItemOptions {
   item: UpdateCenterItem;
@@ -55,73 +48,10 @@ export interface CreateTaskRunnerOptions extends TaskRunnerDependencies {
   superUserCmd?: string;
 }
 
-const runCommand = async (
-  execCommand: string,
-  execParams: string[],
-  onLog?: (message: string) => void,
-  signal?: AbortSignal,
-): Promise<void> => {
-  await new Promise<void>((resolve, reject) => {
-    const child = spawn(execCommand, execParams, {
-      shell: false,
-      env: process.env,
-    });
-
-    const handleOutput = (chunk: Buffer) => {
-      const message = chunk.toString().trim();
-      if (message) {
-        onLog?.(message);
-      }
-    };
-
-    const abortCommand = () => {
-      child.kill();
-      reject(new Error(`Update task cancelled: ${execParams.join(" ")}`));
-    };
-
-    if (signal?.aborted) {
-      abortCommand();
-      return;
-    }
-
-    signal?.addEventListener("abort", abortCommand, { once: true });
-
-    child.stdout?.on("data", handleOutput);
-    child.stderr?.on("data", handleOutput);
-    child.on("error", reject);
-    child.on("close", (code) => {
-      signal?.removeEventListener("abort", abortCommand);
-      if (code === 0) {
-        resolve();
-        return;
-      }
-
-      reject(new Error(`${execCommand} exited with code ${code ?? -1}`));
-    });
-  });
-};
-
-const buildPrivilegedCommand = (
-  command: string,
-  args: string[],
-  superUserCmd?: string,
-): UpdateCommand => {
-  if (superUserCmd) {
-    return {
-      execCommand: superUserCmd,
-      execParams: [command, ...args],
-    };
-  }
-
-  return {
-    execCommand: command,
-    execParams: args,
-  };
-};
-
-// Removed buildLegacySparkUpgradeCommand - all updates now require downloading the deb package first
-// to avoid aptss install popup. Use ssinstall with downloaded deb file instead.
-
+/**
+ * 安装更新项
+ * 使用与商店安装相同的逻辑
+ */
 export const installUpdateItem = async ({
   item,
   filePath,
@@ -135,33 +65,17 @@ export const installUpdateItem = async ({
     );
   }
 
-  if (item.source === "apm") {
-    const installCommand = buildPrivilegedCommand(
-      SHELL_CALLER_PATH,
-      ["apm", "ssinstall", filePath],
-      superUserCmd,
-    );
-    await runCommand(
-      installCommand.execCommand,
-      installCommand.execParams,
-      onLog,
-      signal,
-    );
-    return;
-  }
-
-  // APTSS (Spark Store) packages use ssinstall
-  const installCommand = buildPrivilegedCommand(
-    SSINSTALL_PATH,
-    [filePath, "--delete-after-install", "--no-create-desktop-entry", "--native"],
+  // 使用与商店安装相同的安装逻辑
+  const origin = item.source === "apm" ? "apm" : "spark";
+  
+  await installPackage({
+    pkgname: item.pkgname,
+    filePath,
+    origin,
     superUserCmd,
-  );
-  await runCommand(
-    installCommand.execCommand,
-    installCommand.execParams,
     onLog,
     signal,
-  );
+  });
 };
 
 export const createTaskRunner = (
@@ -194,11 +108,7 @@ export const createTaskRunner = (
 
   return {
     cancelActiveTask: () => {
-      if (!activeAbortController || activeAbortController.signal.aborted) {
-        return;
-      }
-
-      activeAbortController.abort();
+      activeAbortController?.abort();
     },
     runNextTask: async () => {
       if (inFlightTask) {

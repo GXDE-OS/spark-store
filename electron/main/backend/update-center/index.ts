@@ -155,20 +155,30 @@ const loadAptssItemMetadata = async (
   | { item: UpdateCenterItem; warning?: undefined }
   | { item: null; warning: string }
 > => {
+  console.log(`[DEBUG] Loading APTSS metadata for ${item.pkgname}`);
   const printUrisCommand = getAptssPrintUrisCommand(item.pkgname);
+  console.log(`[DEBUG] APTSS command: ${printUrisCommand.command} ${printUrisCommand.args.join(' ')}`);
+  
   const metadataResult = await runCommand(
     printUrisCommand.command,
     printUrisCommand.args,
   );
+  console.log(`[DEBUG] APTSS metadata result code: ${metadataResult.code}`);
+  console.log(`[DEBUG] APTSS metadata stdout: ${metadataResult.stdout.substring(0, 500)}`);
+  console.log(`[DEBUG] APTSS metadata stderr: ${metadataResult.stderr.substring(0, 500)}`);
+  
   const commandError = getCommandError(
     `aptss metadata query for ${item.pkgname}`,
     metadataResult,
   );
   if (commandError) {
+    console.log(`[DEBUG] APTSS metadata error: ${commandError}`);
     return { item: null, warning: commandError };
   }
 
   const metadata = parsePrintUrisOutput(metadataResult.stdout);
+  console.log(`[DEBUG] APTSS parsed metadata:`, metadata);
+  
   if (!metadata) {
     return {
       item: null,
@@ -424,14 +434,8 @@ export const initializeUpdateCenter = (): UpdateCenterService => {
     return updateCenterService;
   }
 
-  const superUserCmdProvider = async (): Promise<string> => {
-    const installManager = await import("../install-manager.js");
-    return installManager.checkSuperUserCommand();
-  };
-
   updateCenterService = createUpdateCenterService({
     loadItems: loadUpdateCenterItems,
-    superUserCmdProvider,
   });
   registerUpdateCenterIpc(ipcMain, updateCenterService);
 

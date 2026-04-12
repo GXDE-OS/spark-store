@@ -88,8 +88,8 @@ export const createUpdateCenterQueue = (): UpdateCenterQueue => {
   let refreshing = false;
   let nextTaskId = 1;
 
-  const getTask = (taskId: number): UpdateCenterTask | undefined =>
-    tasks.find((task) => task.id === taskId);
+  const getTaskIndex = (taskId: number): number =>
+    tasks.findIndex((task) => task.id === taskId);
 
   return {
     setItems: (nextItems) => {
@@ -117,40 +117,59 @@ export const createUpdateCenterQueue = (): UpdateCenterQueue => {
       return task;
     },
     markActiveTask: (taskId, status) => {
-      const task = getTask(taskId);
-      if (!task) {
+      const taskIndex = getTaskIndex(taskId);
+      if (taskIndex === -1) {
         return;
       }
 
-      task.status = status;
+      // 创建新的 task 对象和新的 tasks 数组以触发状态更新
+      tasks = tasks.map((task, index) =>
+        index === taskIndex ? { ...task, status } : task,
+      );
     },
     updateTaskProgress: (taskId, progress) => {
-      const task = getTask(taskId);
-      if (!task) {
+      const taskIndex = getTaskIndex(taskId);
+      if (taskIndex === -1) {
         return;
       }
 
-      task.progress = clampProgress(progress);
+      // 创建新的 task 对象和新的 tasks 数组以触发状态更新
+      tasks = tasks.map((task, index) =>
+        index === taskIndex
+          ? { ...task, progress: clampProgress(progress) }
+          : task,
+      );
     },
     appendTaskLog: (taskId, message, time = Date.now()) => {
-      const task = getTask(taskId);
-      if (!task) {
+      const taskIndex = getTaskIndex(taskId);
+      if (taskIndex === -1) {
         return;
       }
 
-      task.logs = [...task.logs, { time, message }];
+      // 创建新的 task 对象和新的 tasks 数组以触发状态更新
+      tasks = tasks.map((task, index) =>
+        index === taskIndex
+          ? { ...task, logs: [...task.logs, { time, message }] }
+          : task,
+      );
     },
     finishTask: (taskId, status, error) => {
-      const task = getTask(taskId);
-      if (!task) {
+      const taskIndex = getTaskIndex(taskId);
+      if (taskIndex === -1) {
         return;
       }
 
-      task.status = status;
-      task.error = error;
-      if (status === "completed") {
-        task.progress = 100;
-      }
+      // 创建新的 task 对象和新的 tasks 数组以触发状态更新
+      tasks = tasks.map((task, index) =>
+        index === taskIndex
+          ? {
+              ...task,
+              status,
+              error,
+              progress: status === "completed" ? 100 : task.progress,
+            }
+          : task,
+      );
     },
     getNextQueuedTask: () => tasks.find((task) => task.status === "queued"),
     getSnapshot: () => createSnapshot(items, tasks, warnings, refreshing),
