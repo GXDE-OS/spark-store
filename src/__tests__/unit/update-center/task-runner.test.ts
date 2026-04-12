@@ -3,7 +3,6 @@ import { describe, expect, it, vi } from "vitest";
 import type { UpdateCenterItem } from "../../../../electron/main/backend/update-center/types";
 import {
   createTaskRunner,
-  buildLegacySparkUpgradeCommand,
   installUpdateItem,
 } from "../../../../electron/main/backend/update-center/install";
 import { createUpdateCenterQueue } from "../../../../electron/main/backend/update-center/queue";
@@ -114,22 +113,6 @@ describe("update-center task runner", () => {
     });
   });
 
-  it("returns a direct aptss upgrade command instead of spark-update-tool", () => {
-    expect(
-      buildLegacySparkUpgradeCommand("spark-weather", "/usr/bin/pkexec"),
-    ).toEqual({
-      execCommand: "/usr/bin/pkexec",
-      execParams: [
-        "/opt/spark-store/extras/shell-caller.sh",
-        "aptss",
-        "install",
-        "-y",
-        "spark-weather",
-        "--only-upgrade",
-      ],
-    });
-  });
-
   it("blocks close while a refresh or task is still running", () => {
     const queue = createUpdateCenterQueue();
     const item = createAptssItem();
@@ -208,7 +191,7 @@ describe("update-center task runner", () => {
         {
           id: task.id,
           status: "failed",
-          error: "APM update task requires downloaded package metadata",
+          error: "Update task for spark-player requires download metadata (URL and filename)",
         },
       ],
     });
@@ -296,6 +279,30 @@ describe("update-center task runner", () => {
           "apm",
           "ssinstall",
           "/tmp/spark-player.deb",
+        ],
+      },
+    ]);
+  });
+
+  it("uses ssinstall for aptss (spark) file installs", async () => {
+    childProcessMock.spawnCalls.length = 0;
+
+    await installUpdateItem({
+      item: createAptssItem(),
+      filePath: "/tmp/spark-weather.deb",
+      superUserCmd: "/usr/bin/pkexec",
+    });
+
+    expect(childProcessMock.spawnCalls).toEqual([
+      {
+        command: "/usr/bin/pkexec",
+        args: [
+          "/opt/spark-store/extras/shell-caller.sh",
+          "ssinstall",
+          "/tmp/spark-weather.deb",
+          "--delete-after-install",
+          "--no-create-desktop-entry",
+          "--native",
         ],
       },
     ]);

@@ -148,8 +148,7 @@ ipcMain.on("queue-install", async (event, download_json) => {
     typeof download_json === "string"
       ? JSON.parse(download_json)
       : download_json;
-  const { id, pkgname, metalinkUrl, filename, upgradeOnly, origin } =
-    download || {};
+  const { id, pkgname, metalinkUrl, filename, origin } = download || {};
 
   if (!id || !pkgname) {
     logger.warn("passed arguments missing id or pkgname");
@@ -249,26 +248,24 @@ ipcMain.on("queue-install", async (event, download_json) => {
   }
 
   if (origin === "spark") {
-    // Spark Store logic
-    if (upgradeOnly) {
-      execCommand = superUserCmd || SHELL_CALLER_PATH;
-      if (superUserCmd) execParams.push(SHELL_CALLER_PATH);
-      execParams.push("aptss", "install", "-y", pkgname, "--only-upgrade");
-    } else {
-      execCommand = superUserCmd || SHELL_CALLER_PATH;
-      if (superUserCmd) execParams.push(SHELL_CALLER_PATH);
+    execCommand = superUserCmd || SHELL_CALLER_PATH;
+    if (superUserCmd) execParams.push(SHELL_CALLER_PATH);
 
-      if (metalinkUrl && filename) {
-        execParams.push(
-          "ssinstall",
-          `${downloadDir}/${filename}`,
-          "--delete-after-install",
-          "--no-create-desktop-entry",
-          "--native",
-        );
-      } else {
-        execParams.push("aptss", "install", "-y", pkgname);
-      }
+    if (metalinkUrl && filename) {
+      execParams.push(
+        "ssinstall",
+        `${downloadDir}/${filename}`,
+        "--delete-after-install",
+        "--no-create-desktop-entry",
+        "--native",
+      );
+    } else {
+      execParams.push(
+        "ssinstall",
+        pkgname,
+        "--no-create-desktop-entry",
+        "--native",
+      );
     }
   } else {
     // APM Store logic

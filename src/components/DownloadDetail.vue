@@ -13,7 +13,7 @@
       @click="handleOverlayClick"
     >
       <div
-        class="scrollbar-nowidth scrollbar-thumb-slate-200 dark:scrollbar-thumb-slate-700 scrollbar-track-transparent w-full max-w-2xl max-h-[85vh] overflow-y-auto rounded-3xl border border-white/10 bg-white/95 p-6 shadow-2xl dark:border-slate-800 dark:bg-slate-900"
+        class="scrollbar-nowidth scrollbar-thumb-slate-200 dark:scrollbar-thumb-slate-700 scrollbar-track-transparent w-full max-w-2xl max-h-[85vh] overflow-y-auto overscroll-contain rounded-3xl border border-white/10 bg-white/95 p-6 shadow-2xl dark:border-slate-800 dark:bg-slate-900"
         @click.stop
       >
         <div class="flex items-start justify-between">
@@ -154,7 +154,7 @@
               </button>
             </div>
             <div
-              class="max-h-48 space-y-2 overflow-y-auto rounded-2xl bg-slate-50/80 p-3 font-mono text-xs text-slate-600 dark:bg-slate-900/60 dark:text-slate-300"
+              class="max-h-48 space-y-2 overflow-y-auto overscroll-contain rounded-2xl bg-slate-50/80 p-3 font-mono text-xs text-slate-600 dark:bg-slate-900/60 dark:text-slate-300"
             >
               <div
                 v-for="(log, index) in download.logs"

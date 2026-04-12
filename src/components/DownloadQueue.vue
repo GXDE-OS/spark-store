@@ -49,7 +49,7 @@
       leave-from-class="opacity-100 translate-y-0"
       leave-to-class="opacity-0 -translate-y-2"
     >
-      <div v-show="isExpanded" class="max-h-96 overflow-y-auto px-3 pb-4">
+      <div v-show="isExpanded" class="max-h-96 overflow-y-auto overscroll-contain px-3 pb-4">
         <div
           v-if="downloads.length === 0"
           class="flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-200/80 px-4 py-12 text-slate-500 dark:border-slate-800/80 dark:text-slate-400"
