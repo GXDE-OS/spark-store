@@ -40,6 +40,22 @@
       </div>
     </div>
 
+    <div class="flex items-center gap-3">
+      <label class="inline-flex cursor-pointer items-center gap-2 select-none">
+        <input
+          ref="selectAllRef"
+          type="checkbox"
+          class="h-4 w-4 rounded border-slate-300 accent-brand focus:ring-brand"
+          :checked="allSelected"
+          @change="$emit('toggle-select-all')"
+        />
+        <span class="text-sm font-medium text-slate-700 dark:text-slate-200">全选</span>
+      </label>
+      <span class="text-sm text-slate-400 dark:text-slate-500">
+        已选 {{ selectedCount }} 项
+      </span>
+    </div>
+
     <label class="block">
       <span class="sr-only">搜索更新</span>
       <input
@@ -54,17 +70,34 @@
 </template>
 
 <script setup lang="ts">
+import { ref, watch } from "vue";
+
 const props = defineProps<{
   searchQuery: string;
   selectedCount: number;
+  allSelected: boolean;
+  someSelected: boolean;
 }>();
 
 const emit = defineEmits<{
   (e: "refresh"): void;
   (e: "start-selected"): void;
   (e: "request-close"): void;
+  (e: "toggle-select-all"): void;
   (e: "update:search-query", value: string): void;
 }>();
+
+const selectAllRef = ref<HTMLInputElement | null>(null);
+
+watch(
+  [() => props.someSelected, () => props.allSelected],
+  () => {
+    if (selectAllRef.value) {
+      selectAllRef.value.indeterminate = props.someSelected && !props.allSelected;
+    }
+  },
+  { flush: "post" },
+);
 
 const handleInput = (event: Event): void => {
   const target = event.target as HTMLInputElement | null;

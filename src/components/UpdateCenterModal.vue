@@ -20,9 +20,12 @@
         <UpdateCenterToolbar
           :search-query="store.searchQuery.value"
           :selected-count="selectedCount"
+          :all-selected="store.allSelected.value"
+          :some-selected="store.someSelected.value"
           @refresh="store.refresh"
           @start-selected="emit('request-start-selected')"
           @request-close="store.requestClose"
+          @toggle-select-all="store.toggleSelectAll"
           @update:search-query="emit('update:search-query', $event)"
         />
 

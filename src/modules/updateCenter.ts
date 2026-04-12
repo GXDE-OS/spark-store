@@ -23,11 +23,14 @@ export interface UpdateCenterStore {
   selectedTaskKeys: Ref<Set<string>>;
   snapshot: Ref<UpdateCenterSnapshot>;
   filteredItems: ComputedRef<UpdateCenterItem[]>;
+  allSelected: ComputedRef<boolean>;
+  someSelected: ComputedRef<boolean>;
   bind: () => void;
   unbind: () => void;
   open: () => Promise<void>;
   refresh: () => Promise<void>;
   toggleSelection: (taskKey: string) => void;
+  toggleSelectAll: () => void;
   getSelectedItems: () => UpdateCenterItem[];
   closeNow: () => void;
   startSelected: () => Promise<void>;
@@ -74,9 +77,23 @@ export const createUpdateCenterStore = (): UpdateCenterStore => {
     snapshot.value = nextSnapshot;
   };
 
+  const selectableItems = computed(() =>
+    snapshot.value.items.filter((item) => item.ignored !== true),
+  );
+
   const filteredItems = computed(() => {
     const query = searchQuery.value.trim();
     return snapshot.value.items.filter((item) => matchesSearch(item, query));
+  });
+
+  const allSelected = computed(() => {
+    const selectable = selectableItems.value;
+    return selectable.length > 0 && selectable.every((item) => selectedTaskKeys.value.has(item.taskKey));
+  });
+
+  const someSelected = computed(() => {
+    const selectable = selectableItems.value;
+    return selectable.length > 0 && selectable.some((item) => selectedTaskKeys.value.has(item.taskKey));
   });
 
   const handleState = (nextSnapshot: UpdateCenterSnapshot): void => {
@@ -131,6 +148,15 @@ export const createUpdateCenterStore = (): UpdateCenterStore => {
     }
 
     selectedTaskKeys.value = nextSelection;
+  };
+
+  const toggleSelectAll = (): void => {
+    const selectable = selectableItems.value;
+    if (allSelected.value) {
+      selectedTaskKeys.value = new Set();
+    } else {
+      selectedTaskKeys.value = new Set(selectable.map((item) => item.taskKey));
+    }
   };
 
   const getSelectedItems = (): UpdateCenterItem[] => {
@@ -217,11 +243,14 @@ export const createUpdateCenterStore = (): UpdateCenterStore => {
     selectedTaskKeys,
     snapshot,
     filteredItems,
+    allSelected,
+    someSelected,
     bind,
     unbind,
     open,
     refresh,
     toggleSelection,
+    toggleSelectAll,
     getSelectedItems,
     closeNow,
     startSelected,
