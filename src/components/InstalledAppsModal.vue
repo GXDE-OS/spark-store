@@ -11,6 +11,7 @@
       v-if="show"
       class="fixed inset-0 z-50 flex items-start justify-center bg-slate-900/70 px-4 py-10"
       @click.self="$emit('close')"
+      @wheel="onOverlayWheel"
     >
       <div
         class="flex w-full max-w-4xl max-h-[85vh] flex-col rounded-3xl border border-white/10 bg-white/95 shadow-2xl dark:border-slate-800 dark:bg-slate-900"
@@ -193,4 +194,10 @@ defineEmits<{
   (e: "uninstall", app: App): void;
   (e: "switch-origin", origin: "apm" | "spark"): void;
 }>();
+
+const onOverlayWheel = (e: WheelEvent) => {
+  const target = e.target as HTMLElement;
+  if (target.closest(".overflow-y-auto, .overflow-auto")) return;
+  e.preventDefault();
+};
 </script>

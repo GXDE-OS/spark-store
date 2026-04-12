@@ -11,9 +11,11 @@
       v-if="show"
       class="fixed inset-0 z-50 flex items-start justify-center bg-slate-900/70 px-4 py-6 lg:py-10"
       @wheel="onOverlayWheel"
+      @click="onOverlayClick"
     >
       <div
         class="flex max-h-[90vh] w-full max-w-6xl flex-col overflow-hidden rounded-3xl border border-white/10 bg-white/95 shadow-2xl dark:border-slate-800 dark:bg-slate-900"
+        @click.stop
       >
         <UpdateCenterToolbar
           :search-query="store.searchQuery.value"
@@ -84,5 +86,9 @@ const onOverlayWheel = (e: WheelEvent) => {
   const target = e.target as HTMLElement;
   if (target.closest(".overflow-y-auto, .overflow-auto")) return;
   e.preventDefault();
+};
+
+const onOverlayClick = () => {
+  props.store.requestClose();
 };
 </script>

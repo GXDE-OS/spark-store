@@ -10,7 +10,9 @@
         >{{ tasks.length }} 项</span
       >
     </div>
-    <div class="mt-4 min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain">
+    <div
+      class="mt-4 min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain"
+    >
       <div
         v-if="tasks.length === 0"
         class="rounded-2xl border border-dashed border-slate-200/80 px-4 py-8 text-center text-sm text-slate-500 dark:border-slate-800/80 dark:text-slate-400"

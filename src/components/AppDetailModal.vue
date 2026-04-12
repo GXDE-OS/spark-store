@@ -12,6 +12,7 @@
       v-bind="attrs"
       class="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-slate-900/70 p-4"
       @click.self="closeModal"
+      @wheel="onOverlayWheel"
     >
       <div
         class="modal-panel relative w-full max-w-5xl max-h-[85vh] overflow-y-auto overscroll-contain scrollbar-nowidth rounded-3xl border border-white/10 bg-white/95 px-6 pb-6 shadow-2xl dark:border-slate-800 dark:bg-slate-900"
@@ -628,5 +629,11 @@ const openPreview = (index: number) => {
 
 const hideImage = (e: Event) => {
   (e.target as HTMLElement).style.display = "none";
+};
+
+const onOverlayWheel = (e: WheelEvent) => {
+  const target = e.target as HTMLElement;
+  if (target.closest(".overflow-y-auto, .overflow-auto")) return;
+  e.preventDefault();
 };
 </script>
