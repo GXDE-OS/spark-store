@@ -4,6 +4,7 @@ import vue from '@vitejs/plugin-vue'
 import tailwindcss from '@tailwindcss/vite'
 import electron from 'vite-plugin-electron/simple'
 import pkg from './package.json'
+import { resolve } from 'path'
 
 // https://vitejs.dev/config/
 export default defineConfig(({ command }) => {
@@ -110,5 +111,10 @@ export default defineConfig(({ command }) => {
     define: {
       __APP_VERSION__: JSON.stringify(process.env.npm_package_version),
     },
+    resolve: {
+      alias: {
+        '@': resolve(__dirname, 'src')
+      }
+    }
   };
 });

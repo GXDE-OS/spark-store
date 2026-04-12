@@ -15,7 +15,7 @@ extraResources:
     to: "icons"
 
 linux:
-  icon: "icons/amber-pm-logo.icns"
+  icon: "icons/spark-store.png"
   category: "System"
   executableName: "spark-store"
   desktop:
