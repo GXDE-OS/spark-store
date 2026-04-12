@@ -14,7 +14,7 @@
       @click.self="closeModal"
     >
       <div
-        class="modal-panel relative w-full max-w-5xl max-h-[85vh] overflow-y-auto scrollbar-nowidth rounded-3xl border border-white/10 bg-white/95 px-6 pb-6 shadow-2xl dark:border-slate-800 dark:bg-slate-900"
+        class="modal-panel relative w-full max-w-5xl max-h-[85vh] overflow-y-auto overscroll-contain scrollbar-nowidth rounded-3xl border border-white/10 bg-white/95 px-6 pb-6 shadow-2xl dark:border-slate-800 dark:bg-slate-900"
       >
         <!-- 返回按钮 - sticky定位在模态框内部左上角，滚动时始终可见 -->
         <button
@@ -276,7 +276,7 @@
                 应用详情
               </h3>
               <div
-                class="max-h-48 overflow-y-auto text-sm leading-relaxed text-slate-600 dark:text-slate-300 space-y-2"
+                class="max-h-48 overflow-y-auto overscroll-contain text-sm leading-relaxed text-slate-600 dark:text-slate-300 space-y-2"
                 v-html="displayApp.more.replace(/\n/g, '<br>')"
               ></div>
             </div>
@@ -351,7 +351,7 @@
           应用信息
         </h3>
         <div
-          class="max-h-80 overflow-y-auto rounded-xl bg-slate-50 p-4 dark:bg-slate-900/50 space-y-3"
+          class="max-h-80 overflow-y-auto overscroll-contain rounded-xl bg-slate-50 p-4 dark:bg-slate-900/50 space-y-3"
         >
           <div v-if="displayApp?.name" class="flex justify-between">
             <span class="text-sm text-slate-500">应用名称</span>

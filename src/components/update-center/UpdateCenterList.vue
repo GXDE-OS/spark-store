@@ -1,6 +1,6 @@
 <template>
   <div
-    class="min-h-0 overflow-y-auto border-r border-slate-200/70 p-6 dark:border-slate-800/70"
+    class="min-h-0 overflow-y-auto overscroll-contain border-r border-slate-200/70 p-6 dark:border-slate-800/70"
   >
     <div
       v-if="items.length === 0"

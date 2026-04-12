@@ -11,6 +11,7 @@
       v-if="show"
       class="fixed inset-0 z-50 flex items-start justify-center bg-slate-900/70 px-4 py-10"
       @click="handleOverlayClick"
+      @wheel="onOverlayWheel"
     >
       <div
         class="scrollbar-nowidth scrollbar-thumb-slate-200 dark:scrollbar-thumb-slate-700 scrollbar-track-transparent w-full max-w-2xl max-h-[85vh] overflow-y-auto overscroll-contain rounded-3xl border border-white/10 bg-white/95 p-6 shadow-2xl dark:border-slate-800 dark:bg-slate-900"
@@ -310,4 +311,10 @@ const copyLogs = () => {
 const downloadProgress = computed(() => {
   return props.download ? Math.floor(props.download.progress * 100) : 0;
 });
+
+const onOverlayWheel = (e: WheelEvent) => {
+  const target = e.target as HTMLElement;
+  if (target.closest(".overflow-y-auto, .overflow-auto")) return;
+  e.preventDefault();
+};
 </script>
