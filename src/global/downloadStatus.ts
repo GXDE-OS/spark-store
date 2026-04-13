@@ -3,6 +3,34 @@ import type { DownloadItem, DownloadItemStatus } from "./typedefinition";
 
 export const downloads = ref<DownloadItem[]>([]);
 
+let nextDownloadId = 1;
+
+export function getNextDownloadId(): number {
+  if (downloads.value.length > 0) {
+    nextDownloadId = Math.max(
+      nextDownloadId,
+      Math.max(...downloads.value.map((item) => item.id)) + 1,
+    );
+  }
+
+  const downloadId = nextDownloadId;
+  nextDownloadId += 1;
+
+  return downloadId;
+}
+
+export function getNextUpdateDownloadId(): number {
+  const negativeIds = downloads.value
+    .map((item) => item.id)
+    .filter((id) => id < 0);
+
+  if (negativeIds.length === 0) {
+    return -1;
+  }
+
+  return Math.min(...negativeIds) - 1;
+}
+
 export function removeDownloadItem(pkgname: string) {
   const list = downloads.value;
   for (let i = list.length - 1; i >= 0; i -= 1) {

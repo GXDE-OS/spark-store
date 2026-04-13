@@ -33,6 +33,11 @@ type UpdateCenterSnapshot = {
   hasRunningTasks: boolean;
 };
 
+type UpdateCenterStartTask = {
+  taskKey: string;
+  id: number;
+};
+
 type IpcRendererFacade = {
   on: typeof ipcRenderer.on;
   off: typeof ipcRenderer.off;
@@ -98,8 +103,8 @@ contextBridge.exposeInMainWorld("updateCenter", {
     packageName: string;
     newVersion: string;
   }): Promise<void> => ipcRenderer.invoke("update-center-unignore", payload),
-  start: (taskKeys: string[]): Promise<void> =>
-    ipcRenderer.invoke("update-center-start", taskKeys),
+  start: (tasks: UpdateCenterStartTask[]): Promise<void> =>
+    ipcRenderer.invoke("update-center-start", tasks),
   cancel: (taskKey: string): Promise<void> =>
     ipcRenderer.invoke("update-center-cancel", taskKey),
   getState: (): Promise<UpdateCenterSnapshot> =>

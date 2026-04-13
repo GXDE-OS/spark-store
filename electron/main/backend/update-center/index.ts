@@ -14,6 +14,7 @@ import {
   createUpdateCenterService,
   type UpdateCenterIgnorePayload,
   type UpdateCenterService,
+  type UpdateCenterStartTask,
 } from "./service";
 import type { UpdateCenterItem } from "./types";
 
@@ -435,8 +436,8 @@ export const registerUpdateCenterIpc = (
     "update-center-unignore",
     (_event, payload: UpdateCenterIgnorePayload) => service.unignore(payload),
   );
-  ipc.handle("update-center-start", (_event, taskKeys: string[]) =>
-    service.start(taskKeys),
+  ipc.handle("update-center-start", (_event, tasks: UpdateCenterStartTask[]) =>
+    service.start(tasks),
   );
   ipc.handle("update-center-cancel", (_event, taskKey: string) =>
     service.cancel(taskKey),

@@ -4,8 +4,9 @@ import type {
   UpdateCenterItem,
   UpdateCenterSnapshot,
   DownloadItem,
+  UpdateCenterStartTask,
 } from "@/global/typedefinition";
-import { downloads } from "@/global/downloadStatus";
+import { downloads, getNextUpdateDownloadId } from "@/global/downloadStatus";
 import { APM_STORE_BASE_URL } from "@/global/storeConfig";
 
 const EMPTY_SNAPSHOT: UpdateCenterSnapshot = {
@@ -88,12 +89,18 @@ export const createUpdateCenterStore = (): UpdateCenterStore => {
 
   const allSelected = computed(() => {
     const selectable = selectableItems.value;
-    return selectable.length > 0 && selectable.every((item) => selectedTaskKeys.value.has(item.taskKey));
+    return (
+      selectable.length > 0 &&
+      selectable.every((item) => selectedTaskKeys.value.has(item.taskKey))
+    );
   });
 
   const someSelected = computed(() => {
     const selectable = selectableItems.value;
-    return selectable.length > 0 && selectable.some((item) => selectedTaskKeys.value.has(item.taskKey));
+    return (
+      selectable.length > 0 &&
+      selectable.some((item) => selectedTaskKeys.value.has(item.taskKey))
+    );
   });
 
   const handleState = (nextSnapshot: UpdateCenterSnapshot): void => {
@@ -173,18 +180,13 @@ export const createUpdateCenterStore = (): UpdateCenterStore => {
 
   const startSelected = async (): Promise<void> => {
     const selectedItems = getSelectedItems();
-    const taskKeys = selectedItems.map((item) => item.taskKey);
-
-    if (taskKeys.length === 0) {
+    if (selectedItems.length === 0) {
       return;
     }
 
     // 在前端创建下载项，这样用户能在下载列表中看到更新任务
     const arch = window.apm_store.arch || "amd64";
-    let downloadIdCounter =
-      downloads.value.length > 0
-        ? Math.max(...downloads.value.map((d) => d.id)) + 1
-        : 1;
+    const startTasks: UpdateCenterStartTask[] = [];
 
     selectedItems.forEach((item) => {
       // 检查任务是否已存在
@@ -200,8 +202,9 @@ export const createUpdateCenterStore = (): UpdateCenterStore => {
         const icon =
           item.remoteIcon ||
           `${APM_STORE_BASE_URL}/${finalArch}/unknown/${item.packageName}/icon.png`;
+        const downloadId = getNextUpdateDownloadId();
         const download: DownloadItem = {
-          id: downloadIdCounter++,
+          id: downloadId,
           name: item.displayName,
           pkgname: item.packageName,
           version: item.newVersion,
@@ -224,10 +227,18 @@ export const createUpdateCenterStore = (): UpdateCenterStore => {
             : undefined,
         };
         downloads.value.push(download);
+        startTasks.push({
+          taskKey: item.taskKey,
+          id: downloadId,
+        });
       }
     });
 
-    await window.updateCenter.start(taskKeys);
+    if (startTasks.length === 0) {
+      return;
+    }
+
+    await window.updateCenter.start(startTasks);
   };
 
   const requestClose = (): void => {
