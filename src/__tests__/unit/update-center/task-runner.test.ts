@@ -191,7 +191,8 @@ describe("update-center task runner", () => {
         {
           id: task.id,
           status: "failed",
-          error: "Update task for spark-player requires download metadata (URL and filename)",
+          error:
+            "Update task for spark-player requires download metadata (URL and filename)",
         },
       ],
     });

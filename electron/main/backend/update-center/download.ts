@@ -27,7 +27,7 @@ export const runAria2Download = async ({
 
   // 使用与商店安装相同的下载逻辑
   const metalinkUrl = `${item.downloadUrl}.metalink`;
-  
+
   const result = await downloadPackage({
     pkgname: item.pkgname,
     metalinkUrl,

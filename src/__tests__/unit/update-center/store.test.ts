@@ -96,7 +96,12 @@ describe("updateCenter store", () => {
     store.toggleSelection("apm:spark-clock");
     await store.startSelected();
 
-    expect(start).toHaveBeenCalledWith(["aptss:spark-weather"]);
+    expect(start).toHaveBeenCalledWith([
+      {
+        taskKey: "aptss:spark-weather",
+        id: downloads.value[0]?.id,
+      },
+    ]);
   });
 
   it("uses remoteIcon when adding update tasks to the download queue", async () => {
@@ -125,6 +130,45 @@ describe("updateCenter store", () => {
     expect(downloads.value[0]?.icon).toBe(
       "https://example.com/icons/spark-weather.png",
     );
+  });
+
+  it("assigns update-center download ids from a separate range", async () => {
+    downloads.value = [
+      {
+        id: 5,
+        name: "Spark Notes",
+        pkgname: "spark-notes",
+        version: "1.0.0",
+        icon: "https://example.com/icons/spark-notes.png",
+        origin: "spark",
+        status: "queued",
+        progress: 0,
+        downloadedSize: 0,
+        totalSize: 1024,
+        speed: 0,
+        timeRemaining: 0,
+        startTime: Date.now(),
+        logs: [],
+        source: "APM Store",
+        retry: false,
+      },
+    ];
+    const snapshot = createSnapshot();
+    open.mockResolvedValue(snapshot);
+    const store = createUpdateCenterStore();
+
+    await store.open();
+    store.toggleSelection("aptss:spark-weather");
+    await store.startSelected();
+
+    expect(downloads.value).toHaveLength(2);
+    expect(downloads.value[1]?.id).toBeLessThan(0);
+    expect(start).toHaveBeenCalledWith([
+      {
+        taskKey: "aptss:spark-weather",
+        id: downloads.value[1]?.id,
+      },
+    ]);
   });
 
   it("blocks close requests while the snapshot reports running tasks", () => {

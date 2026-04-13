@@ -7,7 +7,7 @@ import {
   currentAppApmInstalled,
 } from "../global/storeConfig";
 import { APM_STORE_BASE_URL } from "../global/storeConfig";
-import { downloads } from "../global/downloadStatus";
+import { downloads, getNextDownloadId } from "../global/downloadStatus";
 
 import {
   InstallLog,
@@ -18,7 +18,6 @@ import {
 } from "../global/typedefinition";
 import axios from "axios";
 
-let downloadIdCounter = 0;
 const logger = pino({ name: "processInstall.ts" });
 
 export const handleInstall = async (appObj?: App) => {
@@ -51,14 +50,14 @@ export const handleInstall = async (appObj?: App) => {
     return;
   }
 
-  downloadIdCounter += 1;
   // 创建下载任务
   const arch = window.apm_store.arch || "amd64";
   const finalArch =
     targetApp.origin === "spark" ? `${arch}-store` : `${arch}-apm`;
+  const downloadId = getNextDownloadId();
 
   const download: DownloadItem = {
-    id: downloadIdCounter,
+    id: downloadId,
     name: targetApp.name,
     pkgname: targetApp.pkgname,
     version: targetApp.version,
@@ -140,12 +139,12 @@ export const handleUpgrade = async (app: App) => {
     return;
   }
 
-  downloadIdCounter += 1;
   const arch = window.apm_store.arch || "amd64";
   const finalArch = app.origin === "spark" ? `${arch}-store` : `${arch}-apm`;
+  const downloadId = getNextDownloadId();
 
   const download: DownloadItem = {
-    id: downloadIdCounter,
+    id: downloadId,
     name: app.name,
     pkgname: app.pkgname,
     version: app.version,

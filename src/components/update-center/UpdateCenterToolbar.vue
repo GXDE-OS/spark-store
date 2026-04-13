@@ -49,7 +49,9 @@
           :checked="allSelected"
           @change="$emit('toggle-select-all')"
         />
-        <span class="text-sm font-medium text-slate-700 dark:text-slate-200">全选</span>
+        <span class="text-sm font-medium text-slate-700 dark:text-slate-200"
+          >全选</span
+        >
       </label>
       <span class="text-sm text-slate-400 dark:text-slate-500">
         已选 {{ selectedCount }} 项
@@ -93,7 +95,8 @@ watch(
   [() => props.someSelected, () => props.allSelected],
   () => {
     if (selectAllRef.value) {
-      selectAllRef.value.indeterminate = props.someSelected && !props.allSelected;
+      selectAllRef.value.indeterminate =
+        props.someSelected && !props.allSelected;
     }
   },
   { flush: "post" },

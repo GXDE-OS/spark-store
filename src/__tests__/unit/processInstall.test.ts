@@ -33,4 +33,78 @@ describe("processInstall queue forwarding", () => {
 
     expect(send).toHaveBeenCalledWith("queue-install", payload);
   });
+
+  it("allocates install ids after existing update tasks", async () => {
+    const handlers = new Map<string, (...args: unknown[]) => void>();
+    const send = vi.fn();
+
+    vi.doMock("axios", () => ({
+      default: {
+        create: vi.fn(() => ({
+          post: vi.fn(() => Promise.resolve({ data: { ok: true } })),
+        })),
+      },
+    }));
+
+    Object.assign(window.ipcRenderer, {
+      on: vi.fn((channel: string, handler: (...args: unknown[]) => void) => {
+        handlers.set(channel, handler);
+      }),
+      send,
+      invoke: vi.fn(),
+    });
+
+    window.apm_store.arch = "amd64";
+
+    const { downloads } = await import("@/global/downloadStatus");
+    downloads.value = [
+      {
+        id: 4,
+        name: "Spark Weather",
+        pkgname: "spark-weather",
+        version: "2.0.0",
+        icon: "https://example.com/icon.png",
+        origin: "spark",
+        status: "downloading",
+        progress: 0,
+        downloadedSize: 0,
+        totalSize: 1024,
+        speed: 0,
+        timeRemaining: 0,
+        startTime: Date.now(),
+        logs: [],
+        source: "Update Center",
+        retry: false,
+        upgradeOnly: true,
+      },
+    ];
+
+    const { handleInstall } = await import("@/modules/processInstall");
+
+    await handleInstall({
+      name: "Spark Notes",
+      pkgname: "spark-notes",
+      version: "1.0.0",
+      filename: "spark-notes_1.0.0_amd64.deb",
+      torrent_address: "spark-notes_1.0.0_amd64.deb.torrent",
+      author: "Tester",
+      contributor: "Tester",
+      website: "https://example.com",
+      update: "2026-04-13",
+      size: "10MB",
+      more: "Test app",
+      tags: "test",
+      img_urls: [],
+      icons: "https://example.com/icon.png",
+      category: "office",
+      origin: "spark",
+      currentStatus: "not-installed",
+    });
+
+    expect(downloads.value.map((download) => download.id)).toEqual([4, 5]);
+    expect(send).toHaveBeenCalledWith(
+      "queue-install",
+      expect.stringContaining('"id":5'),
+    );
+  });
 });

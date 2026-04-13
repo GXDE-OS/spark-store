@@ -1,5 +1,9 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { downloads, removeDownloadItem } from "@/global/downloadStatus";
+import {
+  downloads,
+  getNextDownloadId,
+  removeDownloadItem,
+} from "@/global/downloadStatus";
 import type { DownloadItem } from "@/global/typedefinition";
 
 describe("downloadStatus", () => {
@@ -97,6 +101,17 @@ describe("downloadStatus", () => {
         "app-2",
         "app-3",
       ]);
+    });
+
+    it("should not reuse ids after earlier tasks are removed", () => {
+      downloads.value.push(createMockDownload(1, "app-1"));
+
+      const secondId = getNextDownloadId();
+      downloads.value.push(createMockDownload(secondId, "app-2"));
+
+      downloads.value = [];
+
+      expect(getNextDownloadId()).toBe(secondId + 1);
     });
   });
 });

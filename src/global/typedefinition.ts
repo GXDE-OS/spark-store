@@ -165,6 +165,11 @@ export interface UpdateCenterTaskState {
   errorMessage: string;
 }
 
+export interface UpdateCenterStartTask {
+  taskKey: string;
+  id: number;
+}
+
 export interface UpdateCenterSnapshot {
   items: UpdateCenterItem[];
   tasks: UpdateCenterTaskState[];
@@ -183,7 +188,7 @@ export interface UpdateCenterBridge {
     packageName: string;
     newVersion: string;
   }) => Promise<void>;
-  start: (taskKeys: string[]) => Promise<void>;
+  start: (tasks: UpdateCenterStartTask[]) => Promise<void>;
   cancel: (taskKey: string) => Promise<void>;
   getState: () => Promise<UpdateCenterSnapshot>;
   onState: (listener: (snapshot: UpdateCenterSnapshot) => void) => void;

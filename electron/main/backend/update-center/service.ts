@@ -1,4 +1,4 @@
-import { BrowserWindow, ipcMain } from "electron";
+import { BrowserWindow } from "electron";
 import {
   LEGACY_IGNORE_CONFIG_PATH,
   applyIgnoredEntries,
@@ -8,7 +8,6 @@ import {
 } from "./ignore-config";
 import {
   createUpdateCenterQueue,
-  type UpdateCenterQueue,
   type UpdateCenterQueueSnapshot,
 } from "./queue";
 import type { UpdateCenterItem, UpdateSource } from "./types";
@@ -62,12 +61,17 @@ export interface UpdateCenterIgnorePayload {
   newVersion: string;
 }
 
+export interface UpdateCenterStartTask {
+  taskKey: string;
+  id: number;
+}
+
 export interface UpdateCenterService {
   open: () => Promise<UpdateCenterServiceState>;
   refresh: () => Promise<UpdateCenterServiceState>;
   ignore: (payload: UpdateCenterIgnorePayload) => Promise<void>;
   unignore: (payload: UpdateCenterIgnorePayload) => Promise<void>;
-  start: (taskKeys: string[]) => Promise<void>;
+  start: (tasks: UpdateCenterStartTask[]) => Promise<void>;
   cancel: (taskKey: string) => Promise<void>;
   getState: () => UpdateCenterServiceState;
   subscribe: (
@@ -138,8 +142,6 @@ export const createUpdateCenterService = (
     ((entries: ReadonlySet<string>) =>
       saveIgnoredEntries(LEGACY_IGNORE_CONFIG_PATH, entries));
 
-  let nextUpdateTaskId = 1;
-
   const applyWarning = (message: string): void => {
     queue.finishRefresh([message]);
   };
@@ -188,10 +190,11 @@ export const createUpdateCenterService = (
       await saveIgnored(entries);
       await refresh();
     },
-    async start(taskKeys) {
+    async start(tasks) {
       const snapshot = queue.getSnapshot();
+      const taskIdByKey = new Map(tasks.map((task) => [task.taskKey, task.id]));
       const selectedItems = snapshot.items.filter(
-        (item) => taskKeys.includes(getTaskKey(item)) && !item.ignored,
+        (item) => taskIdByKey.has(getTaskKey(item)) && !item.ignored,
       );
 
       if (selectedItems.length === 0) {
@@ -211,7 +214,10 @@ export const createUpdateCenterService = (
       let currentItems = snapshot.items;
 
       for (const item of selectedItems) {
-        const updateTaskId = nextUpdateTaskId++;
+        const updateTaskId = taskIdByKey.get(getTaskKey(item));
+        if (!updateTaskId) {
+          continue;
+        }
 
         // 构建 metalink URL
         const metalinkUrl = item.downloadUrl

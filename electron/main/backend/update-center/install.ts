@@ -67,7 +67,7 @@ export const installUpdateItem = async ({
 
   // 使用与商店安装相同的安装逻辑
   const origin = item.source === "apm" ? "apm" : "spark";
-  
+
   await installPackage({
     pkgname: item.pkgname,
     filePath,

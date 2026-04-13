@@ -244,7 +244,7 @@ export const installPackage = async ({
       filePath,
       "--delete-after-install",
       "--no-create-desktop-entry",
-      "--native"
+      "--native",
     );
   } else {
     // APM
