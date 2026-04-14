@@ -58,7 +58,7 @@
       </span>
     </div>
 
-    <label class="block">
+    <label class="block relative">
       <span class="sr-only">搜索更新</span>
       <input
         :value="searchQuery"
@@ -67,6 +67,15 @@
         class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-brand/60 focus:bg-white dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:focus:bg-slate-900"
         @input="handleInput"
       />
+      <button
+        v-if="searchQuery"
+        type="button"
+        class="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300 transition-colors"
+        @click="clearSearch"
+        title="清除搜索"
+      >
+        <i class="fas fa-times-circle"></i>
+      </button>
     </label>
   </div>
 </template>
@@ -105,5 +114,9 @@ watch(
 const handleInput = (event: Event): void => {
   const target = event.target as HTMLInputElement | null;
   emit("update:search-query", target?.value ?? props.searchQuery);
+};
+
+const clearSearch = () => {
+  emit("update:search-query", "");
 };
 </script>

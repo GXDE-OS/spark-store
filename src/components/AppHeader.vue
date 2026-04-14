@@ -22,7 +22,17 @@
             placeholder="搜索应用名 / 包名 / 标签，按回车键搜索"
             @keydown.enter="handleSearch"
             @focus="handleSearchFocus"
+            @input="handleInput"
           />
+          <button
+            v-if="localSearchQuery"
+            type="button"
+            class="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300 transition-colors"
+            @click="clearSearch"
+            title="清除搜索"
+          >
+            <i class="fas fa-times-circle"></i>
+          </button>
         </div>
         <button
           type="button"
@@ -76,6 +86,15 @@ const handleSearch = () => {
 
 const handleSearchFocus = () => {
   emit("search-focus");
+};
+
+const handleInput = () => {
+  emit("update-search", localSearchQuery.value);
+};
+
+const clearSearch = () => {
+  localSearchQuery.value = "";
+  emit("update-search", "");
 };
 
 watch(
