@@ -5,6 +5,10 @@ load_transhell_debug
 
 #############################################################
 
+function has-command() {
+    command -v "$1" >/dev/null 2>&1
+}
+
 # 发送通知
 function notify-send() {
     local user
@@ -86,6 +90,30 @@ function load-ignored-apps() {
     done
 }
 
+function get-apm-upgradable-list() {
+    local output
+    output=$(env LANGUAGE=en_US apm list --upgradable 2>/dev/null | awk 'NR>1')
+
+    local ifs_old="$IFS"
+    IFS=$'\n'
+
+    local line
+    for line in $output; do
+        local pkg_name
+        local pkg_new_ver
+        local pkg_cur_ver
+        pkg_name=$(echo "$line" | awk -F '/' '{print $1}')
+        pkg_new_ver=$(echo "$line" | awk '{print $2}')
+        pkg_cur_ver=$(printf '%s\n' "$line" | sed -n 's/.*\[\(upgradable from\|from\):[[:space:]]*\([^]]*\)\].*/\2/p')
+
+        if [ -n "$pkg_name" ] && [ -n "$pkg_new_ver" ] && [ -n "$pkg_cur_ver" ]; then
+            echo "${pkg_name} ${pkg_new_ver} ${pkg_cur_ver}"
+        fi
+    done
+
+    IFS="$ifs_old"
+}
+
 # 检测网络链接畅通
 function network-check() {
     # 超时时间
@@ -106,6 +134,21 @@ function network-check() {
     fi
 }
 
+has_aptss=0
+has_apm=0
+
+if has-command aptss; then
+    has_aptss=1
+fi
+
+if has-command apm; then
+    has_apm=1
+fi
+
+if [ "$has_aptss" -eq 0 ] && [ "$has_apm" -eq 0 ]; then
+    exit 0
+fi
+
 # 初始化等待时间和最大等待时间
 initial_wait_time=15  # 初始等待时间 15 秒
 max_wait_time=$((12 * 3600))  # 最大等待时间 12 小时
@@ -123,70 +166,120 @@ while ! network-check; do
     fi
 done
 
-# 每日更新星火源文件
-aptss update
+load-ignored-apps
+spark_update_count=0
+if [ "$has_aptss" -eq 1 ]; then
+    # 每日更新星火源文件
+    aptss update
 
-updatetext=`LANGUAGE=en_US aptss ssupdate 2>&1`
+    updatetext=$(LANGUAGE=en_US aptss ssupdate 2>&1)
 
-# 在网络恢复后，继续更新操作
-retry_count=0
-max_retries=12  # 最大重试次数，防止死循环
+    # 在网络恢复后，继续更新操作
+    retry_count=0
+    max_retries=12  # 最大重试次数，防止死循环
 
-until ! echo $updatetext | grep -q "E:"; do
-    if [ $retry_count -ge $max_retries ]; then
-        echo "Reached maximum retry limit for aptss ssupdate."
-        exit 1
+    until ! echo "$updatetext" | grep -q "E:"; do
+        if [ $retry_count -ge $max_retries ]; then
+            echo "Reached maximum retry limit for aptss ssupdate."
+            exit 1
+        fi
+
+        echo "${TRANSHELL_CONTENT_UPDATE_ERROR_AND_WAIT_15_SEC}"
+        sleep 15
+        updatetext=$(LANGUAGE=en_US aptss ssupdate 2>&1)
+        retry_count=$((retry_count + 1))
+    done
+
+    spark_update_count=$(env LANGUAGE=en_US /usr/bin/apt -c /opt/durapps/spark-store/bin/apt-fast-conf/aptss-apt.conf list --upgradable -o Dir::Etc::sourcelist="/opt/durapps/spark-store/bin/apt-fast-conf/sources.list.d/aptss.list" -o Dir::Etc::sourceparts="/dev/null" -o APT::Get::List-Cleanup="0" 2>/dev/null | grep -c upgradable)
+
+    if [ "$spark_update_count" -gt 0 ]; then
+        # 获取用户选择的要更新的应用
+        PKG_LIST="$(/opt/durapps/spark-store/bin/update-upgrade/ss-do-upgrade-worker.sh upgradable-list)"
+        IFS_OLD="$IFS"
+        IFS=$'\n'
+
+        for line in $PKG_LIST; do
+            PKG_NAME=$(echo "$line" | awk -F ' ' '{print $1}')
+            PKG_NEW_VER=$(echo "$line" | awk -F ' ' '{print $2}')
+            PKG_CUR_VER=$(echo "$line" | awk -F ' ' '{print $3}')
+
+            dpkg --compare-versions "$PKG_NEW_VER" le "$PKG_CUR_VER"
+            if [ $? -eq 0 ]; then
+                spark_update_count=$((spark_update_count - 1))
+                continue
+            fi
+
+            PKG_STA=$(dpkg-query -W -f='${db:Status-Want}' "$PKG_NAME")
+            if [ "$PKG_STA" = "hold" ]; then
+                spark_update_count=$((spark_update_count - 1))
+                continue
+            fi
+
+            if [ -n "${ignored_apps["$PKG_NAME|$PKG_NEW_VER"]}" ]; then
+                spark_update_count=$((spark_update_count - 1))
+                continue
+            fi
+        done
+
+        IFS="$IFS_OLD"
     fi
-
-    echo "${TRANSHELL_CONTENT_UPDATE_ERROR_AND_WAIT_15_SEC}"
-    sleep 15
-    updatetext=`LANGUAGE=en_US aptss ssupdate 2>&1`
-    retry_count=$((retry_count + 1))
-done
-
-update_app_number=$(env LANGUAGE=en_US /usr/bin/apt -c /opt/durapps/spark-store/bin/apt-fast-conf/aptss-apt.conf list --upgradable -o Dir::Etc::sourcelist="/opt/durapps/spark-store/bin/apt-fast-conf/sources.list.d/aptss.list" -o Dir::Etc::sourceparts="/dev/null" -o APT::Get::List-Cleanup="0" 2>/dev/null | grep -c upgradable)
-
-if [ "$update_app_number" -le 0 ]; then
-    exit 0
 fi
 
-load-ignored-apps
+apm_update_count=0
+if [ "$has_apm" -eq 1 ]; then
+    updatetext=$(LANGUAGE=en_US apm update 2>&1)
+    retry_count=0
+    max_retries=12
 
-# 获取用户选择的要更新的应用
-PKG_LIST="$(/opt/durapps/spark-store/bin/update-upgrade/ss-do-upgrade-worker.sh upgradable-list)"
-# 指定分隔符为 \n
-IFS_OLD="$IFS"
-IFS=$'\n'
+    until ! echo "$updatetext" | grep -q "E:"; do
+        if [ $retry_count -ge $max_retries ]; then
+            echo "Reached maximum retry limit for apm update."
+            exit 1
+        fi
 
-for line in $PKG_LIST; do
-    PKG_NAME=$(echo $line | awk -F ' ' '{print $1}')
-    PKG_NEW_VER=$(echo $line | awk -F ' ' '{print $2}')
-    PKG_CUR_VER=$(echo $line | awk -F ' ' '{print $3}')
+        echo "Update failed...Will retry in 15sec"
+        sleep 15
+        updatetext=$(LANGUAGE=en_US apm update 2>&1)
+        retry_count=$((retry_count + 1))
+    done
 
-    dpkg --compare-versions $PKG_NEW_VER le $PKG_CUR_VER
+    apm clean
+    PKG_LIST="$(get-apm-upgradable-list)"
+    apm_update_count=$(printf '%s\n' "$PKG_LIST" | awk 'NF { count++ } END { print count + 0 }')
 
-    if [ $? -eq 0 ]; then
-        let update_app_number=$update_app_number-1
-        continue
+    if [ "$apm_update_count" -gt 0 ]; then
+        IFS_OLD="$IFS"
+        IFS=$'\n'
+
+        for line in $PKG_LIST; do
+            PKG_NAME=$(echo "$line" | awk -F ' ' '{print $1}')
+            PKG_NEW_VER=$(echo "$line" | awk -F ' ' '{print $2}')
+            PKG_CUR_VER=$(echo "$line" | awk -F ' ' '{print $3}')
+
+            amber-pm-debug dpkg --compare-versions "$PKG_NEW_VER" le "$PKG_CUR_VER"
+            if [ $? -eq 0 ]; then
+                apm_update_count=$((apm_update_count - 1))
+                continue
+            fi
+
+            PKG_STA=$(amber-pm-debug dpkg-query -W -f='${db:Status-Want}' "$PKG_NAME")
+            if [ "$PKG_STA" = "hold" ]; then
+                apm_update_count=$((apm_update_count - 1))
+                continue
+            fi
+
+            if [ -n "${ignored_apps["$PKG_NAME|$PKG_NEW_VER"]}" ]; then
+                apm_update_count=$((apm_update_count - 1))
+                continue
+            fi
+        done
+
+        IFS="$IFS_OLD"
     fi
+fi
 
-    # 检测是否是 hold 状态
-    PKG_STA=$(dpkg-query -W -f='${db:Status-Want}' $PKG_NAME)
-    if [ "$PKG_STA" = "hold" ]; then
-        let update_app_number=$update_app_number-1
-        continue
-    fi
-
-    # 检测是否在忽略列表中
-    if [ -n "${ignored_apps["$PKG_NAME|$PKG_NEW_VER"]}" ]; then
-        let update_app_number=$update_app_number-1
-        continue
-    fi
-done
-
-# 还原分隔符
-IFS="$IFS_OLD"
-if [ $update_app_number -le 0 ]; then
+update_app_number=$((spark_update_count + apm_update_count))
+if [ "$update_app_number" -le 0 ]; then
     exit 0
 fi
 update_transhell
