@@ -50,90 +50,87 @@
               <h2 class="mt-4 text-xl font-bold text-slate-900 dark:text-white">
                 {{ displayApp?.name || "" }}
               </h2>
-              <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">
+              <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
                 {{ displayApp?.pkgname || "" }}
               </p>
-            </div>
-
-            <!-- 版本号和来源切换 -->
-            <div class="space-y-3">
-              <!-- 版本号 -->
               <div
-                class="flex items-center justify-between rounded-2xl border border-slate-200/60 bg-slate-50/50 px-4 py-3 dark:border-slate-800/60 dark:bg-slate-800/50"
+                v-if="displayApp?.version || downloadCount"
+                class="mt-1 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-sm text-slate-500 dark:text-slate-400"
               >
-                <span class="text-sm text-slate-500 dark:text-slate-400"
-                  >版本</span
-                >
+                <span v-if="displayApp?.version">{{ displayApp.version }}</span>
                 <span
-                  class="text-sm font-semibold text-slate-800 dark:text-slate-200"
-                  >{{ displayApp?.version || "-" }}</span
+                  v-if="displayApp?.version && downloadCount"
+                  class="text-slate-300 dark:text-slate-600"
+                  >·</span
                 >
-              </div>
-
-              <!-- 应用来源切换 -->
-              <div
-                class="flex items-center justify-between rounded-2xl border border-slate-200/60 bg-slate-50/50 px-4 py-3 dark:border-slate-800/60 dark:bg-slate-800/50"
-              >
-                <span class="text-sm text-slate-500 dark:text-slate-400"
-                  >来源</span
-                >
-                <div
-                  v-if="app?.isMerged"
-                  class="flex gap-1 overflow-hidden rounded-lg shadow-sm border border-slate-200 dark:border-slate-700"
-                >
-                  <button
-                    v-if="app.sparkApp"
-                    type="button"
-                    class="px-3 py-1 text-xs font-medium uppercase tracking-wider transition-colors"
-                    :class="
-                      viewingOrigin === 'spark'
-                        ? 'bg-orange-500 text-white'
-                        : 'bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600'
-                    "
-                    @click="viewingOrigin = 'spark'"
+                <span v-if="downloadCount" class="flex items-center gap-1">
+                  <svg
+                    class="w-3.5 h-3.5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
                   >
-                    Spark
-                  </button>
-                  <button
-                    v-if="app.apmApp"
-                    type="button"
-                    class="px-3 py-1 text-xs font-medium uppercase tracking-wider transition-colors"
-                    :class="
-                      viewingOrigin === 'apm'
-                        ? 'bg-blue-500 text-white'
-                        : 'bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600'
-                    "
-                    @click="viewingOrigin = 'apm'"
-                  >
-                    APM
-                  </button>
-                </div>
-                <span
-                  v-else-if="displayApp"
-                  :class="[
-                    'rounded-md px-2 py-1 text-xs font-bold uppercase tracking-wider',
-                    displayApp.origin === 'spark'
-                      ? 'bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400'
-                      : 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400',
-                  ]"
-                >
-                  {{ displayApp.origin === "spark" ? "Spark" : "APM" }}
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+                    />
+                  </svg>
+                  {{ downloadCount }}
                 </span>
               </div>
+            </div>
 
-              <!-- 下载量 -->
-              <div
-                v-if="downloadCount"
-                class="flex items-center justify-between rounded-2xl border border-slate-200/60 bg-slate-50/50 px-4 py-3 dark:border-slate-800/60 dark:bg-slate-800/50"
+            <!-- 应用来源切换 -->
+            <div
+              class="flex items-center justify-between rounded-2xl border border-slate-200/60 bg-slate-50/50 px-4 py-3 dark:border-slate-800/60 dark:bg-slate-800/50"
+            >
+              <span class="text-sm text-slate-500 dark:text-slate-400"
+                >来源</span
               >
-                <span class="text-sm text-slate-500 dark:text-slate-400"
-                  >下载量</span
+              <div
+                v-if="app?.isMerged"
+                class="flex gap-1 overflow-hidden rounded-lg shadow-sm border border-slate-200 dark:border-slate-700"
+              >
+                <button
+                  v-if="app.sparkApp"
+                  type="button"
+                  class="px-3 py-1 text-xs font-medium uppercase tracking-wider transition-colors"
+                  :class="
+                    viewingOrigin === 'spark'
+                      ? 'bg-orange-500 text-white'
+                      : 'bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600'
+                  "
+                  @click="viewingOrigin = 'spark'"
                 >
-                <span
-                  class="text-sm font-semibold text-slate-800 dark:text-slate-200"
-                  >{{ downloadCount }}</span
+                  Spark
+                </button>
+                <button
+                  v-if="app.apmApp"
+                  type="button"
+                  class="px-3 py-1 text-xs font-medium uppercase tracking-wider transition-colors"
+                  :class="
+                    viewingOrigin === 'apm'
+                      ? 'bg-blue-500 text-white'
+                      : 'bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600'
+                  "
+                  @click="viewingOrigin = 'apm'"
                 >
+                  APM
+                </button>
               </div>
+              <span
+                v-else-if="displayApp"
+                :class="[
+                  'rounded-md px-2 py-1 text-xs font-bold uppercase tracking-wider',
+                  displayApp.origin === 'spark'
+                    ? 'bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400'
+                    : 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400',
+                ]"
+              >
+                {{ displayApp.origin === "spark" ? "Spark" : "APM" }}
+              </span>
             </div>
 
             <!-- 功能按钮 -->
