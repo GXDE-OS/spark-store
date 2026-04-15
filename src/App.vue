@@ -123,6 +123,8 @@
       :apm-available="apmAvailable"
       @close="closeInstalledModal"
       @refresh="refreshInstalledApps"
+      @open-app="openDownloadedApp($event.pkgname, $event.origin)"
+      @open-detail="openDetail"
       @uninstall="uninstallInstalledApp"
       @switch-origin="handleSwitchOrigin"
     />

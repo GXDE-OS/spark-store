@@ -148,6 +148,23 @@
               </div>
               <button
                 type="button"
+                class="inline-flex items-center gap-2 rounded-2xl border border-slate-300/70 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+                @click="$emit('open-app', app)"
+              >
+                <i class="fas fa-play"></i>
+                打开
+              </button>
+              <button
+                v-if="canOpenDetail(app)"
+                type="button"
+                class="inline-flex items-center gap-2 rounded-2xl border border-brand/30 px-4 py-2 text-sm font-semibold text-brand transition hover:bg-brand/10"
+                @click="$emit('open-detail', app)"
+              >
+                <i class="fas fa-circle-info"></i>
+                查看详情
+              </button>
+              <button
+                type="button"
                 class="inline-flex items-center gap-2 rounded-2xl border border-rose-300/60 px-4 py-2 text-sm font-semibold text-rose-600 transition hover:bg-rose-50 disabled:opacity-50"
                 :disabled="app.currentStatus === 'not-installed'"
                 @click="$emit('uninstall', app)"
@@ -178,6 +195,16 @@ const getIconUrl = (app: App) => {
   return `${APM_STORE_BASE_URL}/${finalArch}/${app.category}/${app.pkgname}/icon.png`;
 };
 
+const canOpenDetail = (app: App) => {
+  return (
+    app.category !== "unknown" ||
+    Boolean(app.more) ||
+    Boolean(app.website) ||
+    Boolean(app.author) ||
+    (app.img_urls?.length ?? 0) > 0
+  );
+};
+
 defineProps<{
   show: boolean;
   apps: App[];
@@ -193,6 +220,8 @@ defineEmits<{
   (e: "refresh"): void;
   (e: "uninstall", app: App): void;
   (e: "switch-origin", origin: "apm" | "spark"): void;
+  (e: "open-app", app: App): void;
+  (e: "open-detail", app: App): void;
 }>();
 
 const onOverlayWheel = (e: WheelEvent) => {
