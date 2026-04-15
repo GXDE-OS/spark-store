@@ -18,9 +18,8 @@
           <input
             id="searchBox"
             v-model="localSearchQuery"
-            class="w-full rounded-2xl border border-slate-200/70 bg-white/80 py-3 pl-12 pr-24 text-sm text-slate-700 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-brand/50 focus:ring-4 focus:ring-brand/10 dark:border-slate-800/70 dark:bg-slate-900/60 dark:text-slate-200"
-            placeholder="搜索应用名 / 包名 / 标签，按回车键搜索"
-            @keydown.enter="handleSearch"
+            class="w-full rounded-2xl border border-slate-200/70 bg-white/80 py-3 pl-12 pr-20 text-sm text-slate-700 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-brand/50 focus:ring-4 focus:ring-brand/10 dark:border-slate-800/70 dark:bg-slate-900/60 dark:text-slate-200"
+            placeholder="搜索应用名 / 包名 / 标签"
             @focus="handleSearchFocus"
             @input="handleInput"
           />
@@ -79,10 +78,6 @@ const emit = defineEmits<{
 }>();
 
 const localSearchQuery = ref(props.searchQuery || "");
-
-const handleSearch = () => {
-  emit("update-search", localSearchQuery.value);
-};
 
 const handleSearchFocus = () => {
   emit("search-focus");
