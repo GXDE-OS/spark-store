@@ -835,6 +835,15 @@ const refreshInstalledApps = async () => {
         continue;
       }
 
+      // 二次确认：使用 check-installed 验证包是否真正安装
+      const isReallyInstalled = await window.ipcRenderer.invoke(
+        "check-installed",
+        { pkgname: app.pkgname, origin: app.origin },
+      );
+      if (!isReallyInstalled) {
+        continue;
+      }
+
       if (appInfo) {
         appInfo.flags = app.flags;
         appInfo.arch = app.arch;
