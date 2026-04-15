@@ -2,7 +2,7 @@
  * 共享的安装/下载逻辑
  * 被 install-manager.ts 和 update-center 共同使用
  */
-import { spawn, ChildProcess } from "node:child_process";
+import { spawn } from "node:child_process";
 import { createWriteStream } from "node:fs";
 import * as fs from "node:fs";
 import * as path from "node:path";
@@ -34,7 +34,6 @@ export interface DownloadResult {
  * 与 install-manager.ts 中的下载逻辑保持一致
  */
 export const downloadPackage = async ({
-  pkgname,
   metalinkUrl,
   filename,
   downloadDir,
@@ -225,7 +224,6 @@ export interface InstallOptions {
  * 与 install-manager.ts 中的安装逻辑保持一致
  */
 export const installPackage = async ({
-  pkgname,
   filePath,
   origin,
   superUserCmd,
@@ -265,8 +263,6 @@ export const installPackage = async ({
       env: process.env,
     });
 
-    let stdout = "";
-    let stderr = "";
     let logBuffer = "";
     let logBufferTimer: NodeJS.Timeout | null = null;
     const LOG_FLUSH_MS = 100;
@@ -295,12 +291,10 @@ export const installPackage = async ({
     signal?.addEventListener("abort", abortHandler, { once: true });
 
     child.stdout?.on("data", (data) => {
-      stdout += data.toString();
       bufferedSendLog(data.toString());
     });
 
     child.stderr?.on("data", (data) => {
-      stderr += data.toString();
       bufferedSendLog(data.toString());
     });
 

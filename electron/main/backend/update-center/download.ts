@@ -1,5 +1,4 @@
-import { join } from "node:path";
-import { downloadPackage, type DownloadResult } from "../shared-installer";
+import { downloadPackage } from "../shared-installer";
 import type { UpdateCenterItem } from "./types";
 
 export interface Aria2DownloadResult {
