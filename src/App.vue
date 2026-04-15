@@ -151,6 +151,8 @@
     />
 
     <AboutModal :show="showAboutModal" @close="closeAboutModal" />
+
+    <SettingsModal :show="showSettingsModal" @close="closeSettingsModal" />
   </div>
 </template>
 
@@ -170,6 +172,7 @@ import InstalledAppsModal from "./components/InstalledAppsModal.vue";
 import UpdateCenterModal from "./components/UpdateCenterModal.vue";
 import UninstallConfirmModal from "./components/UninstallConfirmModal.vue";
 import AboutModal from "./components/AboutModal.vue";
+import SettingsModal from "./components/SettingsModal.vue";
 import {
   APM_STORE_BASE_URL,
   currentApp,
@@ -260,6 +263,7 @@ const updateCenterStore = createUpdateCenterStore();
 const showUninstallModal = ref(false);
 const uninstallTargetApp: Ref<App | null> = ref(null);
 const showAboutModal = ref(false);
+const showSettingsModal = ref(false);
 const apmAvailable = ref(false);
 
 /** 启动参数 --no-apm => 仅 Spark；--no-spark => 仅 APM；由主进程 IPC 提供 */
@@ -747,15 +751,8 @@ const handleUpdate = async () => {
   await openUpdateModal();
 };
 
-const handleOpenInstallSettings = async () => {
-  try {
-    const result = await window.ipcRenderer.invoke("open-install-settings");
-    if (!result || !result.success) {
-      logger.warn(`启动安装设置失败: ${result?.message || "未知错误"}`);
-    }
-  } catch (error) {
-    logger.error(`调用安装设置时出错: ${error}`);
-  }
+const handleOpenInstallSettings = () => {
+  showSettingsModal.value = true;
 };
 
 const handleList = () => {
@@ -935,6 +932,10 @@ const openAboutModal = () => {
 
 const closeAboutModal = () => {
   showAboutModal.value = false;
+};
+
+const closeSettingsModal = () => {
+  showSettingsModal.value = false;
 };
 
 // TODO: 目前 APM 商店不能暂停下载

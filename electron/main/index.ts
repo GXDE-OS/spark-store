@@ -214,21 +214,101 @@ ipcMain.on("set-theme-source", (event, theme: "system" | "light" | "dark") => {
   nativeTheme.themeSource = theme;
 });
 
-// 启动安装设置脚本（可能需要提升权限）
-ipcMain.handle("open-install-settings", async () => {
+// 配置文件路径
+const SPARK_CONFIG_DIR = path.join(
+  os.homedir(),
+  ".config/spark-union/spark-store",
+);
+const UPDATE_CHECK_CONFIG = "ssshell-config-do-not-show-upgrade-notify";
+const CREATE_DESKTOP_CONFIG = "ssshell-config-do-not-create-desktop";
+
+// 获取安装设置
+ipcMain.handle("get-install-settings", async () => {
+  try {
+    const result: Record<string, boolean> = {};
+
+    // 检查更新检测配置
+    result[UPDATE_CHECK_CONFIG] = fs.existsSync(
+      path.join(SPARK_CONFIG_DIR, UPDATE_CHECK_CONFIG),
+    );
+
+    // 检查自动创建桌面启动器配置
+    result[CREATE_DESKTOP_CONFIG] = fs.existsSync(
+      path.join(SPARK_CONFIG_DIR, CREATE_DESKTOP_CONFIG),
+    );
+
+    return { success: true, data: result };
+  } catch (err) {
+    logger.error({ err }, "Failed to get install settings");
+    return { success: false, message: (err as Error)?.message || String(err) };
+  }
+});
+
+// 设置安装设置
+ipcMain.handle(
+  "set-install-settings",
+  async (
+    _event,
+    settings: {
+      [UPDATE_CHECK_CONFIG]?: boolean;
+      [CREATE_DESKTOP_CONFIG]?: boolean;
+    },
+  ) => {
+    try {
+      // 确保配置目录存在
+      if (!fs.existsSync(SPARK_CONFIG_DIR)) {
+        fs.mkdirSync(SPARK_CONFIG_DIR, { recursive: true });
+      }
+
+      // 更新检测配置
+      const updateCheckPath = path.join(SPARK_CONFIG_DIR, UPDATE_CHECK_CONFIG);
+      if (settings[UPDATE_CHECK_CONFIG]) {
+        fs.writeFileSync(updateCheckPath, "");
+      } else {
+        if (fs.existsSync(updateCheckPath)) {
+          fs.unlinkSync(updateCheckPath);
+        }
+      }
+
+      // 自动创建桌面启动器配置
+      const createDesktopPath = path.join(
+        SPARK_CONFIG_DIR,
+        CREATE_DESKTOP_CONFIG,
+      );
+      if (settings[CREATE_DESKTOP_CONFIG]) {
+        fs.writeFileSync(createDesktopPath, "");
+      } else {
+        if (fs.existsSync(createDesktopPath)) {
+          fs.unlinkSync(createDesktopPath);
+        }
+      }
+
+      return { success: true };
+    } catch (err) {
+      logger.error({ err }, "Failed to set install settings");
+      return {
+        success: false,
+        message: (err as Error)?.message || String(err),
+      };
+    }
+  },
+);
+
+// 检查更新
+ipcMain.handle("check-for-updates", async () => {
   try {
     const { spawn } = await import("node:child_process");
     const scriptPath =
-      "/opt/durapps/spark-store/bin/update-upgrade/ss-update-controler.sh";
+      "/opt/durapps/spark-store/bin/update-upgrade/ss-do-upgrade.sh";
     const child = spawn("systemd-run", ["--user", scriptPath], {
       detached: true,
       stdio: "ignore",
     });
     child.unref();
-    logger.info(`Launched ${scriptPath}`);
+    logger.info(`Launched update check script: ${scriptPath}`);
     return { success: true };
   } catch (err) {
-    logger.error({ err }, "Failed to launch install settings script");
+    logger.error({ err }, "Failed to launch update check script");
     return { success: false, message: (err as Error)?.message || String(err) };
   }
 });
