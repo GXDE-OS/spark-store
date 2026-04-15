@@ -10,7 +10,7 @@
     <div
       v-if="show"
       v-bind="attrs"
-      class="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-slate-900/70 p-4"
+      class="fixed inset-0 z-[70] flex items-center justify-center overflow-hidden bg-slate-900/70 p-4"
       @click.self="closeModal"
       @wheel="onOverlayWheel"
     >
@@ -332,7 +332,7 @@
   >
     <div
       v-if="showMetaModal"
-      class="fixed inset-0 z-[60] flex items-center justify-center overflow-hidden bg-slate-900/60 p-4"
+      class="fixed inset-0 z-[80] flex items-center justify-center overflow-hidden bg-slate-900/60 p-4"
       @click.self="closeMetaModal"
     >
       <div

@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { UpdateCenterItem } from "../../../../electron/main/backend/update-center/types";
-import type { UpdateCenterQueue } from "../../../../electron/main/backend/update-center/queue";
 import { createUpdateCenterQueue } from "../../../../electron/main/backend/update-center/queue";
 import {
   createUpdateCenterService,
@@ -29,6 +28,11 @@ const createItem = (): UpdateCenterItem => ({
   source: "aptss",
   currentVersion: "1.0.0",
   nextVersion: "2.0.0",
+});
+
+const createStartTask = (taskKey: string, id: number) => ({
+  taskKey,
+  id,
 });
 
 describe("update-center/ipc", () => {
@@ -127,7 +131,10 @@ describe("update-center/ipc", () => {
     const startHandler = handle.mock.calls.find(
       ([channel]: [string]) => channel === "update-center-start",
     )?.[1] as
-      | ((event: unknown, taskKeys: string[]) => Promise<void>)
+      | ((
+          event: unknown,
+          tasks: Array<{ taskKey: string; id: number }>,
+        ) => Promise<void>)
       | undefined;
     const cancelHandler = handle.mock.calls.find(
       ([channel]: [string]) => channel === "update-center-cancel",
@@ -146,7 +153,7 @@ describe("update-center/ipc", () => {
       {},
       { packageName: "spark-weather", newVersion: "2.0.0" },
     );
-    await startHandler?.({}, ["aptss:spark-weather"]);
+    await startHandler?.({}, [{ taskKey: "aptss:spark-weather", id: 1 }]);
     await cancelHandler?.({}, "aptss:spark-weather");
 
     expect(getStateHandler?.()).toEqual(snapshot);
@@ -160,7 +167,9 @@ describe("update-center/ipc", () => {
       packageName: "spark-weather",
       newVersion: "2.0.0",
     });
-    expect(service.start).toHaveBeenCalledWith(["aptss:spark-weather"]);
+    expect(service.start).toHaveBeenCalledWith([
+      { taskKey: "aptss:spark-weather", id: 1 },
+    ]);
     expect(service.cancel).toHaveBeenCalledWith("aptss:spark-weather");
 
     listener?.(snapshot);
@@ -169,43 +178,35 @@ describe("update-center/ipc", () => {
 
   it("service subscribers receive state updates after refresh start and ignore", async () => {
     let ignoredEntries = new Set<string>();
+    const send = vi.fn();
     const service = createUpdateCenterService({
       loadItems: async () => [createItem()],
       loadIgnoredEntries: async () => new Set(ignoredEntries),
       saveIgnoredEntries: async (entries: ReadonlySet<string>) => {
         ignoredEntries = new Set(entries);
       },
-      createTaskRunner: (queue: UpdateCenterQueue) => ({
-        cancelActiveTask: vi.fn(),
-        runNextTask: async () => {
-          const task = queue.getNextQueuedTask();
-          if (!task) {
-            return null;
-          }
-
-          queue.markActiveTask(task.id, "installing");
-          queue.finishTask(task.id, "completed");
-          return task;
-        },
-      }),
     });
     const snapshots: UpdateCenterServiceState[] = [];
+
+    electronMock.getAllWindows.mockReturnValue([{ webContents: { send } }]);
 
     service.subscribe((snapshot: UpdateCenterServiceState) => {
       snapshots.push(snapshot);
     });
 
     await service.refresh();
-    await service.start(["aptss:spark-weather"]);
+    await service.start([createStartTask("aptss:spark-weather", 1)]);
     await service.ignore({ packageName: "spark-weather", newVersion: "2.0.0" });
 
-    expect(snapshots.some((snapshot) => snapshot.hasRunningTasks)).toBe(true);
+    expect(send).toHaveBeenCalledWith(
+      "queue-install",
+      expect.stringContaining('"pkgname":"spark-weather"'),
+    );
     expect(
       snapshots.some((snapshot) =>
-        snapshot.tasks.some(
-          (task: UpdateCenterServiceState["tasks"][number]) =>
-            task.taskKey === "aptss:spark-weather" &&
-            task.status === "completed",
+        snapshot.items.every(
+          (item: UpdateCenterServiceState["items"][number]) =>
+            item.taskKey !== "aptss:spark-weather",
         ),
       ),
     ).toBe(true);
@@ -215,10 +216,15 @@ describe("update-center/ipc", () => {
       newVersion: "2.0.0",
     });
     expect(snapshots.at(-1)?.items[0]).not.toHaveProperty("nextVersion");
+    expect(snapshots.every((snapshot) => snapshot.tasks.length === 0)).toBe(
+      true,
+    );
+    expect(
+      snapshots.every((snapshot) => snapshot.hasRunningTasks === false),
+    ).toBe(true);
   });
 
-  it("service task snapshots keep localIcon and remoteIcon for queued work", async () => {
-    let releaseTask: (() => void) | undefined;
+  it("service item snapshots keep localIcon and remoteIcon after refresh", async () => {
     const service = createUpdateCenterService({
       loadItems: async () => [
         {
@@ -227,39 +233,17 @@ describe("update-center/ipc", () => {
           remoteIcon: "https://example.com/weather.png",
         },
       ],
-      createTaskRunner: (queue: UpdateCenterQueue) => ({
-        cancelActiveTask: vi.fn(),
-        runNextTask: async () => {
-          const task = queue.getNextQueuedTask();
-          if (!task) {
-            return null;
-          }
-
-          await new Promise<void>((resolve) => {
-            releaseTask = resolve;
-          });
-          queue.markActiveTask(task.id, "installing");
-          queue.finishTask(task.id, "completed");
-          return task;
-        },
-      }),
     });
 
     await service.refresh();
-    const startPromise = service.start(["aptss:spark-weather"]);
-    await flushPromises();
 
-    expect(service.getState().tasks).toMatchObject([
+    expect(service.getState().items).toMatchObject([
       {
         taskKey: "aptss:spark-weather",
         localIcon: "/icons/weather.png",
         remoteIcon: "https://example.com/weather.png",
-        status: "queued",
       },
     ]);
-
-    releaseTask?.();
-    await startPromise;
   });
 
   it("service item snapshots prefer resolved app names over package names", async () => {
@@ -283,178 +267,85 @@ describe("update-center/ipc", () => {
     ]);
   });
 
-  it("concurrent start calls still serialize through one processing pipeline", async () => {
-    const startedTaskIds: number[] = [];
-    const releases: Array<() => void> = [];
+  it("start forwards selected updates to the main download queue", async () => {
+    const send = vi.fn();
     const service = createUpdateCenterService({
       loadItems: async () => [
         createItem(),
         { ...createItem(), pkgname: "spark-clock" },
       ],
-      createTaskRunner: (queue: UpdateCenterQueue) => ({
-        cancelActiveTask: vi.fn(),
-        runNextTask: async () => {
-          const task = queue.getNextQueuedTask();
-          if (!task) {
-            return null;
-          }
-
-          startedTaskIds.push(task.id);
-          queue.markActiveTask(task.id, "installing");
-          await new Promise<void>((resolve) => {
-            releases.push(resolve);
-          });
-          queue.finishTask(task.id, "completed");
-          return task;
-        },
-      }),
     });
 
+    electronMock.getAllWindows.mockReturnValue([{ webContents: { send } }]);
+
     await service.refresh();
-
-    const firstStart = service.start(["aptss:spark-weather"]);
-    const secondStart = service.start(["aptss:spark-clock"]);
-
-    await flushPromises();
-    expect(startedTaskIds).toEqual([1]);
-
-    releases.shift()?.();
-    await flushPromises();
-    expect(startedTaskIds).toEqual([1, 2]);
-
-    releases.shift()?.();
-    await Promise.all([firstStart, secondStart]);
-
-    expect(service.getState().tasks).toMatchObject([
-      { taskKey: "aptss:spark-weather", status: "completed" },
-      { taskKey: "aptss:spark-clock", status: "completed" },
+    await service.start([
+      createStartTask("aptss:spark-weather", 1),
+      createStartTask("aptss:spark-clock", 2),
     ]);
+
+    expect(send).toHaveBeenCalledTimes(2);
+    expect(service.getState().items).toEqual([]);
   });
 
-  it("cancelling an active task stops it and leaves it cancelled", async () => {
-    let releaseTask: (() => void) | undefined;
-    const cancelActiveTask = vi.fn(() => {
-      releaseTask?.();
-    });
+  it("cancel is a no-op for update-center tasks", async () => {
     const service = createUpdateCenterService({
       loadItems: async () => [createItem()],
-      createTaskRunner: (queue: UpdateCenterQueue) => ({
-        cancelActiveTask,
-        runNextTask: async () => {
-          const task = queue.getNextQueuedTask();
-          if (!task) {
-            return null;
-          }
-
-          queue.markActiveTask(task.id, "installing");
-          await new Promise<void>((resolve) => {
-            releaseTask = resolve;
-          });
-
-          return (
-            queue.getSnapshot().tasks.find((entry) => entry.id === task.id) ??
-            null
-          );
-        },
-      }),
     });
 
     await service.refresh();
-
-    const startPromise = service.start(["aptss:spark-weather"]);
-    await flushPromises();
-
     await service.cancel("aptss:spark-weather");
-    await startPromise;
 
-    expect(cancelActiveTask).toHaveBeenCalledTimes(1);
-    expect(service.getState().tasks).toMatchObject([
-      { taskKey: "aptss:spark-weather", status: "cancelled" },
-    ]);
+    expect(service.getState()).toMatchObject({
+      items: [{ taskKey: "aptss:spark-weather" }],
+      tasks: [],
+      hasRunningTasks: false,
+    });
   });
 
-  it("cancelling a queued task does not abort the currently active task", async () => {
-    let releaseTask: (() => void) | undefined;
-    const cancelActiveTask = vi.fn(() => {
-      releaseTask?.();
-    });
+  it("start without a main window leaves updates actionable", async () => {
     const service = createUpdateCenterService({
       loadItems: async () => [
         createItem(),
         { ...createItem(), pkgname: "spark-clock" },
       ],
-      createTaskRunner: (queue: UpdateCenterQueue) => ({
-        cancelActiveTask,
-        runNextTask: async () => {
-          const task = queue.getNextQueuedTask();
-          if (!task) {
-            return null;
-          }
-
-          queue.markActiveTask(task.id, "installing");
-          await new Promise<void>((resolve) => {
-            releaseTask = resolve;
-          });
-
-          if (
-            queue.getSnapshot().tasks.find((entry) => entry.id === task.id)
-              ?.status !== "cancelled"
-          ) {
-            queue.finishTask(task.id, "completed");
-          }
-          return task;
-        },
-      }),
     });
+
+    electronMock.getAllWindows.mockReturnValue([]);
 
     await service.refresh();
 
-    const activeStart = service.start(["aptss:spark-weather"]);
-    await flushPromises();
-    const queuedStart = service.start(["aptss:spark-clock"]);
-    await flushPromises();
+    await service.start([createStartTask("aptss:spark-weather", 1)]);
 
-    await service.cancel("aptss:spark-clock");
-    expect(cancelActiveTask).not.toHaveBeenCalled();
-
-    releaseTask?.();
-    await Promise.all([activeStart, queuedStart]);
-
-    expect(service.getState().tasks).toMatchObject([
-      { taskKey: "aptss:spark-weather", status: "completed" },
-      { taskKey: "aptss:spark-clock", status: "cancelled" },
+    expect(service.getState().items).toMatchObject([
+      { taskKey: "aptss:spark-weather" },
+      { taskKey: "aptss:spark-clock" },
     ]);
   });
 
-  it("superUserCmdProvider failure does not leave a task stuck in queued state", async () => {
+  it("ignored items are not forwarded to the main download queue", async () => {
+    const send = vi.fn();
     const service = createUpdateCenterService({
       loadItems: async () => [createItem()],
-      superUserCmdProvider: async () => {
-        throw new Error("pkexec unavailable");
-      },
-      createTaskRunner: () => ({
-        cancelActiveTask: vi.fn(),
-        runNextTask: async () => {
-          throw new Error(
-            "runner should not start when privilege lookup fails",
-          );
-        },
-      }),
+      loadIgnoredEntries: async () => new Set(["spark-weather|2.0.0"]),
     });
 
+    electronMock.getAllWindows.mockReturnValue([{ webContents: { send } }]);
+
     await service.refresh();
-    await service.start(["aptss:spark-weather"]);
+    await service.start([createStartTask("aptss:spark-weather", 1)]);
 
     expect(service.getState()).toMatchObject({
       hasRunningTasks: false,
-      tasks: [
+      items: [
         {
           taskKey: "aptss:spark-weather",
-          status: "failed",
-          errorMessage: "pkexec unavailable",
+          ignored: true,
         },
       ],
+      tasks: [],
     });
+    expect(send).not.toHaveBeenCalled();
   });
 
   it("refresh exposes load-item failures as warnings", async () => {

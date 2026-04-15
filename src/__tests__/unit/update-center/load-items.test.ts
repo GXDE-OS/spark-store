@@ -242,6 +242,15 @@ describe("update-center load items", () => {
         };
       }
 
+      if (key === APTSS_NOTES_PRINT_URIS_KEY) {
+        return {
+          code: 0,
+          stdout:
+            "'https://example.invalid/spark-notes_2.0.0_amd64.deb' spark-notes_2.0.0_amd64.deb 654321 SHA512:beadfeed",
+          stderr: "",
+        };
+      }
+
       if (key === "apm list --upgradable" || key === "apm list --installed") {
         return {
           code: 127,
@@ -299,6 +308,15 @@ describe("update-center load items", () => {
         };
       }
 
+      if (key === APTSS_NOTES_PRINT_URIS_KEY) {
+        return {
+          code: 0,
+          stdout:
+            "'https://example.invalid/spark-notes_2.0.0_amd64.deb' spark-notes_2.0.0_amd64.deb 654321 SHA512:beadfeed",
+          stderr: "",
+        };
+      }
+
       if (key === "apm list --upgradable" || key === "apm list --installed") {
         return {
           code: 127,
@@ -319,7 +337,10 @@ describe("update-center load items", () => {
         currentVersion: "1.0.0",
         nextVersion: "2.0.0",
         arch: "amd64",
-        name: "Spark Notes",
+        downloadUrl: "https://example.invalid/spark-notes_2.0.0_amd64.deb",
+        fileName: "spark-notes_2.0.0_amd64.deb",
+        size: 654321,
+        sha512: "beadfeed",
       },
     ]);
 
@@ -344,6 +365,10 @@ describe("update-center load items", () => {
         name: "Spark Notes",
         remoteIcon:
           "https://erotica.spark-app.store/amd64-store/office/spark-notes/icon.png",
+        downloadUrl: "https://example.invalid/spark-notes_2.0.0_amd64.deb",
+        fileName: "spark-notes_2.0.0_amd64.deb",
+        size: 654321,
+        sha512: "beadfeed",
       },
     ]);
   });
@@ -409,6 +434,10 @@ describe("update-center load items", () => {
         name: "Spark Notes",
         remoteIcon:
           "https://erotica.spark-app.store/amd64-store/office/spark-notes/icon.png",
+        downloadUrl: "https://example.invalid/spark-notes_2.0.0_amd64.deb",
+        fileName: "spark-notes_2.0.0_amd64.deb",
+        size: 654321,
+        sha512: "beadfeed",
       },
     ]);
     expect(result.warnings).toEqual([

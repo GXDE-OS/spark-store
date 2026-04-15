@@ -9,7 +9,7 @@
   >
     <div
       v-if="show"
-      class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 p-4"
+      class="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/70 p-4"
       @click.self="handleClose"
     >
       <div

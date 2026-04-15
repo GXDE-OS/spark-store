@@ -9,7 +9,7 @@
   >
     <div
       v-if="show"
-      class="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/80 px-4 py-10"
+      class="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/80 px-4 py-10"
       @click.self="closePreview"
     >
       <div class="relative w-full max-w-5xl">
