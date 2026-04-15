@@ -816,7 +816,19 @@ const refreshInstalledApps = async () => {
   installedError.value = "";
   try {
     const origin = activeInstalledOrigin.value;
-    const result = await window.ipcRenderer.invoke("list-installed", origin);
+
+    // Spark 优化：只检查远端商店目录中的应用，避免全量扫描
+    let pkgnameList: string[] | undefined;
+    if (origin === "spark") {
+      pkgnameList = apps.value
+        .filter((a) => a.origin === "spark")
+        .map((a) => a.pkgname);
+    }
+
+    const result = await window.ipcRenderer.invoke("list-installed", {
+      origin,
+      pkgnameList,
+    });
     if (!result?.success) {
       installedApps.value = [];
       installedError.value = result?.message || "读取已安装应用失败";
@@ -832,15 +844,6 @@ const refreshInstalledApps = async () => {
 
       if (origin === "spark" && !appInfo) {
         // Only show Spark packages that exist in the App Store catalogue
-        continue;
-      }
-
-      // 二次确认：使用 check-installed 验证包是否真正安装
-      const isReallyInstalled = await window.ipcRenderer.invoke(
-        "check-installed",
-        { pkgname: app.pkgname, origin: app.origin },
-      );
-      if (!isReallyInstalled) {
         continue;
       }
 

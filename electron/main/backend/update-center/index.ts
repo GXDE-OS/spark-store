@@ -49,6 +49,21 @@ interface RemoteCategoryAppEntry {
 const REMOTE_STORE_BASE_URL = "https://erotica.spark-app.store";
 const categoryCache = new Map<string, Promise<StoreAppMetadataMap>>();
 
+const isAptssAvailable = async (): Promise<boolean> => {
+  return await new Promise((resolve) => {
+    const child = spawn("command", ["-v", "aptss"], {
+      shell: false,
+      env: process.env,
+    });
+    child.on("close", (code) => {
+      resolve(code === 0);
+    });
+    child.on("error", () => {
+      resolve(false);
+    });
+  });
+};
+
 const APTSS_LIST_UPGRADABLE_COMMAND = {
   command: "bash",
   args: [
@@ -352,49 +367,63 @@ const enrichItemIcons = (items: UpdateCenterItem[]): UpdateCenterItem[] => {
 export const loadUpdateCenterItems = async (
   runCommand: UpdateCenterCommandRunner = runCommandCapture,
 ): Promise<UpdateCenterLoadItemsResult> => {
+  const aptssAvailable = await isAptssAvailable();
+
   const [aptssResult, apmResult, aptssInstalledResult, apmInstalledResult] =
     await Promise.all([
-      runCommand(
-        APTSS_LIST_UPGRADABLE_COMMAND.command,
-        APTSS_LIST_UPGRADABLE_COMMAND.args,
-      ),
+      aptssAvailable
+        ? runCommand(
+            APTSS_LIST_UPGRADABLE_COMMAND.command,
+            APTSS_LIST_UPGRADABLE_COMMAND.args,
+          )
+        : Promise.resolve({ code: 0, stdout: "", stderr: "" }),
       runCommand("apm", ["list", "--upgradable"]),
-      runCommand(
-        DPKG_QUERY_INSTALLED_COMMAND.command,
-        DPKG_QUERY_INSTALLED_COMMAND.args,
-      ),
+      aptssAvailable
+        ? runCommand(
+            DPKG_QUERY_INSTALLED_COMMAND.command,
+            DPKG_QUERY_INSTALLED_COMMAND.args,
+          )
+        : Promise.resolve({ code: 0, stdout: "", stderr: "" }),
       runCommand("apm", ["list", "--installed"]),
     ]);
 
   const warnings = [
-    getCommandError("aptss upgradable query", aptssResult),
+    aptssAvailable
+      ? getCommandError("aptss upgradable query", aptssResult)
+      : null,
     getCommandError("apm upgradable query", apmResult),
-    getCommandError("dpkg installed query", aptssInstalledResult),
+    aptssAvailable
+      ? getCommandError("dpkg installed query", aptssInstalledResult)
+      : null,
     getCommandError("apm installed query", apmInstalledResult),
   ].filter((message): message is string => message !== null);
 
   const aptssItems =
-    aptssResult.code === 0
+    aptssAvailable && aptssResult.code === 0
       ? parseAptssUpgradableOutput(aptssResult.stdout)
       : [];
   const apmItems =
     apmResult.code === 0 ? parseApmUpgradableOutput(apmResult.stdout) : [];
 
-  if (aptssResult.code !== 0 && apmResult.code !== 0) {
+  if (apmResult.code !== 0) {
     throw new Error(warnings.join("; "));
   }
 
   const installedSources = buildInstalledSourceMap(
-    aptssInstalledResult.code === 0 ? aptssInstalledResult.stdout : "",
+    aptssAvailable && aptssInstalledResult.code === 0
+      ? aptssInstalledResult.stdout
+      : "",
     apmInstalledResult.code === 0 ? apmInstalledResult.stdout : "",
   );
 
   const [categorizedAptssItems, categorizedApmItems] = await Promise.all([
-    enrichItemCategories(aptssItems),
+    aptssAvailable ? enrichItemCategories(aptssItems) : Promise.resolve([]),
     enrichItemCategories(apmItems),
   ]);
   const [enrichedAptssItems, enrichedApmItems] = await Promise.all([
-    enrichAptssItems(categorizedAptssItems, runCommand),
+    aptssAvailable
+      ? enrichAptssItems(categorizedAptssItems, runCommand)
+      : Promise.resolve({ items: [], warnings: [] }),
     enrichApmItems(categorizedApmItems, runCommand),
   ]);
 

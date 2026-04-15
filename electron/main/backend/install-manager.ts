@@ -699,31 +699,26 @@ ipcMain.handle("check-installed", async (_event, payload: any) => {
     return isInstalled;
   }
 
-  const checkScript = "/opt/spark-store/extras/check-is-installed";
+  // Spark: 使用 dpkg-query 检查安装状态
+  const { code, stdout } = await runCommandCapture("dpkg-query", [
+    "-W",
+    "-f=${Package}\\t${Status}\\n",
+    pkgname,
+  ]);
 
-  // 首先尝试使用内置脚本
-  if (fs.existsSync(checkScript)) {
-    const child = spawn(checkScript, [pkgname], {
-      shell: false,
-      env: process.env,
-    });
-
-    await new Promise<void>((resolve) => {
-      child.on("error", (err) => {
-        logger.error(`check-installed 脚本执行失败: ${err?.message || err}`);
-        resolve();
-      });
-
-      child.on("close", (code) => {
-        if (code === 0) {
+  if (code === 0) {
+    const line = stdout.trim();
+    if (line) {
+      const parts = line.split("\t");
+      if (parts.length >= 2) {
+        const status = parts[1].trim();
+        // 检查状态是否为 "install ok installed"
+        if (status === "install ok installed") {
           isInstalled = true;
-          logger.info(`应用已安装 (脚本检测): ${pkgname}`);
+          logger.info(`应用已安装 (dpkg检测): ${pkgname}`);
         }
-        resolve();
-      });
-    });
-
-    if (isInstalled) return true;
+      }
+    }
   }
 
   return isInstalled;
@@ -793,7 +788,11 @@ ipcMain.on("remove-installed", async (_event, payload) => {
 
 ipcMain.handle(
   "list-installed",
-  async (_event, origin: "apm" | "spark" = "apm") => {
+  async (
+    _event,
+    payload: { origin: "apm" | "spark"; pkgnameList?: string[] },
+  ) => {
+    const { origin, pkgnameList } = payload;
     const apmBasePath = "/var/lib/apm/apm/files/ace-env/var/lib/apm";
 
     try {
@@ -809,9 +808,54 @@ ipcMain.handle(
       }> = [];
 
       if (origin === "spark") {
+        // 如果提供了包名列表，只检查这些包的安装状态（优化版）
+        if (pkgnameList && pkgnameList.length > 0) {
+          logger.info(
+            `使用优化模式检查 ${pkgnameList.length} 个 Spark 包的安装状态`,
+          );
+
+          // 批量查询这些包的状态
+          // 注意：dpkg-query 在部分包不存在时也会返回非零码，但已找到的包会输出到 stdout
+          const { stdout, stderr } = await runCommandCapture("dpkg-query", [
+            "-W",
+            "-f=${Package}\\t${Version}\\t${Architecture}\\t${Status}\\n",
+            ...pkgnameList,
+          ]);
+
+          // 即使没有错误，也可能有警告信息输出到 stderr
+          if (stderr) {
+            logger.debug(`dpkg-query warnings: ${stderr}`);
+          }
+
+          const lines = stdout.split("\n");
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed) continue;
+            const parts = trimmed.split("\t");
+            if (parts.length >= 4) {
+              const status = parts[3].trim();
+              // 只保留状态为 "install ok installed" 的包
+              if (status === "install ok installed") {
+                installedApps.push({
+                  pkgname: parts[0],
+                  name: parts[0],
+                  version: parts[1],
+                  arch: parts[2],
+                  flags: "[installed]",
+                  origin: "spark",
+                  isDependency: false,
+                });
+              }
+            }
+          }
+          return { success: true, apps: installedApps };
+        }
+
+        // 回退到全量扫描模式（未提供包名列表时）
+        logger.info("使用全量扫描模式获取所有 Spark 已安装包");
         const { code, stdout } = await runCommandCapture("dpkg-query", [
           "-W",
-          "-f=${Package} ${Version} ${Architecture}\\n",
+          "-f=${Package}\\t${Version}\\t${Architecture}\\t${Status}\\n",
         ]);
 
         if (code !== 0) {
@@ -827,17 +871,21 @@ ipcMain.handle(
         for (const line of lines) {
           const trimmed = line.trim();
           if (!trimmed) continue;
-          const parts = trimmed.split(" ");
-          if (parts.length >= 3) {
-            installedApps.push({
-              pkgname: parts[0],
-              name: parts[0],
-              version: parts[1],
-              arch: parts[2],
-              flags: "[installed]",
-              origin: "spark",
-              isDependency: false,
-            });
+          const parts = trimmed.split("\t");
+          if (parts.length >= 4) {
+            const status = parts[3].trim();
+            // 只保留状态为 "install ok installed" 的包
+            if (status === "install ok installed") {
+              installedApps.push({
+                pkgname: parts[0],
+                name: parts[0],
+                version: parts[1],
+                arch: parts[2],
+                flags: "[installed]",
+                origin: "spark",
+                isDependency: false,
+              });
+            }
           }
         }
         return { success: true, apps: installedApps };
