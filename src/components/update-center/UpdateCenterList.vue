@@ -16,6 +16,10 @@
         :task="taskMap.get(item.taskKey)"
         :selected="selectedTaskKeys.has(item.taskKey)"
         @toggle-selection="$emit('toggle-selection', item.taskKey)"
+        @ignore-item="$emit('ignore-item', item.packageName, item.newVersion)"
+        @unignore-item="
+          $emit('unignore-item', item.packageName, item.newVersion)
+        "
       />
     </div>
   </div>
@@ -39,6 +43,8 @@ const props = defineProps<{
 
 defineEmits<{
   (e: "toggle-selection", taskKey: string): void;
+  (e: "ignore-item", packageName: string, newVersion: string): void;
+  (e: "unignore-item", packageName: string, newVersion: string): void;
 }>();
 
 const taskMap = computed(() => {

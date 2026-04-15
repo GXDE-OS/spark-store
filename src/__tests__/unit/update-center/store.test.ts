@@ -24,6 +24,8 @@ const createSnapshot = (overrides = {}) => ({
 describe("updateCenter store", () => {
   const open = vi.fn();
   const refresh = vi.fn();
+  const ignore = vi.fn();
+  const unignore = vi.fn();
   const start = vi.fn();
   const onState = vi.fn();
   const offState = vi.fn();
@@ -31,6 +33,8 @@ describe("updateCenter store", () => {
   beforeEach(() => {
     open.mockReset();
     refresh.mockReset();
+    ignore.mockReset();
+    unignore.mockReset();
     start.mockReset();
     onState.mockReset();
     offState.mockReset();
@@ -41,8 +45,8 @@ describe("updateCenter store", () => {
       value: {
         open,
         refresh,
-        ignore: vi.fn(),
-        unignore: vi.fn(),
+        ignore,
+        unignore,
         start,
         cancel: vi.fn(),
         getState: vi.fn(),
@@ -132,6 +136,25 @@ describe("updateCenter store", () => {
     );
   });
 
+  it("forwards ignore and unignore actions with the package and target version", async () => {
+    const snapshot = createSnapshot();
+    open.mockResolvedValue(snapshot);
+    const store = createUpdateCenterStore();
+
+    await store.open();
+    await store.ignoreItem("spark-weather", "2.0.0");
+    await store.unignoreItem("spark-weather", "2.0.0");
+
+    expect(ignore).toHaveBeenCalledWith({
+      packageName: "spark-weather",
+      newVersion: "2.0.0",
+    });
+    expect(unignore).toHaveBeenCalledWith({
+      packageName: "spark-weather",
+      newVersion: "2.0.0",
+    });
+  });
+
   it("assigns update-center download ids from a separate range", async () => {
     downloads.value = [
       {
@@ -178,8 +201,8 @@ describe("updateCenter store", () => {
 
     store.requestClose();
 
-    expect(store.isOpen.value).toBe(true);
-    expect(store.showCloseConfirm.value).toBe(true);
+    expect(store.isOpen.value).toBe(false);
+    expect(store.showCloseConfirm.value).toBe(false);
   });
 
   it("applies pushed snapshots from the main process", () => {

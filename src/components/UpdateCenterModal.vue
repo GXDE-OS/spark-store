@@ -48,6 +48,8 @@
             :tasks="store.snapshot.value.tasks"
             :selected-task-keys="store.selectedTaskKeys.value"
             @toggle-selection="emit('toggle-selection', $event)"
+            @ignore-item="store.ignoreItem"
+            @unignore-item="store.unignoreItem"
           />
         </div>
 

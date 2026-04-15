@@ -1,9 +1,16 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { homedir } from "node:os";
 import { dirname } from "node:path";
+import { join } from "node:path";
 
 import type { UpdateCenterItem } from "./types";
 
-export const LEGACY_IGNORE_CONFIG_PATH = "/etc/spark-store/ignored_apps.conf";
+export const IGNORE_CONFIG_PATH = join(
+  homedir(),
+  ".config",
+  "spark-store",
+  "ignored_apps.conf",
+);
 
 const LEGACY_IGNORE_SEPARATOR = "|";
 
@@ -77,3 +84,15 @@ export const applyIgnoredEntries = (
       createIgnoreKey(item.pkgname, item.nextVersion),
     ),
   }));
+
+export const sortIgnoredItems = (
+  items: UpdateCenterItem[],
+): UpdateCenterItem[] => {
+  return [...items].sort((left, right) => {
+    if (left.ignored === right.ignored) {
+      return 0;
+    }
+
+    return left.ignored === true ? 1 : -1;
+  });
+};

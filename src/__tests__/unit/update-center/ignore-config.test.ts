@@ -1,4 +1,5 @@
 import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { homedir } from "node:os";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
@@ -6,7 +7,7 @@ import { describe, expect, it } from "vitest";
 
 import type { UpdateCenterItem } from "../../../../electron/main/backend/update-center/types";
 import {
-  LEGACY_IGNORE_CONFIG_PATH,
+  IGNORE_CONFIG_PATH,
   applyIgnoredEntries,
   createIgnoreKey,
   loadIgnoredEntries,
@@ -15,9 +16,9 @@ import {
 } from "../../../../electron/main/backend/update-center/ignore-config";
 
 describe("update-center ignore config", () => {
-  it("round-trips the legacy package|version format", async () => {
-    expect(LEGACY_IGNORE_CONFIG_PATH).toBe(
-      "/etc/spark-store/ignored_apps.conf",
+  it("round-trips the package|version format at the user config path", async () => {
+    expect(IGNORE_CONFIG_PATH).toBe(
+      join(homedir(), ".config", "spark-store", "ignored_apps.conf"),
     );
 
     const entries = new Set([

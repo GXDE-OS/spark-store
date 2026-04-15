@@ -238,10 +238,10 @@ void MainWindow::checkUpdates()
     for (const auto &item : updateInfo) {
         QJsonObject obj = item.toObject();
         QString packageName = obj["package"].toString();
-        QString currentVersion = obj["current_version"].toString();
+        QString newVersion = obj["new_version"].toString();
         
         // 检查应用是否被忽略
-        if (m_ignoreConfig->isAppIgnored(packageName, currentVersion)) {
+        if (m_ignoreConfig->isAppIgnored(packageName, newVersion)) {
             // 标记为忽略状态
             obj["ignored"] = true;
             ignoredApps.append(obj);
@@ -468,9 +468,9 @@ void MainWindow::onIgnoreApp(const QString &packageName, const QString &version)
 }
 
 // 新增：处理取消忽略应用的槽函数
-void MainWindow::onUnignoreApp(const QString &packageName) {
+void MainWindow::onUnignoreApp(const QString &packageName, const QString &version) {
     // 从忽略配置中移除应用
-    m_ignoreConfig->removeIgnoredApp(packageName);
+    m_ignoreConfig->removeIgnoredApp(packageName, version);
     
     // 更新模型中应用的状态
     QJsonArray updatedApps;

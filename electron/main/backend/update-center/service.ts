@@ -1,10 +1,11 @@
 import { BrowserWindow } from "electron";
 import {
-  LEGACY_IGNORE_CONFIG_PATH,
+  IGNORE_CONFIG_PATH,
   applyIgnoredEntries,
   createIgnoreKey,
   loadIgnoredEntries,
   saveIgnoredEntries,
+  sortIgnoredItems,
 } from "./ignore-config";
 import {
   createUpdateCenterQueue,
@@ -136,11 +137,11 @@ export const createUpdateCenterService = (
   const listeners = new Set<(snapshot: UpdateCenterServiceState) => void>();
   const loadIgnored =
     options.loadIgnoredEntries ??
-    (() => loadIgnoredEntries(LEGACY_IGNORE_CONFIG_PATH));
+    (() => loadIgnoredEntries(IGNORE_CONFIG_PATH));
   const saveIgnored =
     options.saveIgnoredEntries ??
     ((entries: ReadonlySet<string>) =>
-      saveIgnoredEntries(LEGACY_IGNORE_CONFIG_PATH, entries));
+      saveIgnoredEntries(IGNORE_CONFIG_PATH, entries));
 
   const applyWarning = (message: string): void => {
     queue.finishRefresh([message]);
@@ -163,7 +164,9 @@ export const createUpdateCenterService = (
     try {
       const ignoredEntries = await loadIgnored();
       const loadedItems = normalizeLoadedItems(await options.loadItems());
-      const items = applyIgnoredEntries(loadedItems.items, ignoredEntries);
+      const items = sortIgnoredItems(
+        applyIgnoredEntries(loadedItems.items, ignoredEntries),
+      );
       queue.setItems(items);
       queue.finishRefresh(loadedItems.warnings);
       return emit();

@@ -69,10 +69,14 @@ const createStore = (
     selectedTaskKeys,
     snapshot,
     filteredItems: computed(() => snapshot.value.items),
+    allSelected: computed(() => false),
+    someSelected: computed(() => selectedTaskKeys.value.size > 0),
     bind: vi.fn(),
     unbind: vi.fn(),
     open: vi.fn(),
     refresh: vi.fn(),
+    ignoreItem: vi.fn(),
+    unignoreItem: vi.fn(),
     toggleSelection: vi.fn(),
     getSelectedItems: vi.fn(() =>
       snapshot.value.items.filter(
@@ -87,7 +91,7 @@ const createStore = (
 };
 
 describe("UpdateCenterModal", () => {
-  it("renders source tags, running state, warnings, migration marker, and close confirmation", () => {
+  it("renders source tags, running state, warnings, and migration marker", () => {
     const store = createStore();
 
     render(UpdateCenterModal, {
@@ -104,24 +108,6 @@ describe("UpdateCenterModal", () => {
     expect(screen.getByText("更新过程中请勿关闭商店")).toBeTruthy();
     expect(screen.getByText("下载中")).toBeTruthy();
     expect(screen.getByText("42%")).toBeTruthy();
-    expect(screen.getByText(/确定关闭/)).toBeTruthy();
-  });
-
-  it("close confirmation exposes a confirm-close path", async () => {
-    const onConfirmClose = vi.fn();
-    const store = createStore();
-
-    render(UpdateCenterModal, {
-      props: {
-        show: true,
-        store,
-        onConfirmClose,
-      },
-    });
-
-    await fireEvent.click(screen.getByRole("button", { name: "确认关闭" }));
-
-    expect(onConfirmClose).toHaveBeenCalledTimes(1);
   });
 
   it("renders ignored items as disabled instead of normal selectable actions", () => {
@@ -148,7 +134,34 @@ describe("UpdateCenterModal", () => {
     });
 
     expect(screen.getByText("已忽略")).toBeTruthy();
-    expect(screen.getByRole("checkbox")).toBeDisabled();
+    expect(screen.getAllByRole("checkbox").at(-1)).toBeDisabled();
+    expect(screen.getByRole("button", { name: "取消忽略" })).toBeTruthy();
+  });
+
+  it("renders ignore action for normal items", () => {
+    const store = createStore({
+      items: [
+        createItem({
+          taskKey: "aptss:spark-weather",
+          packageName: "spark-weather",
+          displayName: "Spark Weather",
+          source: "aptss",
+          ignored: false,
+        }),
+      ],
+      tasks: [],
+      warnings: [],
+      hasRunningTasks: false,
+    });
+
+    render(UpdateCenterModal, {
+      props: {
+        show: true,
+        store,
+      },
+    });
+
+    expect(screen.getByRole("button", { name: "忽略更新" })).toBeTruthy();
   });
 
   it("renders migration confirmation when requested", () => {

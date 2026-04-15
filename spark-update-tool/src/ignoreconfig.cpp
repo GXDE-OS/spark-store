@@ -4,40 +4,19 @@
 #include <QFile>
 #include <QTextStream>
 #include <QDebug>
-#include <unistd.h>  // for geteuid
 
 IgnoreConfig::IgnoreConfig(QObject *parent)
     : QObject(parent)
 {
-    // 设置配置文件路径
     QString configDir;
-    
-    // // 检查是否以 root 权限运行
-    // if (geteuid() == 0) {
-    //     // 首先检查是否有 SUDO_USER_HOME 环境变量（表示是通过 pkexec 提权的普通用户）
-    //     QByteArray sudoUserHomeEnv = qgetenv("SUDO_USER_HOME");
-    //     if (!sudoUserHomeEnv.isEmpty()) {
-    //         // 通过 pkexec 提权的普通用户，使用原用户的配置目录
-    //         QString sudoUserHomePath = QString::fromLocal8Bit(sudoUserHomeEnv);
-    //         configDir = sudoUserHomePath + "/.config";
-    //     } else {
-    //         // 获取实际的 HOME 目录来判断是真正的 root 用户还是其他方式提权的用户
-    //         QByteArray homeEnv = qgetenv("HOME");
-    //         QString homePath = QString::fromLocal8Bit(homeEnv);
-            
-    //         if (homePath == "/root") {
-    //             // 真正的 root 用户，使用 /root/.config
-    //             configDir = "/root/.config";
-    //         } else {
-    //             // 其他方式提权的用户，使用 HOME 目录下的配置
-    //             configDir = homePath + "/.config";
-    //         }
-    //     }
-    // } else {
-    //     // 普通用户，使用标准配置目录
-    //     configDir = QStandardPaths::writableLocation(QStandardPaths::ConfigLocation);
-    // }
-    configDir = "/etc/";
+    QByteArray sudoUserHomeEnv = qgetenv("SUDO_USER_HOME");
+
+    if (!sudoUserHomeEnv.isEmpty()) {
+        configDir = QString::fromLocal8Bit(sudoUserHomeEnv) + "/.config";
+    } else {
+        configDir = QStandardPaths::writableLocation(QStandardPaths::ConfigLocation);
+    }
+
     QDir dir(configDir);
     if (!dir.exists()) {
         dir.mkpath(".");
@@ -64,17 +43,9 @@ void IgnoreConfig::addIgnoredApp(const QString &packageName, const QString &vers
     saveConfig();
 }
 
-void IgnoreConfig::removeIgnoredApp(const QString &packageName)
+void IgnoreConfig::removeIgnoredApp(const QString &packageName, const QString &version)
 {
-    // 移除所有该包名的版本
-    auto it = m_ignoredApps.begin();
-    while (it != m_ignoredApps.end()) {
-        if (it->first == packageName) {
-            it = m_ignoredApps.erase(it);
-        } else {
-            ++it;
-        }
-    }
+    m_ignoredApps.remove(qMakePair(packageName, version));
     saveConfig();
 }
 

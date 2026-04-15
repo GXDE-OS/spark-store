@@ -63,6 +63,29 @@
       </div>
     </div>
 
+    <div class="flex justify-end">
+      <button
+        v-if="item.ignored === true"
+        type="button"
+        class="inline-flex items-center gap-2 rounded-2xl border border-slate-300/80 px-3 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+        aria-label="取消忽略"
+        @click.stop="$emit('unignore-item')"
+      >
+        <i class="fas fa-rotate-left"></i>
+        取消忽略
+      </button>
+      <button
+        v-else
+        type="button"
+        class="inline-flex items-center gap-2 rounded-2xl border border-amber-300/80 px-3 py-2 text-sm font-semibold text-amber-700 transition hover:bg-amber-50 dark:border-amber-500/40 dark:text-amber-300 dark:hover:bg-amber-500/10"
+        aria-label="忽略更新"
+        @click.stop="$emit('ignore-item')"
+      >
+        <i class="fas fa-eye-slash"></i>
+        忽略更新
+      </button>
+    </div>
+
     <div v-if="showProgress" class="space-y-2">
       <div
         class="h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800"
@@ -96,6 +119,8 @@ const iconIndex = ref(0);
 
 defineEmits<{
   (e: "toggle-selection"): void;
+  (e: "ignore-item"): void;
+  (e: "unignore-item"): void;
 }>();
 
 const normalizeIconSrc = (icon: string): string => {

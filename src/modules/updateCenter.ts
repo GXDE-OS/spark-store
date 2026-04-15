@@ -30,6 +30,8 @@ export interface UpdateCenterStore {
   unbind: () => void;
   open: () => Promise<void>;
   refresh: () => Promise<void>;
+  ignoreItem: (packageName: string, newVersion: string) => Promise<void>;
+  unignoreItem: (packageName: string, newVersion: string) => Promise<void>;
   toggleSelection: (taskKey: string) => void;
   toggleSelectAll: () => void;
   getSelectedItems: () => UpdateCenterItem[];
@@ -137,6 +139,20 @@ export const createUpdateCenterStore = (): UpdateCenterStore => {
   const refresh = async (): Promise<void> => {
     const nextSnapshot = await window.updateCenter.refresh();
     applySnapshot(nextSnapshot);
+  };
+
+  const ignoreItem = async (
+    packageName: string,
+    newVersion: string,
+  ): Promise<void> => {
+    await window.updateCenter.ignore({ packageName, newVersion });
+  };
+
+  const unignoreItem = async (
+    packageName: string,
+    newVersion: string,
+  ): Promise<void> => {
+    await window.updateCenter.unignore({ packageName, newVersion });
   };
 
   const toggleSelection = (taskKey: string): void => {
@@ -260,6 +276,8 @@ export const createUpdateCenterStore = (): UpdateCenterStore => {
     unbind,
     open,
     refresh,
+    ignoreItem,
+    unignoreItem,
     toggleSelection,
     toggleSelectAll,
     getSelectedItems,

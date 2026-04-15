@@ -324,7 +324,8 @@ bool AppDelegate::editorEvent(QEvent *event, QAbstractItemModel *model,
             QRect unignoreButtonRect(option.rect.right() - 80, option.rect.top() + (option.rect.height() - 30) / 2, 70, 30);
             if (unignoreButtonRect.contains(mouseEvent->pos())) {
                 // 发送取消忽略信号
-                emit unignoreApp(packageName);
+                QString newVersion = index.data(Qt::UserRole + 3).toString();
+                emit unignoreApp(packageName, newVersion);
                 return true;
             }
             return true; // 消耗其他事件，不允许其他交互
@@ -369,8 +370,8 @@ bool AppDelegate::editorEvent(QEvent *event, QAbstractItemModel *model,
             // 检查是否点击了忽略按钮
             QRect ignoreButtonRect(rect.right() - 160, rect.top() + (rect.height() - 30) / 2, 70, 30);
             if (ignoreButtonRect.contains(mouseEvent->pos())) {
-                QString currentVersion = index.data(Qt::UserRole + 2).toString();
-                emit ignoreApp(packageName, currentVersion);
+                QString newVersion = index.data(Qt::UserRole + 3).toString();
+                emit ignoreApp(packageName, newVersion);
                 return true;
             }
 

@@ -17,7 +17,7 @@ public:
     void addIgnoredApp(const QString &packageName, const QString &version);
     
     // 移除忽略的应用
-    void removeIgnoredApp(const QString &packageName);
+    void removeIgnoredApp(const QString &packageName, const QString &version);
     
     // 检查应用是否被忽略
     bool isAppIgnored(const QString &packageName, const QString &version) const;

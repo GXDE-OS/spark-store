@@ -7,13 +7,83 @@ load_transhell_debug
 
 # 发送通知
 function notify-send() {
-    # Detect user using the display
-    local user=$(who | awk '{print $1}' | head -n 1)
+    local user
+    user=$(detect-notify-user)
+
+    if [ -z "$user" ]; then
+        return 1
+    fi
 
     # Detect uid of the user
     local uid=$(id -u $user)
 
     sudo -u $user  DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/${uid}/bus notify-send "$@"
+}
+
+function detect-notify-user() {
+    local user
+
+    user=$(who | awk '{print $1}' | head -n 1)
+    if [ -n "$user" ]; then
+        echo "$user"
+        return 0
+    fi
+
+    if command -v loginctl >/dev/null 2>&1; then
+        user=$(loginctl list-sessions --no-legend 2>/dev/null | awk 'NR == 1 {print $3}')
+        if [ -n "$user" ]; then
+            echo "$user"
+            return 0
+        fi
+    fi
+
+    return 1
+}
+
+function load-ignored-apps() {
+    declare -gA ignored_apps=()
+    local config_paths=()
+    declare -A seen_config_paths=()
+    local user
+    local user_home
+    local config_path
+
+    user=$(detect-notify-user)
+    if [ -n "$user" ]; then
+        user_home=$(getent passwd "$user" | cut -d: -f6)
+        if [ -n "$user_home" ] && [ -d "$user_home" ]; then
+            config_path="$user_home/.config/spark-store/ignored_apps.conf"
+            if [ -f "$config_path" ] && [ -z "${seen_config_paths["$config_path"]}" ]; then
+                config_paths+=("$config_path")
+                seen_config_paths["$config_path"]=1
+            fi
+        fi
+    fi
+
+    local home_dir
+    for home_dir in /home/*; do
+        if [ ! -d "$home_dir" ]; then
+            continue
+        fi
+
+        config_path="$home_dir/.config/spark-store/ignored_apps.conf"
+        if [ -f "$config_path" ] && [ -z "${seen_config_paths["$config_path"]}" ]; then
+            config_paths+=("$config_path")
+            seen_config_paths["$config_path"]=1
+        fi
+    done
+
+    local pkg_name
+    local pkg_version
+    for config_path in "${config_paths[@]}"; do
+        while IFS='|' read -r pkg_name pkg_version || [ -n "$pkg_name" ]; do
+            pkg_name=$(printf '%s' "$pkg_name" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+            pkg_version=$(printf '%s' "$pkg_version" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+            if [ -n "$pkg_name" ] && [ -n "$pkg_version" ]; then
+                ignored_apps["$pkg_name|$pkg_version"]=1
+            fi
+        done < "$config_path"
+    done
 }
 
 # 检测网络链接畅通
@@ -80,17 +150,7 @@ if [ "$update_app_number" -le 0 ]; then
     exit 0
 fi
 
-# 读取忽略列表到数组
-declare -A ignored_apps
-if [ -f "/etc/spark-store/ignored_apps.conf" ]; then
-    while IFS='|' read -r pkg_name pkg_version || [ -n "$pkg_name" ]; do
-        # 去除前后空白字符
-        pkg_name=$(echo "$pkg_name" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
-        if [ -n "$pkg_name" ]; then
-            ignored_apps["$pkg_name"]=1
-        fi
-    done < "/etc/spark-store/ignored_apps.conf"
-fi
+load-ignored-apps
 
 # 获取用户选择的要更新的应用
 PKG_LIST="$(/opt/durapps/spark-store/bin/update-upgrade/ss-do-upgrade-worker.sh upgradable-list)"
@@ -118,7 +178,7 @@ for line in $PKG_LIST; do
     fi
 
     # 检测是否在忽略列表中
-    if [ -n "${ignored_apps[$PKG_NAME]}" ]; then
+    if [ -n "${ignored_apps["$PKG_NAME|$PKG_NEW_VER"]}" ]; then
         let update_app_number=$update_app_number-1
         continue
     fi
@@ -135,8 +195,8 @@ update_transhell
 # TODO: 除了apt-mark hold之外额外有一个禁止检查列表
 # 如果不想提示就不提示
 
-user=$(who | awk '{print $1}' | head -n 1)
-if [ -e "/home/$user/.config/spark-union/spark-store/ssshell-config-do-not-show-upgrade-notify" ]; then
+user=$(detect-notify-user)
+if [ -n "$user" ] && [ -e "/home/$user/.config/spark-union/spark-store/ssshell-config-do-not-show-upgrade-notify" ]; then
     echo "他不想站在世界之巅，好吧"
     echo "Okay he don't want to be at the top of the world, okay"
     exit
