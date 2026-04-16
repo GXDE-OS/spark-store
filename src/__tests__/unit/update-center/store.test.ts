@@ -61,9 +61,9 @@ describe("updateCenter store", () => {
     open.mockResolvedValue(snapshot);
     const store = createUpdateCenterStore();
 
-    await store.open();
+    await store.open("apm");
 
-    expect(open).toHaveBeenCalledTimes(1);
+    expect(open).toHaveBeenCalledWith("apm");
     expect(store.isOpen.value).toBe(true);
     expect(store.snapshot.value).toEqual(snapshot);
     expect(store.filteredItems.value).toEqual(snapshot.items);

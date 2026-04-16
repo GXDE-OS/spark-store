@@ -1,5 +1,7 @@
 import { ipcRenderer, contextBridge, type IpcRendererEvent } from "electron";
 
+type StoreFilter = "spark" | "apm" | "both";
+
 type UpdateCenterSnapshot = {
   items: Array<{
     taskKey: string;
@@ -90,10 +92,10 @@ contextBridge.exposeInMainWorld("apm_store", {
 });
 
 contextBridge.exposeInMainWorld("updateCenter", {
-  open: (): Promise<UpdateCenterSnapshot> =>
-    ipcRenderer.invoke("update-center-open"),
-  refresh: (): Promise<UpdateCenterSnapshot> =>
-    ipcRenderer.invoke("update-center-refresh"),
+  open: (storeFilter: StoreFilter = "both"): Promise<UpdateCenterSnapshot> =>
+    ipcRenderer.invoke("update-center-open", storeFilter),
+  refresh: (storeFilter: StoreFilter = "both"): Promise<UpdateCenterSnapshot> =>
+    ipcRenderer.invoke("update-center-refresh", storeFilter),
   ignore: (payload: {
     packageName: string;
     newVersion: string;

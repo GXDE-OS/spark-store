@@ -12,6 +12,7 @@ import {
 import { resolveUpdateItemIcons } from "./icons";
 import {
   createUpdateCenterService,
+  type StoreFilter,
   type UpdateCenterIgnorePayload,
   type UpdateCenterService,
   type UpdateCenterStartTask,
@@ -349,35 +350,70 @@ const enrichItemIcons = (items: UpdateCenterItem[]): UpdateCenterItem[] => {
   });
 };
 
+const isSourceEnabled = (
+  storeFilter: StoreFilter,
+  source: "spark" | "apm",
+): boolean => {
+  return storeFilter === "both" || storeFilter === source;
+};
+
+const isCommandAvailable = async (
+  runCommand: UpdateCenterCommandRunner,
+  command: "aptss" | "apm",
+): Promise<boolean> => {
+  const result = await runCommand("which", [command]);
+  return result.code === 0 && result.stdout.trim().length > 0;
+};
+
 export const loadUpdateCenterItems = async (
   runCommand: UpdateCenterCommandRunner = runCommandCapture,
+  storeFilter: StoreFilter = "both",
 ): Promise<UpdateCenterLoadItemsResult> => {
+  const [sparkEnabled, apmEnabled] = await Promise.all([
+    isSourceEnabled(storeFilter, "spark")
+      ? isCommandAvailable(runCommand, "aptss")
+      : Promise.resolve(false),
+    isSourceEnabled(storeFilter, "apm")
+      ? isCommandAvailable(runCommand, "apm")
+      : Promise.resolve(false),
+  ]);
+
   const [aptssResult, apmResult, aptssInstalledResult, apmInstalledResult] =
     await Promise.all([
-      runCommand(
-        APTSS_LIST_UPGRADABLE_COMMAND.command,
-        APTSS_LIST_UPGRADABLE_COMMAND.args,
-      ),
-      runCommand("apm", ["list", "--upgradable"]),
-      runCommand(
-        DPKG_QUERY_INSTALLED_COMMAND.command,
-        DPKG_QUERY_INSTALLED_COMMAND.args,
-      ),
-      runCommand("apm", ["list", "--installed"]),
+      sparkEnabled
+        ? runCommand(
+            APTSS_LIST_UPGRADABLE_COMMAND.command,
+            APTSS_LIST_UPGRADABLE_COMMAND.args,
+          )
+        : Promise.resolve({ code: 0, stdout: "", stderr: "" }),
+      apmEnabled
+        ? runCommand("apm", ["list", "--upgradable"])
+        : Promise.resolve({ code: 0, stdout: "", stderr: "" }),
+      sparkEnabled
+        ? runCommand(
+            DPKG_QUERY_INSTALLED_COMMAND.command,
+            DPKG_QUERY_INSTALLED_COMMAND.args,
+          )
+        : Promise.resolve({ code: 0, stdout: "", stderr: "" }),
+      apmEnabled
+        ? runCommand("apm", ["list", "--installed"])
+        : Promise.resolve({ code: 0, stdout: "", stderr: "" }),
     ]);
 
   const aptssAvailable =
-    aptssResult.code === 0 || aptssInstalledResult.code === 0;
+    sparkEnabled && (aptssResult.code === 0 || aptssInstalledResult.code === 0);
 
   const warnings = [
     aptssAvailable
       ? getCommandError("aptss upgradable query", aptssResult)
       : null,
-    getCommandError("apm upgradable query", apmResult),
+    apmEnabled ? getCommandError("apm upgradable query", apmResult) : null,
     aptssAvailable
       ? getCommandError("dpkg installed query", aptssInstalledResult)
       : null,
-    getCommandError("apm installed query", apmInstalledResult),
+    apmEnabled
+      ? getCommandError("apm installed query", apmInstalledResult)
+      : null,
   ].filter((message): message is string => message !== null);
 
   const aptssItems =
@@ -385,7 +421,9 @@ export const loadUpdateCenterItems = async (
       ? parseAptssUpgradableOutput(aptssResult.stdout)
       : [];
   const apmItems =
-    apmResult.code === 0 ? parseApmUpgradableOutput(apmResult.stdout) : [];
+    apmEnabled && apmResult.code === 0
+      ? parseApmUpgradableOutput(apmResult.stdout)
+      : [];
 
   const installedSources = buildInstalledSourceMap(
     aptssAvailable && aptssInstalledResult.code === 0
@@ -396,13 +434,15 @@ export const loadUpdateCenterItems = async (
 
   const [categorizedAptssItems, categorizedApmItems] = await Promise.all([
     aptssAvailable ? enrichItemCategories(aptssItems) : Promise.resolve([]),
-    enrichItemCategories(apmItems),
+    apmEnabled ? enrichItemCategories(apmItems) : Promise.resolve([]),
   ]);
   const [enrichedAptssItems, enrichedApmItems] = await Promise.all([
     aptssAvailable
       ? enrichAptssItems(categorizedAptssItems, runCommand)
       : Promise.resolve({ items: [], warnings: [] }),
-    enrichApmItems(categorizedApmItems, runCommand),
+    apmEnabled
+      ? enrichApmItems(categorizedApmItems, runCommand)
+      : Promise.resolve({ items: [], warnings: [] }),
   ]);
 
   return {
@@ -433,8 +473,14 @@ export const registerUpdateCenterIpc = (
     | "subscribe"
   >,
 ): void => {
-  ipc.handle("update-center-open", () => service.open());
-  ipc.handle("update-center-refresh", () => service.refresh());
+  ipc.handle(
+    "update-center-open",
+    (_event, storeFilter: StoreFilter = "both") => service.open(storeFilter),
+  );
+  ipc.handle(
+    "update-center-refresh",
+    (_event, storeFilter: StoreFilter = "both") => service.refresh(storeFilter),
+  );
   ipc.handle(
     "update-center-ignore",
     (_event, payload: UpdateCenterIgnorePayload) => service.ignore(payload),

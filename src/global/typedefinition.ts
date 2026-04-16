@@ -26,6 +26,8 @@ export type DownloadItemStatus =
 
 export type StoreMode = "spark" | "apm" | "hybrid";
 
+export type StoreFilter = "spark" | "apm" | "both";
+
 export interface DownloadItem {
   id: number;
   name: string;
@@ -178,8 +180,8 @@ export interface UpdateCenterSnapshot {
 }
 
 export interface UpdateCenterBridge {
-  open: () => Promise<UpdateCenterSnapshot>;
-  refresh: () => Promise<UpdateCenterSnapshot>;
+  open: (storeFilter?: StoreFilter) => Promise<UpdateCenterSnapshot>;
+  refresh: (storeFilter?: StoreFilter) => Promise<UpdateCenterSnapshot>;
   ignore: (payload: {
     packageName: string;
     newVersion: string;

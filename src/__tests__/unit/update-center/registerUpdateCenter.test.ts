@@ -157,8 +157,8 @@ describe("update-center/ipc", () => {
     await cancelHandler?.({}, "aptss:spark-weather");
 
     expect(getStateHandler?.()).toEqual(snapshot);
-    expect(service.open).toHaveBeenCalledTimes(1);
-    expect(service.refresh).toHaveBeenCalledTimes(1);
+    expect(service.open).toHaveBeenCalledWith("both");
+    expect(service.refresh).toHaveBeenCalledWith("both");
     expect(service.ignore).toHaveBeenCalledWith({
       packageName: "spark-weather",
       newVersion: "2.0.0",
@@ -174,6 +174,51 @@ describe("update-center/ipc", () => {
 
     listener?.(snapshot);
     expect(send).toHaveBeenCalledWith("update-center-state", snapshot);
+  });
+
+  it("forwards store filter payloads to open and refresh", async () => {
+    const handle = vi.fn();
+    const snapshot: UpdateCenterServiceState = {
+      items: [],
+      tasks: [],
+      warnings: [],
+      hasRunningTasks: false,
+    };
+    const service = {
+      open: vi.fn().mockResolvedValue(snapshot),
+      refresh: vi.fn().mockResolvedValue(snapshot),
+      ignore: vi.fn().mockResolvedValue(undefined),
+      unignore: vi.fn().mockResolvedValue(undefined),
+      start: vi.fn().mockResolvedValue(undefined),
+      cancel: vi.fn().mockResolvedValue(undefined),
+      getState: vi.fn().mockReturnValue(snapshot),
+      subscribe: vi.fn(() => () => undefined),
+    };
+
+    registerUpdateCenterIpc({ handle }, service);
+
+    const openHandler = handle.mock.calls.find(
+      ([channel]: [string]) => channel === "update-center-open",
+    )?.[1] as
+      | ((
+          event: unknown,
+          storeFilter?: "spark" | "apm" | "both",
+        ) => Promise<UpdateCenterServiceState>)
+      | undefined;
+    const refreshHandler = handle.mock.calls.find(
+      ([channel]: [string]) => channel === "update-center-refresh",
+    )?.[1] as
+      | ((
+          event: unknown,
+          storeFilter?: "spark" | "apm" | "both",
+        ) => Promise<UpdateCenterServiceState>)
+      | undefined;
+
+    await openHandler?.({}, "apm");
+    await refreshHandler?.({}, "spark");
+
+    expect(service.open).toHaveBeenCalledWith("apm");
+    expect(service.refresh).toHaveBeenCalledWith("spark");
   });
 
   it("service subscribers receive state updates after refresh start and ignore", async () => {

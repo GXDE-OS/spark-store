@@ -10,6 +10,24 @@ import axios from "axios";
 
 const logger = pino({ name: "install-manager" });
 
+const getStoreFilterFromArgv = (): "spark" | "apm" | "both" => {
+  const argv = process.argv;
+  const noApm = argv.includes("--no-apm");
+  const noSpark = argv.includes("--no-spark");
+
+  if (noApm && noSpark) return "both";
+  if (noApm) return "spark";
+  if (noSpark) return "apm";
+  return "both";
+};
+
+const isOriginEnabled = (
+  storeFilter: "spark" | "apm" | "both",
+  origin: "spark" | "apm",
+): boolean => {
+  return storeFilter === "both" || storeFilter === origin;
+};
+
 type InstallTask = {
   id: number;
   pkgname: string;
@@ -85,6 +103,14 @@ const checkApmAvailable = async (): Promise<boolean> => {
   const { code, stdout } = await runCommandCapture("which", ["apm"]);
   const found = code === 0 && stdout.trim().length > 0;
   if (!found) logger.info("未检测到 apm 命令");
+  return found;
+};
+
+/** 检测本机是否具备 Spark/aptss 管理能力 */
+const checkSparkAvailable = async (): Promise<boolean> => {
+  const { code, stdout } = await runCommandCapture("which", ["aptss"]);
+  const found = code === 0 && stdout.trim().length > 0;
+  if (!found) logger.info("未检测到 aptss 命令");
   return found;
 };
 
@@ -793,7 +819,32 @@ ipcMain.handle(
     payload: { origin: "apm" | "spark"; pkgnameList?: string[] },
   ) => {
     const { origin, pkgnameList } = payload;
+    const storeFilter = getStoreFilterFromArgv();
     const apmBasePath = "/var/lib/apm/apm/files/ace-env/var/lib/apm";
+
+    if (!isOriginEnabled(storeFilter, origin)) {
+      return {
+        success: false,
+        message: `${origin} origin disabled by startup filter`,
+        apps: [],
+      };
+    }
+
+    if (origin === "spark" && !(await checkSparkAvailable())) {
+      return {
+        success: false,
+        message: "spark origin unavailable on this system",
+        apps: [],
+      };
+    }
+
+    if (origin === "apm" && !(await checkApmAvailable())) {
+      return {
+        success: false,
+        message: "apm origin unavailable on this system",
+        apps: [],
+      };
+    }
 
     try {
       const installedApps: Array<{
@@ -1031,6 +1082,10 @@ ipcMain.handle("list-upgradable", async () => {
 
 ipcMain.handle("check-apm-available", async () => {
   return await checkApmAvailable();
+});
+
+ipcMain.handle("check-spark-available", async () => {
+  return await checkSparkAvailable();
 });
 
 // 显示 APM 安装对话框（在点击安装按钮时提前检查）

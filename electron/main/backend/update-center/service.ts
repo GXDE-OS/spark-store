@@ -13,6 +13,8 @@ import {
 } from "./queue";
 import type { UpdateCenterItem, UpdateSource } from "./types";
 
+export type StoreFilter = "spark" | "apm" | "both";
+
 export interface UpdateCenterLoadedItems {
   items: UpdateCenterItem[];
   warnings: string[];
@@ -68,8 +70,8 @@ export interface UpdateCenterStartTask {
 }
 
 export interface UpdateCenterService {
-  open: () => Promise<UpdateCenterServiceState>;
-  refresh: () => Promise<UpdateCenterServiceState>;
+  open: (storeFilter?: StoreFilter) => Promise<UpdateCenterServiceState>;
+  refresh: (storeFilter?: StoreFilter) => Promise<UpdateCenterServiceState>;
   ignore: (payload: UpdateCenterIgnorePayload) => Promise<void>;
   unignore: (payload: UpdateCenterIgnorePayload) => Promise<void>;
   start: (tasks: UpdateCenterStartTask[]) => Promise<void>;
@@ -81,7 +83,9 @@ export interface UpdateCenterService {
 }
 
 export interface CreateUpdateCenterServiceOptions {
-  loadItems: () => Promise<UpdateCenterItem[] | UpdateCenterLoadedItems>;
+  loadItems: (
+    storeFilter: StoreFilter,
+  ) => Promise<UpdateCenterItem[] | UpdateCenterLoadedItems>;
   loadIgnoredEntries?: () => Promise<Set<string>>;
   saveIgnoredEntries?: (entries: ReadonlySet<string>) => Promise<void>;
 }
@@ -135,6 +139,7 @@ export const createUpdateCenterService = (
 ): UpdateCenterService => {
   const queue = createUpdateCenterQueue();
   const listeners = new Set<(snapshot: UpdateCenterServiceState) => void>();
+  let currentStoreFilter: StoreFilter = "both";
   const loadIgnored =
     options.loadIgnoredEntries ??
     (() => loadIgnoredEntries(IGNORE_CONFIG_PATH));
@@ -157,13 +162,18 @@ export const createUpdateCenterService = (
     return snapshot;
   };
 
-  const refresh = async (): Promise<UpdateCenterServiceState> => {
+  const refresh = async (
+    storeFilter: StoreFilter = currentStoreFilter,
+  ): Promise<UpdateCenterServiceState> => {
+    currentStoreFilter = storeFilter;
     queue.startRefresh();
     emit();
 
     try {
       const ignoredEntries = await loadIgnored();
-      const loadedItems = normalizeLoadedItems(await options.loadItems());
+      const loadedItems = normalizeLoadedItems(
+        await options.loadItems(currentStoreFilter),
+      );
       const items = sortIgnoredItems(
         applyIgnoredEntries(loadedItems.items, ignoredEntries),
       );

@@ -29,10 +29,11 @@
           </div>
           <div class="flex items-center gap-3">
             <div
-              v-if="storeFilter === 'both'"
+              v-if="showOriginSwitcher"
               class="flex items-center rounded-2xl border border-slate-200/70 p-1 dark:border-slate-800/70"
             >
               <button
+                v-if="apmEnabled"
                 type="button"
                 class="rounded-xl px-4 py-1.5 text-sm font-semibold transition"
                 :class="
@@ -46,6 +47,7 @@
                 APM 软件
               </button>
               <button
+                v-if="sparkEnabled"
                 type="button"
                 class="rounded-xl px-4 py-1.5 text-sm font-semibold transition"
                 :class="
@@ -185,7 +187,7 @@
 </template>
 
 <script setup lang="ts">
-import { reactive } from "vue";
+import { computed, reactive } from "vue";
 import { App } from "../global/typedefinition";
 import { APM_STORE_BASE_URL } from "../global/storeConfig";
 
@@ -209,13 +211,14 @@ const canOpenDetail = (app: App) => {
   );
 };
 
-defineProps<{
+const props = defineProps<{
   show: boolean;
   apps: App[];
   loading: boolean;
   error: string;
   activeOrigin: "apm" | "spark";
   storeFilter: "spark" | "apm" | "both";
+  sparkAvailable: boolean;
   apmAvailable: boolean;
 }>();
 
@@ -233,4 +236,16 @@ const onOverlayWheel = (e: WheelEvent) => {
   if (target.closest(".overflow-y-auto, .overflow-auto")) return;
   e.preventDefault();
 };
+
+const sparkEnabled = computed(() => {
+  return props.storeFilter !== "apm" && props.sparkAvailable;
+});
+
+const apmEnabled = computed(() => {
+  return props.storeFilter !== "spark" && props.apmAvailable;
+});
+
+const showOriginSwitcher = computed(() => {
+  return sparkEnabled.value && apmEnabled.value;
+});
 </script>

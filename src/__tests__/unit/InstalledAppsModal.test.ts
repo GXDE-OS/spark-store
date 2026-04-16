@@ -35,6 +35,7 @@ describe("InstalledAppsModal", () => {
         error: "",
         activeOrigin: "spark",
         storeFilter: "both",
+        sparkAvailable: true,
         apmAvailable: true,
       },
     });
@@ -54,6 +55,7 @@ describe("InstalledAppsModal", () => {
         error: "",
         activeOrigin: "spark",
         storeFilter: "both",
+        sparkAvailable: true,
         apmAvailable: true,
       },
     });
@@ -71,6 +73,7 @@ describe("InstalledAppsModal", () => {
         error: "",
         activeOrigin: "spark",
         storeFilter: "both",
+        sparkAvailable: true,
         apmAvailable: true,
       },
     });
@@ -92,6 +95,7 @@ describe("InstalledAppsModal", () => {
         error: "",
         activeOrigin: "spark",
         storeFilter: "both",
+        sparkAvailable: true,
         apmAvailable: true,
       },
     });
@@ -113,6 +117,7 @@ describe("InstalledAppsModal", () => {
         error: "",
         activeOrigin: "spark",
         storeFilter: "both",
+        sparkAvailable: true,
         apmAvailable: true,
       },
     });
@@ -129,6 +134,7 @@ describe("InstalledAppsModal", () => {
         error: "",
         activeOrigin: "spark",
         storeFilter: "both",
+        sparkAvailable: true,
         apmAvailable: true,
       },
     });

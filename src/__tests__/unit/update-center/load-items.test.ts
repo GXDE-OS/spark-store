@@ -25,6 +25,9 @@ const APTSS_WEATHER_PRINT_URIS_KEY =
 const APTSS_NOTES_PRINT_URIS_KEY =
   "bash -lc /usr/bin/apt download spark-notes --print-uris -c /opt/durapps/spark-store/bin/apt-fast-conf/aptss-apt.conf -o Dir::Etc::sourcelist=/opt/durapps/spark-store/bin/apt-fast-conf/sources.list.d/aptss.list -o Dir::Etc::sourceparts=/dev/null";
 
+const WHICH_APTSS_KEY = "which aptss";
+const WHICH_APM_KEY = "which apm";
+
 const loadUpdateCenterModule = async (
   remoteStore: Record<string, RemoteStoreResponse>,
 ) => {
@@ -106,6 +109,22 @@ afterEach(() => {
 describe("update-center load items", () => {
   it("enriches apm migration items with download metadata and remote fallback icons", async () => {
     const commandResults = new Map<string, CommandResult>([
+      [
+        WHICH_APTSS_KEY,
+        {
+          code: 0,
+          stdout: "/usr/bin/aptss\n",
+          stderr: "",
+        },
+      ],
+      [
+        WHICH_APM_KEY,
+        {
+          code: 0,
+          stdout: "/usr/bin/apm\n",
+          stderr: "",
+        },
+      ],
       [
         APTSS_LIST_UPGRADABLE_KEY,
         {
@@ -217,6 +236,14 @@ describe("update-center load items", () => {
     const result = await loadUpdateCenterItems(async (command, args) => {
       const key = `${command} ${args.join(" ")}`;
 
+      if (key === WHICH_APTSS_KEY) {
+        return { code: 0, stdout: "/usr/bin/aptss\n", stderr: "" };
+      }
+
+      if (key === WHICH_APM_KEY) {
+        return { code: 127, stdout: "", stderr: "apm: command not found" };
+      }
+
       if (key === APTSS_LIST_UPGRADABLE_KEY) {
         return {
           code: 0,
@@ -279,10 +306,7 @@ describe("update-center load items", () => {
         sha512: "beadfeed",
       },
     ]);
-    expect(result.warnings).toEqual([
-      "apm upgradable query failed: apm: command not found",
-      "apm installed query failed: apm: command not found",
-    ]);
+    expect(result.warnings).toEqual([]);
   });
 
   it("retries category lookup after an earlier fetch failure in the same process", async () => {
@@ -291,6 +315,14 @@ describe("update-center load items", () => {
 
     const runCommand = async (command: string, args: string[]) => {
       const key = `${command} ${args.join(" ")}`;
+
+      if (key === WHICH_APTSS_KEY) {
+        return { code: 0, stdout: "/usr/bin/aptss\n", stderr: "" };
+      }
+
+      if (key === WHICH_APM_KEY) {
+        return { code: 127, stdout: "", stderr: "apm: command not found" };
+      }
 
       if (key === APTSS_LIST_UPGRADABLE_KEY) {
         return {
@@ -387,6 +419,14 @@ describe("update-center load items", () => {
     const result = await loadUpdateCenterItems(async (command, args) => {
       const key = `${command} ${args.join(" ")}`;
 
+      if (key === WHICH_APTSS_KEY) {
+        return { code: 0, stdout: "/usr/bin/aptss\n", stderr: "" };
+      }
+
+      if (key === WHICH_APM_KEY) {
+        return { code: 127, stdout: "", stderr: "apm: command not found" };
+      }
+
       if (key === APTSS_LIST_UPGRADABLE_KEY) {
         return {
           code: 0,
@@ -440,9 +480,122 @@ describe("update-center load items", () => {
         sha512: "beadfeed",
       },
     ]);
-    expect(result.warnings).toEqual([
-      "apm upgradable query failed: apm: command not found",
-      "apm installed query failed: apm: command not found",
+    expect(result.warnings).toEqual([]);
+  });
+
+  it("skips aptss commands when the store filter disables Spark", async () => {
+    const { loadUpdateCenterItems } = await loadUpdateCenterModule({
+      "https://erotica.spark-app.store/amd64-apm/categories.json": {
+        tools: { zh: "Tools" },
+      },
+      "https://erotica.spark-app.store/amd64-apm/tools/applist.json": [
+        { Name: "Spark Clock", Pkgname: "spark-clock" },
+      ],
+    });
+
+    const runCommand = vi.fn(async (command: string, args: string[]) => {
+      const key = `${command} ${args.join(" ")}`;
+
+      if (key === WHICH_APM_KEY) {
+        return { code: 0, stdout: "/usr/bin/apm\n", stderr: "" };
+      }
+
+      if (key === "apm list --upgradable") {
+        return {
+          code: 0,
+          stdout: "spark-clock/main 2.0.0 amd64 [upgradable from: 1.0.0]",
+          stderr: "",
+        };
+      }
+
+      if (key === "apm list --installed") {
+        return {
+          code: 0,
+          stdout: "",
+          stderr: "",
+        };
+      }
+
+      if (
+        key ===
+        "bash -lc amber-pm-debug /usr/bin/apt -c /opt/durapps/spark-store/bin/apt-fast-conf/aptss-apt.conf download spark-clock --print-uris"
+      ) {
+        return {
+          code: 0,
+          stdout:
+            "'https://example.invalid/spark-clock_2.0.0_amd64.deb' spark-clock_2.0.0_amd64.deb 1234 SHA512:feedface",
+          stderr: "",
+        };
+      }
+
+      throw new Error(`Unexpected command ${key}`);
+    });
+
+    await loadUpdateCenterItems(runCommand, "apm");
+
+    expect(runCommand).not.toHaveBeenCalledWith(
+      "bash",
+      expect.arrayContaining([
+        expect.stringContaining("apt list --upgradable"),
+      ]),
+    );
+    expect(runCommand).not.toHaveBeenCalledWith(
+      "dpkg-query",
+      expect.any(Array),
+    );
+  });
+
+  it("skips apm commands when the store filter disables APM", async () => {
+    const { loadUpdateCenterItems } = await loadUpdateCenterModule({
+      "https://erotica.spark-app.store/amd64-store/categories.json": {
+        office: { zh: "Office" },
+      },
+      "https://erotica.spark-app.store/amd64-store/office/applist.json": [
+        { Name: "Spark Notes", Pkgname: "spark-notes" },
+      ],
+    });
+
+    const runCommand = vi.fn(async (command: string, args: string[]) => {
+      const key = `${command} ${args.join(" ")}`;
+
+      if (key === WHICH_APTSS_KEY) {
+        return { code: 0, stdout: "/usr/bin/aptss\n", stderr: "" };
+      }
+
+      if (key === APTSS_LIST_UPGRADABLE_KEY) {
+        return {
+          code: 0,
+          stdout: "spark-notes/stable 2.0.0 amd64 [upgradable from: 1.0.0]",
+          stderr: "",
+        };
+      }
+
+      if (key === DPKG_QUERY_INSTALLED_KEY) {
+        return {
+          code: 0,
+          stdout: "spark-notes\tinstall ok installed\n",
+          stderr: "",
+        };
+      }
+
+      if (key === APTSS_NOTES_PRINT_URIS_KEY) {
+        return {
+          code: 0,
+          stdout:
+            "'https://example.invalid/spark-notes_2.0.0_amd64.deb' spark-notes_2.0.0_amd64.deb 654321 SHA512:beadfeed",
+          stderr: "",
+        };
+      }
+
+      throw new Error(`Unexpected command ${key}`);
+    });
+
+    await loadUpdateCenterItems(runCommand, "spark");
+
+    expect(runCommand).not.toHaveBeenCalledWith("apm", [
+      "list",
+      "--upgradable",
     ]);
+    expect(runCommand).not.toHaveBeenCalledWith("apm", ["list", "--installed"]);
   });
 });

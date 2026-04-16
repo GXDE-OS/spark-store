@@ -5,6 +5,7 @@ import type {
   UpdateCenterSnapshot,
   DownloadItem,
   UpdateCenterStartTask,
+  StoreFilter,
 } from "@/global/typedefinition";
 import { downloads, getNextUpdateDownloadId } from "@/global/downloadStatus";
 import { APM_STORE_BASE_URL } from "@/global/storeConfig";
@@ -28,8 +29,8 @@ export interface UpdateCenterStore {
   someSelected: ComputedRef<boolean>;
   bind: () => void;
   unbind: () => void;
-  open: () => Promise<void>;
-  refresh: () => Promise<void>;
+  open: (storeFilter?: StoreFilter) => Promise<void>;
+  refresh: (storeFilter?: StoreFilter) => Promise<void>;
   ignoreItem: (packageName: string, newVersion: string) => Promise<void>;
   unignoreItem: (packageName: string, newVersion: string) => Promise<void>;
   toggleSelection: (taskKey: string) => void;
@@ -129,15 +130,15 @@ export const createUpdateCenterStore = (): UpdateCenterStore => {
     isBound = false;
   };
 
-  const open = async (): Promise<void> => {
+  const open = async (storeFilter: StoreFilter = "both"): Promise<void> => {
     resetSessionState();
-    const nextSnapshot = await window.updateCenter.open();
+    const nextSnapshot = await window.updateCenter.open(storeFilter);
     applySnapshot(nextSnapshot);
     isOpen.value = true;
   };
 
-  const refresh = async (): Promise<void> => {
-    const nextSnapshot = await window.updateCenter.refresh();
+  const refresh = async (storeFilter: StoreFilter = "both"): Promise<void> => {
+    const nextSnapshot = await window.updateCenter.refresh(storeFilter);
     applySnapshot(nextSnapshot);
   };
 

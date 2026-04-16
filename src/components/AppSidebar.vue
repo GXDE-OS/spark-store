@@ -89,7 +89,7 @@
 
     <div class="border-t border-slate-200 pt-4 dark:border-slate-800">
       <button
-        v-if="storeFilter !== 'spark'"
+        v-if="canManageApps"
         type="button"
         class="flex w-full items-center gap-3 rounded-2xl border border-transparent px-4 py-3 text-left text-sm font-medium text-slate-600 transition hover:border-brand/30 hover:bg-brand/5 hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 dark:text-slate-300 dark:hover:bg-slate-800"
         @click="$emit('list')"
@@ -98,6 +98,7 @@
         <span>应用管理</span>
       </button>
       <button
+        v-if="canOpenUpdateCenter"
         type="button"
         class="flex w-full items-center gap-3 rounded-2xl border border-transparent px-4 py-3 text-left text-sm font-medium text-slate-600 transition hover:border-brand/30 hover:bg-brand/5 hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 dark:text-slate-300 dark:hover:bg-slate-800"
         @click="$emit('update')"
@@ -110,15 +111,17 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from "vue";
 import ThemeToggle from "./ThemeToggle.vue";
 import amberLogo from "../assets/imgs/spark-store.svg";
 
-defineProps<{
+const props = defineProps<{
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   categories: Record<string, any>;
   activeCategory: string;
   categoryCounts: Record<string, number>;
   themeMode: "light" | "dark" | "auto";
+  sparkAvailable: boolean;
   apmAvailable: boolean;
   storeFilter: "spark" | "apm" | "both";
 }>();
@@ -134,6 +137,15 @@ const emit = defineEmits<{
 const toggleTheme = () => {
   emit("toggle-theme");
 };
+
+const canManageApps = computed(() => {
+  return (
+    (props.storeFilter !== "apm" && props.sparkAvailable) ||
+    (props.storeFilter !== "spark" && props.apmAvailable)
+  );
+});
+
+const canOpenUpdateCenter = canManageApps;
 
 const selectCategory = (category: string) => {
   emit("select-category", category);

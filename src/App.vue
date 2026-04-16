@@ -20,6 +20,7 @@
         :active-category="activeCategory"
         :category-counts="categoryCounts"
         :theme-mode="themeMode"
+        :spark-available="sparkAvailable"
         :apm-available="apmAvailable"
         :store-filter="storeFilter"
         @toggle-theme="toggleTheme"
@@ -120,6 +121,7 @@
       :error="installedError"
       :active-origin="activeInstalledOrigin"
       :store-filter="storeFilter"
+      :spark-available="sparkAvailable"
       :apm-available="apmAvailable"
       @close="closeInstalledModal"
       @refresh="refreshInstalledApps"
@@ -192,6 +194,12 @@ import {
   rankAppsBySearch,
 } from "./modules/appSearch";
 import { handleInstall, handleRetry } from "./modules/processInstall";
+import {
+  getAllowedInstalledOrigin,
+  getEffectiveStoreFilter,
+  getDefaultInstalledOrigin,
+  isOriginEnabled,
+} from "./modules/storeFilter";
 import { createUpdateCenterStore } from "./modules/updateCenter";
 import type {
   App,
@@ -264,10 +272,18 @@ const showUninstallModal = ref(false);
 const uninstallTargetApp: Ref<App | null> = ref(null);
 const showAboutModal = ref(false);
 const showSettingsModal = ref(false);
+const sparkAvailable = ref(false);
 const apmAvailable = ref(false);
 
 /** 启动参数 --no-apm => 仅 Spark；--no-spark => 仅 APM；由主进程 IPC 提供 */
 const storeFilter = ref<"spark" | "apm" | "both">("both");
+const availableSources = computed(() => ({
+  spark: sparkAvailable.value,
+  apm: apmAvailable.value,
+}));
+const effectiveStoreFilter = computed(() =>
+  getEffectiveStoreFilter(storeFilter.value, availableSources.value),
+);
 
 // 计算属性
 const baseApps = computed(() => {
@@ -761,7 +777,11 @@ const handleList = () => {
 
 const openUpdateModal = async () => {
   try {
-    await updateCenterStore.open();
+    if (!effectiveStoreFilter.value) {
+      return;
+    }
+
+    await updateCenterStore.open(effectiveStoreFilter.value);
   } catch (error) {
     logger.error(`打开更新中心失败: ${error}`);
   }
@@ -791,11 +811,21 @@ const confirmMigrationStart = async () => {
 };
 
 const openInstalledModal = () => {
-  showInstalledModal.value = true;
-  // 如果没有 APM 可用，默认切换到 Spark 应用管理
-  if (!apmAvailable.value && activeInstalledOrigin.value === "apm") {
-    activeInstalledOrigin.value = "spark";
+  const defaultOrigin = getDefaultInstalledOrigin(
+    storeFilter.value,
+    availableSources.value,
+  );
+  if (!defaultOrigin) {
+    return;
   }
+
+  showInstalledModal.value = true;
+  activeInstalledOrigin.value =
+    getAllowedInstalledOrigin(
+      storeFilter.value,
+      activeInstalledOrigin.value,
+      availableSources.value,
+    ) ?? defaultOrigin;
   refreshInstalledApps();
 };
 
@@ -804,7 +834,12 @@ const closeInstalledModal = () => {
 };
 
 const handleSwitchOrigin = (origin: "apm" | "spark") => {
-  activeInstalledOrigin.value = origin;
+  activeInstalledOrigin.value =
+    getAllowedInstalledOrigin(
+      storeFilter.value,
+      origin,
+      availableSources.value,
+    ) ?? activeInstalledOrigin.value;
   refreshInstalledApps();
 };
 
@@ -812,7 +847,24 @@ const refreshInstalledApps = async () => {
   installedLoading.value = true;
   installedError.value = "";
   try {
-    const origin = activeInstalledOrigin.value;
+    const origin = getAllowedInstalledOrigin(
+      storeFilter.value,
+      activeInstalledOrigin.value,
+      availableSources.value,
+    );
+    if (!origin) {
+      installedApps.value = [];
+      installedError.value = "当前系统不可用应用管理功能";
+      return;
+    }
+
+    activeInstalledOrigin.value = origin;
+
+    if (!isOriginEnabled(storeFilter.value, origin)) {
+      installedApps.value = [];
+      installedError.value = `当前启动模式已禁用 ${origin === "spark" ? "Spark" : "APM"} 软件管理`;
+      return;
+    }
 
     // Spark 优化：只检查远端商店目录中的应用，避免全量扫描
     let pkgnameList: string[] | undefined;
@@ -1151,10 +1203,20 @@ onMounted(async () => {
   // 从主进程获取启动参数（--no-apm / --no-spark），再加载数据
   storeFilter.value = await window.ipcRenderer.invoke("get-store-filter");
 
+  if (storeFilter.value !== "apm") {
+    sparkAvailable.value = await window.ipcRenderer.invoke(
+      "check-spark-available",
+    );
+  }
+
   // 检查 apm 是否可用
   if (storeFilter.value !== "spark") {
     apmAvailable.value = await window.ipcRenderer.invoke("check-apm-available");
   }
+
+  activeInstalledOrigin.value =
+    getDefaultInstalledOrigin(storeFilter.value, availableSources.value) ??
+    "spark";
 
   await loadCategories();
 
