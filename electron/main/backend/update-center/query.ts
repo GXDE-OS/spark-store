@@ -6,10 +6,9 @@ import type {
   UpdateSource,
 } from "./types";
 
-const UPGRADABLE_PATTERN =
-  /^(\S+)\/\S+\s+([^\s]+)\s+\S+\s+\[(?:upgradable from|from):\s*([^\]]+)\]$/i;
 const PRINT_URIS_PATTERN = /'([^']+)'\s+(\S+)\s+(\d+)\s+SHA512:([^\s]+)/;
 const APM_INSTALLED_PATTERN = /^(\S+)\/\S+(?:,\S+)?\s+\S+\s+\S+\s+\[[^\]]+\]$/;
+const CURRENT_VERSION_PATTERN = /\[(?:upgradable from|from):\s*([^\]\s]+)\]/i;
 
 const splitVersion = (version: string) => {
   const epochMatch = version.match(/^(\d+):(.*)$/);
@@ -190,18 +189,27 @@ const parseUpgradableOutput = (
   const items: UpdateCenterItem[] = [];
 
   for (const line of output.split("\n")) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith("Listing")) {
+    const trimmed = line
+      .replace(
+        // eslint-disable-next-line no-control-regex
+        /\x1b\[[0-9;]*m/g,
+        "",
+      )
+      .trim();
+    if (!trimmed || trimmed.startsWith("Listing") || !trimmed.includes("/")) {
       continue;
     }
 
-    const match = trimmed.match(UPGRADABLE_PATTERN);
-    if (!match) {
+    const tokens = trimmed.split(/\s+/);
+    if (tokens.length < 3) {
       continue;
     }
 
-    const [, pkgname, nextVersion, currentVersion] = match;
-    const arch = trimmed.split(/\s+/)[2];
+    const pkgname = tokens[0]?.split("/")[0] ?? "";
+    const nextVersion = tokens[1] ?? "";
+    const arch = tokens[2] ?? "";
+    const currentVersion =
+      trimmed.match(CURRENT_VERSION_PATTERN)?.[1] ?? tokens[5] ?? "";
     if (!pkgname || nextVersion === currentVersion) {
       continue;
     }

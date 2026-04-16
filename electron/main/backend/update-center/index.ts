@@ -52,10 +52,7 @@ const categoryCache = new Map<string, Promise<StoreAppMetadataMap>>();
 
 const APTSS_LIST_UPGRADABLE_COMMAND = {
   command: "bash",
-  args: [
-    "-lc",
-    "env LANGUAGE=en_US /usr/bin/apt -c /opt/durapps/spark-store/bin/apt-fast-conf/aptss-apt.conf list --upgradable -o Dir::Etc::sourcelist=/opt/durapps/spark-store/bin/apt-fast-conf/sources.list.d/aptss.list -o Dir::Etc::sourceparts=/dev/null -o APT::Get::List-Cleanup=0",
-  ],
+  args: ["-lc", "env LANGUAGE=en_US aptss list --upgradable"],
 };
 
 const DPKG_QUERY_INSTALLED_COMMAND = {

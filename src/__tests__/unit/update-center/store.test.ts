@@ -69,6 +69,18 @@ describe("updateCenter store", () => {
     expect(store.filteredItems.value).toEqual(snapshot.items);
   });
 
+  it("reuses the last store filter when refreshing without an explicit filter", async () => {
+    const snapshot = createSnapshot();
+    open.mockResolvedValue(snapshot);
+    refresh.mockResolvedValue(snapshot);
+    const store = createUpdateCenterStore();
+
+    await store.open("apm");
+    await store.refresh();
+
+    expect(refresh).toHaveBeenCalledWith("apm");
+  });
+
   it("starts only the selected non-ignored items", async () => {
     const snapshot = createSnapshot({
       items: [

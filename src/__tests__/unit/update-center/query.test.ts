@@ -28,6 +28,25 @@ describe("update-center query", () => {
     ]);
   });
 
+  it("parses aptss wrapper output with ansi noise before package lines", () => {
+    const output = [
+      "\u001b[1;32m信息：正在使用非 Root 权限模式启动！若出现问题，请尝试使用 Root 权限执行命令。\u001b[0m",
+      "正在列表...",
+      "spark-weather/stable 2.0.0 amd64 [upgradable from: 1.9.0]",
+      "",
+    ].join("\n");
+
+    expect(parseAptssUpgradableOutput(output)).toEqual([
+      {
+        pkgname: "spark-weather",
+        source: "aptss",
+        currentVersion: "1.9.0",
+        nextVersion: "2.0.0",
+        arch: "amd64",
+      },
+    ]);
+  });
+
   it("parses the legacy from variant in upgradable output", () => {
     const aptssOutput = "spark-clock/stable 1.2.0 amd64 [from: 1.1.0]";
     const apmOutput = "spark-player/main 2.0.0 amd64 [from: 1.5.0]";

@@ -59,6 +59,7 @@ export const createUpdateCenterStore = (): UpdateCenterStore => {
   const searchQuery = ref("");
   const selectedTaskKeys = ref(new Set<string>());
   const snapshot = ref<UpdateCenterSnapshot>(EMPTY_SNAPSHOT);
+  let lastStoreFilter: StoreFilter = "both";
 
   const resetSessionState = (): void => {
     showCloseConfirm.value = false;
@@ -131,13 +132,17 @@ export const createUpdateCenterStore = (): UpdateCenterStore => {
   };
 
   const open = async (storeFilter: StoreFilter = "both"): Promise<void> => {
+    lastStoreFilter = storeFilter;
     resetSessionState();
     const nextSnapshot = await window.updateCenter.open(storeFilter);
     applySnapshot(nextSnapshot);
     isOpen.value = true;
   };
 
-  const refresh = async (storeFilter: StoreFilter = "both"): Promise<void> => {
+  const refresh = async (
+    storeFilter: StoreFilter = lastStoreFilter,
+  ): Promise<void> => {
+    lastStoreFilter = storeFilter;
     const nextSnapshot = await window.updateCenter.refresh(storeFilter);
     applySnapshot(nextSnapshot);
   };
