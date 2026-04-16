@@ -61,10 +61,16 @@ describe("updateCenter store", () => {
     open.mockResolvedValue(snapshot);
     const store = createUpdateCenterStore();
 
-    await store.open("apm");
+    const openPromise = store.open("apm");
+
+    expect(store.isOpen.value).toBe(true);
+    expect(store.loading.value).toBe(true);
+
+    await openPromise;
 
     expect(open).toHaveBeenCalledWith("apm");
     expect(store.isOpen.value).toBe(true);
+    expect(store.loading.value).toBe(false);
     expect(store.snapshot.value).toEqual(snapshot);
     expect(store.filteredItems.value).toEqual(snapshot.items);
   });
@@ -76,7 +82,12 @@ describe("updateCenter store", () => {
     const store = createUpdateCenterStore();
 
     await store.open("apm");
-    await store.refresh();
+
+    const refreshPromise = store.refresh();
+    expect(store.loading.value).toBe(true);
+
+    await refreshPromise;
+    expect(store.loading.value).toBe(false);
 
     expect(refresh).toHaveBeenCalledWith("apm");
   });
@@ -209,11 +220,13 @@ describe("updateCenter store", () => {
   it("blocks close requests while the snapshot reports running tasks", () => {
     const store = createUpdateCenterStore();
     store.isOpen.value = true;
+    store.loading.value = true;
     store.snapshot.value = createSnapshot({ hasRunningTasks: true });
 
     store.requestClose();
 
     expect(store.isOpen.value).toBe(false);
+    expect(store.loading.value).toBe(false);
     expect(store.showCloseConfirm.value).toBe(false);
   });
 

@@ -19,6 +19,7 @@ const EMPTY_SNAPSHOT: UpdateCenterSnapshot = {
 
 export interface UpdateCenterStore {
   isOpen: Ref<boolean>;
+  loading: Ref<boolean>;
   showCloseConfirm: Ref<boolean>;
   showMigrationConfirm: Ref<boolean>;
   searchQuery: Ref<string>;
@@ -54,6 +55,7 @@ const matchesSearch = (item: UpdateCenterItem, query: string): boolean => {
 
 export const createUpdateCenterStore = (): UpdateCenterStore => {
   const isOpen = ref(false);
+  const loading = ref(false);
   const showCloseConfirm = ref(false);
   const showMigrationConfirm = ref(false);
   const searchQuery = ref("");
@@ -134,17 +136,27 @@ export const createUpdateCenterStore = (): UpdateCenterStore => {
   const open = async (storeFilter: StoreFilter = "both"): Promise<void> => {
     lastStoreFilter = storeFilter;
     resetSessionState();
-    const nextSnapshot = await window.updateCenter.open(storeFilter);
-    applySnapshot(nextSnapshot);
     isOpen.value = true;
+    loading.value = true;
+    try {
+      const nextSnapshot = await window.updateCenter.open(storeFilter);
+      applySnapshot(nextSnapshot);
+    } finally {
+      loading.value = false;
+    }
   };
 
   const refresh = async (
     storeFilter: StoreFilter = lastStoreFilter,
   ): Promise<void> => {
     lastStoreFilter = storeFilter;
-    const nextSnapshot = await window.updateCenter.refresh(storeFilter);
-    applySnapshot(nextSnapshot);
+    loading.value = true;
+    try {
+      const nextSnapshot = await window.updateCenter.refresh(storeFilter);
+      applySnapshot(nextSnapshot);
+    } finally {
+      loading.value = false;
+    }
   };
 
   const ignoreItem = async (
@@ -197,6 +209,7 @@ export const createUpdateCenterStore = (): UpdateCenterStore => {
 
   const closeNow = (): void => {
     resetSessionState();
+    loading.value = false;
     isOpen.value = false;
   };
 
@@ -270,6 +283,7 @@ export const createUpdateCenterStore = (): UpdateCenterStore => {
 
   return {
     isOpen,
+    loading,
     showCloseConfirm,
     showMigrationConfirm,
     searchQuery,

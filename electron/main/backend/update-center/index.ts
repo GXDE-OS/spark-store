@@ -191,7 +191,14 @@ const loadAptssItemMetadata = async (
   }
 
   const metadata = parsePrintUrisOutput(metadataResult.stdout);
-  console.log(`[DEBUG] APTSS parsed metadata:`, metadata);
+  if (metadata) {
+    console.log(`[DEBUG] APTSS parsed metadata:`, {
+      ...metadata,
+      downloadUrl: `${metadata.downloadUrl}.metalink`,
+    });
+  } else {
+    console.log(`[DEBUG] APTSS parsed metadata:`, metadata);
+  }
 
   if (!metadata) {
     return {

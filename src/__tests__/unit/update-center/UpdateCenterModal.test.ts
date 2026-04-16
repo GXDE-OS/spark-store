@@ -63,6 +63,7 @@ const createStore = (
 
   return {
     isOpen: ref(true),
+    loading: ref(false),
     showCloseConfirm: ref(true),
     showMigrationConfirm: ref(false),
     searchQuery: ref(""),
@@ -219,5 +220,53 @@ describe("UpdateCenterModal", () => {
     await fireEvent.click(screen.getByRole("button", { name: "关闭" }));
 
     expect(store.requestClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows loading panel when loading with no items", () => {
+    const store = createStore({
+      items: [],
+      tasks: [],
+      warnings: [],
+      hasRunningTasks: false,
+    });
+    store.loading.value = true;
+
+    render(UpdateCenterModal, {
+      props: {
+        show: true,
+        store,
+      },
+    });
+
+    expect(screen.getByText("正在检查更新…")).toBeTruthy();
+  });
+
+  it("shows refresh hint while loading with existing items", () => {
+    const store = createStore({ hasRunningTasks: false });
+    store.loading.value = true;
+
+    render(UpdateCenterModal, {
+      props: {
+        show: true,
+        store,
+      },
+    });
+
+    expect(screen.getByText("Spark Weather")).toBeTruthy();
+    expect(screen.getByText("正在刷新更新列表…")).toBeTruthy();
+  });
+
+  it("disables refresh button while loading", () => {
+    const store = createStore({ hasRunningTasks: false });
+    store.loading.value = true;
+
+    render(UpdateCenterModal, {
+      props: {
+        show: true,
+        store,
+      },
+    });
+
+    expect(screen.getByRole("button", { name: /刷新/ })).toBeDisabled();
   });
 });

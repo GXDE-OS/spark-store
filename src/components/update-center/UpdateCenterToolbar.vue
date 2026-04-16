@@ -14,11 +14,12 @@
       <div class="flex items-center gap-2">
         <button
           type="button"
-          class="inline-flex items-center gap-2 rounded-2xl border border-slate-200/70 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+          class="inline-flex items-center gap-2 rounded-2xl border border-slate-200/70 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 disabled:opacity-40 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+          :disabled="loading"
           @click="$emit('refresh')"
         >
-          <i class="fas fa-sync-alt"></i>
-          刷新
+          <i class="fas fa-sync-alt" :class="{ 'animate-spin': loading }"></i>
+          {{ loading ? "刷新中" : "刷新" }}
         </button>
         <button
           type="button"
@@ -88,6 +89,7 @@ const props = defineProps<{
   selectedCount: number;
   allSelected: boolean;
   someSelected: boolean;
+  loading?: boolean;
 }>();
 
 const emit = defineEmits<{
