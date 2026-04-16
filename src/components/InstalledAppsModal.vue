@@ -62,7 +62,7 @@
             </div>
             <button
               type="button"
-              class="inline-flex items-center gap-2 rounded-2xl border border-slate-200/70 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 disabled:opacity-40 dark:border-slate-700 dark:text-slate-200"
+              class="inline-flex items-center gap-2 rounded-2xl border border-slate-200/70 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 disabled:opacity-40 dark:border-slate-700 dark:text-slate-200 dark:hover:text-white"
               :disabled="loading"
               @click="$emit('refresh')"
             >
@@ -71,7 +71,7 @@
             </button>
             <button
               type="button"
-              class="inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-200/70 text-slate-500 transition hover:text-slate-900 dark:border-slate-700"
+              class="inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-200/70 text-slate-500 transition hover:text-slate-900 dark:hover:text-white dark:border-slate-700 dark:hover:bg-slate-800"
               @click="$emit('close')"
               aria-label="关闭"
             >
