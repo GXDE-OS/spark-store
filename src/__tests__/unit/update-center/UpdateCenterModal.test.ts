@@ -91,6 +91,34 @@ const createStore = (
 };
 
 describe("UpdateCenterModal", () => {
+  it("constrains the update list so it can scroll with a visible scrollbar", () => {
+    const store = createStore({
+      items: Array.from({ length: 20 }, (_, index) =>
+        createItem({
+          taskKey: `aptss:spark-item-${index}`,
+          packageName: `spark-item-${index}`,
+          displayName: `Spark Item ${index}`,
+        }),
+      ),
+      tasks: [],
+      warnings: [],
+      hasRunningTasks: false,
+    });
+
+    const { container } = render(UpdateCenterModal, {
+      props: {
+        show: true,
+        store,
+      },
+    });
+
+    const scrollContainer = container.querySelector(".scrollbar-muted");
+
+    expect(scrollContainer?.className).toContain("overflow-y-auto");
+    expect(scrollContainer?.className).toContain("flex-1");
+    expect(scrollContainer?.className).toContain("overscroll-contain");
+  });
+
   it("renders source tags, running state, warnings, and migration marker", () => {
     const store = createStore();
 

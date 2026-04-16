@@ -42,7 +42,7 @@
           </p>
         </div>
 
-        <div class="min-h-0 flex-1">
+        <div class="flex min-h-0 flex-1">
           <UpdateCenterList
             :items="store.filteredItems.value"
             :tasks="store.snapshot.value.tasks"
