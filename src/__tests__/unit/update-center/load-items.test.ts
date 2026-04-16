@@ -11,7 +11,7 @@ type RemoteStoreResponse =
   | Array<Record<string, unknown>>;
 
 const APTSS_LIST_UPGRADABLE_KEY =
-  "bash -lc env LANGUAGE=en_US aptss list --upgradable";
+  "bash -lc env LANGUAGE=en_US /usr/bin/apt -c /opt/durapps/spark-store/bin/apt-fast-conf/aptss-apt.conf list --upgradable -o Dir::Etc::sourcelist=/opt/durapps/spark-store/bin/apt-fast-conf/sources.list.d/aptss.list -o Dir::Etc::sourceparts=/dev/null -o APT::Get::List-Cleanup=0 | awk 'NR>1'";
 
 const DPKG_QUERY_INSTALLED_KEY =
   "dpkg-query -W -f=${Package}\t${db:Status-Want} ${db:Status-Status} ${db:Status-Eflag}\n";
@@ -191,7 +191,7 @@ describe("update-center load items", () => {
       ],
     });
 
-    const result = await loadUpdateCenterItems(async (command, args) => {
+    const result = await loadUpdateCenterItems("both", async (command, args) => {
       const key = `${command} ${args.join(" ")}`;
       const match = commandResults.get(key);
       if (!match) {
@@ -233,7 +233,7 @@ describe("update-center load items", () => {
       ],
     });
 
-    const result = await loadUpdateCenterItems(async (command, args) => {
+    const result = await loadUpdateCenterItems("both", async (command, args) => {
       const key = `${command} ${args.join(" ")}`;
 
       if (key === WHICH_APTSS_KEY) {
@@ -360,7 +360,7 @@ describe("update-center load items", () => {
       throw new Error(`Unexpected command ${key}`);
     };
 
-    const firstResult = await loadUpdateCenterItems(runCommand);
+    const firstResult = await loadUpdateCenterItems("both", runCommand);
 
     expect(firstResult.items).toEqual([
       {
@@ -384,7 +384,7 @@ describe("update-center load items", () => {
       "https://erotica.spark-app.store/amd64-store/office/applist.json"
     ] = [{ Name: "Spark Notes", Pkgname: "spark-notes" }];
 
-    const secondResult = await loadUpdateCenterItems(runCommand);
+    const secondResult = await loadUpdateCenterItems("both", runCommand);
 
     expect(secondResult.items).toEqual([
       {
@@ -416,7 +416,7 @@ describe("update-center load items", () => {
       ],
     });
 
-    const result = await loadUpdateCenterItems(async (command, args) => {
+    const result = await loadUpdateCenterItems("both", async (command, args) => {
       const key = `${command} ${args.join(" ")}`;
 
       if (key === WHICH_APTSS_KEY) {
@@ -531,7 +531,7 @@ describe("update-center load items", () => {
       throw new Error(`Unexpected command ${key}`);
     });
 
-    await loadUpdateCenterItems(runCommand, "apm");
+    await loadUpdateCenterItems("apm", runCommand);
 
     expect(runCommand).not.toHaveBeenCalledWith(
       "bash",
@@ -590,7 +590,7 @@ describe("update-center load items", () => {
       throw new Error(`Unexpected command ${key}`);
     });
 
-    await loadUpdateCenterItems(runCommand, "spark");
+    await loadUpdateCenterItems("spark", runCommand);
 
     expect(runCommand).not.toHaveBeenCalledWith("apm", [
       "list",

@@ -166,22 +166,27 @@ export const createUpdateCenterService = (
     storeFilter: StoreFilter = currentStoreFilter,
   ): Promise<UpdateCenterServiceState> => {
     currentStoreFilter = storeFilter;
+    console.log(`[UpdateCenter] service.refresh called with storeFilter=${storeFilter}`);
     queue.startRefresh();
     emit();
 
     try {
       const ignoredEntries = await loadIgnored();
+      console.log(`[UpdateCenter] ignoredEntries count=${ignoredEntries.size}`);
       const loadedItems = normalizeLoadedItems(
         await options.loadItems(currentStoreFilter),
       );
+      console.log(`[UpdateCenter] loadItems returned: items=${loadedItems.items.length}, warnings=${loadedItems.warnings.length}`, loadedItems.warnings);
       const items = sortIgnoredItems(
         applyIgnoredEntries(loadedItems.items, ignoredEntries),
       );
+      console.log(`[UpdateCenter] after applying ignored: items=${items.length}`);
       queue.setItems(items);
       queue.finishRefresh(loadedItems.warnings);
       return emit();
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
+      console.error(`[UpdateCenter] refresh error:`, error);
       queue.setItems([]);
       applyWarning(message);
       return emit();

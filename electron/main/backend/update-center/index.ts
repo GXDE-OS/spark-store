@@ -52,7 +52,10 @@ const categoryCache = new Map<string, Promise<StoreAppMetadataMap>>();
 
 const APTSS_LIST_UPGRADABLE_COMMAND = {
   command: "bash",
-  args: ["-lc", "env LANGUAGE=en_US aptss list --upgradable"],
+  args: [
+    "-lc",
+    "env LANGUAGE=en_US /usr/bin/apt -c /opt/durapps/spark-store/bin/apt-fast-conf/aptss-apt.conf list --upgradable -o Dir::Etc::sourcelist=/opt/durapps/spark-store/bin/apt-fast-conf/sources.list.d/aptss.list -o Dir::Etc::sourceparts=/dev/null -o APT::Get::List-Cleanup=0 | awk 'NR>1'",
+  ],
 };
 
 const DPKG_QUERY_INSTALLED_COMMAND = {
@@ -363,9 +366,10 @@ const isCommandAvailable = async (
 };
 
 export const loadUpdateCenterItems = async (
-  runCommand: UpdateCenterCommandRunner = runCommandCapture,
   storeFilter: StoreFilter = "both",
+  runCommand: UpdateCenterCommandRunner = runCommandCapture,
 ): Promise<UpdateCenterLoadItemsResult> => {
+  console.log(`[UpdateCenter] loadUpdateCenterItems called with storeFilter=${storeFilter}`);
   const [sparkEnabled, apmEnabled] = await Promise.all([
     isSourceEnabled(storeFilter, "spark")
       ? isCommandAvailable(runCommand, "aptss")
@@ -374,6 +378,7 @@ export const loadUpdateCenterItems = async (
       ? isCommandAvailable(runCommand, "apm")
       : Promise.resolve(false),
   ]);
+  console.log(`[UpdateCenter] sparkEnabled=${sparkEnabled}, apmEnabled=${apmEnabled}`);
 
   const [aptssResult, apmResult, aptssInstalledResult, apmInstalledResult] =
     await Promise.all([
@@ -396,6 +401,11 @@ export const loadUpdateCenterItems = async (
         ? runCommand("apm", ["list", "--installed"])
         : Promise.resolve({ code: 0, stdout: "", stderr: "" }),
     ]);
+
+  console.log(`[UpdateCenter] aptssResult: code=${aptssResult.code}, stdout=${aptssResult.stdout.substring(0, 500)}, stderr=${aptssResult.stderr.substring(0, 500)}`);
+  console.log(`[UpdateCenter] apmResult: code=${apmResult.code}, stdout=${apmResult.stdout.substring(0, 500)}, stderr=${apmResult.stderr.substring(0, 500)}`);
+  console.log(`[UpdateCenter] aptssInstalledResult: code=${aptssInstalledResult.code}, stdout=${aptssInstalledResult.stdout.substring(0, 500)}`);
+  console.log(`[UpdateCenter] apmInstalledResult: code=${apmInstalledResult.code}, stdout=${apmInstalledResult.stdout.substring(0, 500)}`);
 
   const aptssAvailable =
     sparkEnabled && (aptssResult.code === 0 || aptssInstalledResult.code === 0);
@@ -421,6 +431,8 @@ export const loadUpdateCenterItems = async (
     apmEnabled && apmResult.code === 0
       ? parseApmUpgradableOutput(apmResult.stdout)
       : [];
+  console.log(`[UpdateCenter] parsed aptssItems count=${aptssItems.length}`, aptssItems.map((i) => `${i.pkgname} ${i.currentVersion}->${i.nextVersion}`));
+  console.log(`[UpdateCenter] parsed apmItems count=${apmItems.length}`, apmItems.map((i) => `${i.pkgname} ${i.currentVersion}->${i.nextVersion}`));
 
   const installedSources = buildInstalledSourceMap(
     aptssAvailable && aptssInstalledResult.code === 0
@@ -428,6 +440,7 @@ export const loadUpdateCenterItems = async (
       : "",
     apmInstalledResult.code === 0 ? apmInstalledResult.stdout : "",
   );
+  console.log(`[UpdateCenter] installedSources size=${installedSources.size}`);
 
   const [categorizedAptssItems, categorizedApmItems] = await Promise.all([
     aptssAvailable ? enrichItemCategories(aptssItems) : Promise.resolve([]),
@@ -441,13 +454,18 @@ export const loadUpdateCenterItems = async (
       ? enrichApmItems(categorizedApmItems, runCommand)
       : Promise.resolve({ items: [], warnings: [] }),
   ]);
+  console.log(`[UpdateCenter] enrichedAptssItems: count=${enrichedAptssItems.items.length}, warnings=${enrichedAptssItems.warnings.length}`, enrichedAptssItems.warnings);
+  console.log(`[UpdateCenter] enrichedApmItems: count=${enrichedApmItems.items.length}, warnings=${enrichedApmItems.warnings.length}`, enrichedApmItems.warnings);
+
+  const mergedItems = mergeUpdateSources(
+    enrichItemIcons(enrichedAptssItems.items),
+    enrichItemIcons(enrichedApmItems.items),
+    installedSources,
+  );
+  console.log(`[UpdateCenter] mergedItems count=${mergedItems.length}`, mergedItems.map((i) => `${i.pkgname} (${i.source}) ${i.currentVersion}->${i.nextVersion}`));
 
   return {
-    items: mergeUpdateSources(
-      enrichItemIcons(enrichedAptssItems.items),
-      enrichItemIcons(enrichedApmItems.items),
-      installedSources,
-    ),
+    items: mergedItems,
     warnings: [
       ...warnings,
       ...enrichedAptssItems.warnings,
