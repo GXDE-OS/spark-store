@@ -47,7 +47,9 @@
           v-if="store.loading.value && store.filteredItems.value.length === 0"
           class="flex min-h-0 flex-1 items-center justify-center p-6"
         >
-          <div class="flex flex-col items-center gap-3 text-slate-500 dark:text-slate-400">
+          <div
+            class="flex flex-col items-center gap-3 text-slate-500 dark:text-slate-400"
+          >
             <i class="fas fa-circle-notch fa-spin text-3xl"></i>
             <p class="text-sm">正在检查更新…</p>
           </div>

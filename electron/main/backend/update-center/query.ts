@@ -263,16 +263,26 @@ const compareVersions = (left: string, right: string): number => {
 export const parseAptssUpgradableOutput = (
   output: string,
 ): UpdateCenterItem[] => {
-  console.log(`[UpdateCenter] parseAptssUpgradableOutput input (first 1000 chars): ${output.substring(0, 1000)}`);
+  console.log(
+    `[UpdateCenter] parseAptssUpgradableOutput input (first 1000 chars): ${output.substring(0, 1000)}`,
+  );
   const result = parseUpgradableOutput(output, "aptss");
-  console.log(`[UpdateCenter] parseAptssUpgradableOutput result count=${result.length}`);
+  console.log(
+    `[UpdateCenter] parseAptssUpgradableOutput result count=${result.length}`,
+  );
   return result;
 };
 
-export const parseApmUpgradableOutput = (output: string): UpdateCenterItem[] => {
-  console.log(`[UpdateCenter] parseApmUpgradableOutput input (first 1000 chars): ${output.substring(0, 1000)}`);
+export const parseApmUpgradableOutput = (
+  output: string,
+): UpdateCenterItem[] => {
+  console.log(
+    `[UpdateCenter] parseApmUpgradableOutput input (first 1000 chars): ${output.substring(0, 1000)}`,
+  );
   const result = parseUpgradableOutput(output, "apm");
-  console.log(`[UpdateCenter] parseApmUpgradableOutput result count=${result.length}`);
+  console.log(
+    `[UpdateCenter] parseApmUpgradableOutput result count=${result.length}`,
+  );
   return result;
 };
 
@@ -283,10 +293,14 @@ export const parsePrintUrisOutput = (
   "downloadUrl" | "fileName" | "size" | "sha512"
 > | null => {
   const trimmed = output.trim();
-  console.log(`[UpdateCenter] parsePrintUrisOutput input (first 500 chars): ${trimmed.substring(0, 500)}`);
+  console.log(
+    `[UpdateCenter] parsePrintUrisOutput input (first 500 chars): ${trimmed.substring(0, 500)}`,
+  );
   const match = trimmed.match(PRINT_URIS_PATTERN);
   if (!match) {
-    console.log(`[UpdateCenter] parsePrintUrisOutput: no match found for pattern ${PRINT_URIS_PATTERN}`);
+    console.log(
+      `[UpdateCenter] parsePrintUrisOutput: no match found for pattern ${PRINT_URIS_PATTERN}`,
+    );
     return null;
   }
 

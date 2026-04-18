@@ -191,15 +191,18 @@ describe("update-center load items", () => {
       ],
     });
 
-    const result = await loadUpdateCenterItems("both", async (command, args) => {
-      const key = `${command} ${args.join(" ")}`;
-      const match = commandResults.get(key);
-      if (!match) {
-        throw new Error(`Missing mock for ${key}`);
-      }
+    const result = await loadUpdateCenterItems(
+      "both",
+      async (command, args) => {
+        const key = `${command} ${args.join(" ")}`;
+        const match = commandResults.get(key);
+        if (!match) {
+          throw new Error(`Missing mock for ${key}`);
+        }
 
-      return match;
-    });
+        return match;
+      },
+    );
 
     expect(result.warnings).toEqual([]);
     expect(result.items).toContainEqual({
@@ -233,61 +236,64 @@ describe("update-center load items", () => {
       ],
     });
 
-    const result = await loadUpdateCenterItems("both", async (command, args) => {
-      const key = `${command} ${args.join(" ")}`;
+    const result = await loadUpdateCenterItems(
+      "both",
+      async (command, args) => {
+        const key = `${command} ${args.join(" ")}`;
 
-      if (key === WHICH_APTSS_KEY) {
-        return { code: 0, stdout: "/usr/bin/aptss\n", stderr: "" };
-      }
+        if (key === WHICH_APTSS_KEY) {
+          return { code: 0, stdout: "/usr/bin/aptss\n", stderr: "" };
+        }
 
-      if (key === WHICH_APM_KEY) {
-        return { code: 127, stdout: "", stderr: "apm: command not found" };
-      }
+        if (key === WHICH_APM_KEY) {
+          return { code: 127, stdout: "", stderr: "apm: command not found" };
+        }
 
-      if (key === APTSS_LIST_UPGRADABLE_KEY) {
-        return {
-          code: 0,
-          stdout: "spark-notes/stable 2.0.0 amd64 [upgradable from: 1.0.0]",
-          stderr: "",
-        };
-      }
+        if (key === APTSS_LIST_UPGRADABLE_KEY) {
+          return {
+            code: 0,
+            stdout: "spark-notes/stable 2.0.0 amd64 [upgradable from: 1.0.0]",
+            stderr: "",
+          };
+        }
 
-      if (key === DPKG_QUERY_INSTALLED_KEY) {
-        return {
-          code: 0,
-          stdout: "spark-notes\tinstall ok installed\n",
-          stderr: "",
-        };
-      }
+        if (key === DPKG_QUERY_INSTALLED_KEY) {
+          return {
+            code: 0,
+            stdout: "spark-notes\tinstall ok installed\n",
+            stderr: "",
+          };
+        }
 
-      if (key === APTSS_NOTES_PRINT_URIS_KEY) {
-        return {
-          code: 0,
-          stdout:
-            "'https://example.invalid/spark-notes_2.0.0_amd64.deb' spark-notes_2.0.0_amd64.deb 654321 SHA512:beadfeed",
-          stderr: "",
-        };
-      }
+        if (key === APTSS_NOTES_PRINT_URIS_KEY) {
+          return {
+            code: 0,
+            stdout:
+              "'https://example.invalid/spark-notes_2.0.0_amd64.deb' spark-notes_2.0.0_amd64.deb 654321 SHA512:beadfeed",
+            stderr: "",
+          };
+        }
 
-      if (key === APTSS_NOTES_PRINT_URIS_KEY) {
-        return {
-          code: 0,
-          stdout:
-            "'https://example.invalid/spark-notes_2.0.0_amd64.deb' spark-notes_2.0.0_amd64.deb 654321 SHA512:beadfeed",
-          stderr: "",
-        };
-      }
+        if (key === APTSS_NOTES_PRINT_URIS_KEY) {
+          return {
+            code: 0,
+            stdout:
+              "'https://example.invalid/spark-notes_2.0.0_amd64.deb' spark-notes_2.0.0_amd64.deb 654321 SHA512:beadfeed",
+            stderr: "",
+          };
+        }
 
-      if (key === "apm list --upgradable" || key === "apm list --installed") {
-        return {
-          code: 127,
-          stdout: "",
-          stderr: "apm: command not found",
-        };
-      }
+        if (key === "apm list --upgradable" || key === "apm list --installed") {
+          return {
+            code: 127,
+            stdout: "",
+            stderr: "apm: command not found",
+          };
+        }
 
-      throw new Error(`Unexpected command ${key}`);
-    });
+        throw new Error(`Unexpected command ${key}`);
+      },
+    );
 
     expect(result.items).toEqual([
       {
@@ -416,52 +422,55 @@ describe("update-center load items", () => {
       ],
     });
 
-    const result = await loadUpdateCenterItems("both", async (command, args) => {
-      const key = `${command} ${args.join(" ")}`;
+    const result = await loadUpdateCenterItems(
+      "both",
+      async (command, args) => {
+        const key = `${command} ${args.join(" ")}`;
 
-      if (key === WHICH_APTSS_KEY) {
-        return { code: 0, stdout: "/usr/bin/aptss\n", stderr: "" };
-      }
+        if (key === WHICH_APTSS_KEY) {
+          return { code: 0, stdout: "/usr/bin/aptss\n", stderr: "" };
+        }
 
-      if (key === WHICH_APM_KEY) {
-        return { code: 127, stdout: "", stderr: "apm: command not found" };
-      }
+        if (key === WHICH_APM_KEY) {
+          return { code: 127, stdout: "", stderr: "apm: command not found" };
+        }
 
-      if (key === APTSS_LIST_UPGRADABLE_KEY) {
-        return {
-          code: 0,
-          stdout: "spark-notes/stable 2.0.0 amd64 [upgradable from: 1.0.0]",
-          stderr: "",
-        };
-      }
+        if (key === APTSS_LIST_UPGRADABLE_KEY) {
+          return {
+            code: 0,
+            stdout: "spark-notes/stable 2.0.0 amd64 [upgradable from: 1.0.0]",
+            stderr: "",
+          };
+        }
 
-      if (key === DPKG_QUERY_INSTALLED_KEY) {
-        return {
-          code: 0,
-          stdout: "spark-notes\tinstall ok installed\n",
-          stderr: "",
-        };
-      }
+        if (key === DPKG_QUERY_INSTALLED_KEY) {
+          return {
+            code: 0,
+            stdout: "spark-notes\tinstall ok installed\n",
+            stderr: "",
+          };
+        }
 
-      if (key === APTSS_NOTES_PRINT_URIS_KEY) {
-        return {
-          code: 0,
-          stdout:
-            "'https://example.invalid/spark-notes_2.0.0_amd64.deb' spark-notes_2.0.0_amd64.deb 654321 SHA512:beadfeed",
-          stderr: "",
-        };
-      }
+        if (key === APTSS_NOTES_PRINT_URIS_KEY) {
+          return {
+            code: 0,
+            stdout:
+              "'https://example.invalid/spark-notes_2.0.0_amd64.deb' spark-notes_2.0.0_amd64.deb 654321 SHA512:beadfeed",
+            stderr: "",
+          };
+        }
 
-      if (key === "apm list --upgradable" || key === "apm list --installed") {
-        return {
-          code: 127,
-          stdout: "",
-          stderr: "apm: command not found",
-        };
-      }
+        if (key === "apm list --upgradable" || key === "apm list --installed") {
+          return {
+            code: 127,
+            stdout: "",
+            stderr: "apm: command not found",
+          };
+        }
 
-      throw new Error(`Unexpected command ${key}`);
-    });
+        throw new Error(`Unexpected command ${key}`);
+      },
+    );
 
     expect(result.items).toEqual([
       {
