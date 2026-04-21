@@ -166,7 +166,9 @@ export const createUpdateCenterService = (
     storeFilter: StoreFilter = currentStoreFilter,
   ): Promise<UpdateCenterServiceState> => {
     currentStoreFilter = storeFilter;
-    console.log(`[UpdateCenter] service.refresh called with storeFilter=${storeFilter}`);
+    console.log(
+      `[UpdateCenter] service.refresh called with storeFilter=${storeFilter}`,
+    );
     queue.startRefresh();
     emit();
 
@@ -176,11 +178,16 @@ export const createUpdateCenterService = (
       const loadedItems = normalizeLoadedItems(
         await options.loadItems(currentStoreFilter),
       );
-      console.log(`[UpdateCenter] loadItems returned: items=${loadedItems.items.length}, warnings=${loadedItems.warnings.length}`, loadedItems.warnings);
+      console.log(
+        `[UpdateCenter] loadItems returned: items=${loadedItems.items.length}, warnings=${loadedItems.warnings.length}`,
+        loadedItems.warnings,
+      );
       const items = sortIgnoredItems(
         applyIgnoredEntries(loadedItems.items, ignoredEntries),
       );
-      console.log(`[UpdateCenter] after applying ignored: items=${items.length}`);
+      console.log(
+        `[UpdateCenter] after applying ignored: items=${items.length}`,
+      );
       queue.setItems(items);
       queue.finishRefresh(loadedItems.warnings);
       return emit();
