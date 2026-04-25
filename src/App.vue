@@ -238,8 +238,6 @@ const fetchWithRetry = async <T,>(
   }
 };
 
-const cacheBuster = (url: string) => `${url}?cb=${Date.now()}`;
-
 // 响应式状态
 const themeMode = ref<"light" | "dark" | "auto">("auto");
 const systemIsDark = ref(
@@ -401,7 +399,7 @@ const fetchAppFromStore = async (
     const arch = window.apm_store.arch || "amd64";
     const finalArch = origin === "spark" ? `${arch}-store` : `${arch}-apm`;
     const appJsonUrl = `${APM_STORE_BASE_URL}/${finalArch}/${category}/${pkgname}/app.json`;
-    const response = await fetch(cacheBuster(appJsonUrl));
+    const response = await fetch(appJsonUrl);
     if (!response.ok) return null;
     const appJson = await response.json();
     return {
@@ -672,7 +670,7 @@ const loadHome = async () => {
 
       // homelinks.json
       try {
-        const res = await fetch(cacheBuster(`${base}/homelinks.json`));
+        const res = await fetch(`${base}/homelinks.json`);
         if (res.ok) {
           const links = await res.json();
           const taggedLinks = links.map((l: HomeLink) => ({
@@ -687,14 +685,14 @@ const loadHome = async () => {
 
       // homelist.json
       try {
-        const res2 = await fetch(cacheBuster(`${base}/homelist.json`));
+        const res2 = await fetch(`${base}/homelist.json`);
         if (res2.ok) {
           const lists = await res2.json();
           for (const item of lists) {
             if (item.type === "appList" && item.jsonUrl) {
               try {
                 const url = `${APM_STORE_BASE_URL}/${finalArch}${item.jsonUrl}`;
-                const r = await fetch(cacheBuster(url));
+                const r = await fetch(url);
                 if (r.ok) {
                   const appsJson = await r.json();
                   const rawApps = appsJson || [];
@@ -712,7 +710,7 @@ const loadHome = async () => {
 
                       try {
                         const realAppUrl = `${APM_STORE_BASE_URL}/${finalArch}/${baseApp.category}/${baseApp.pkgname}/app.json`;
-                        const realRes = await fetch(cacheBuster(realAppUrl));
+                        const realRes = await fetch(realAppUrl);
                         if (realRes.ok) {
                           const realApp = await realRes.json();
                           if (realApp.Filename)
@@ -1081,7 +1079,7 @@ const loadCategories = async () => {
       const path = `/${finalArch}/categories.json`;
 
       try {
-        const response = await axiosInstance.get(cacheBuster(path));
+        const response = await axiosInstance.get(path);
         const data = response.data;
         Object.keys(data).forEach((key) => {
           if (categoryData[key]) {
@@ -1134,7 +1132,7 @@ const loadApps = async (onFirstBatch?: () => void) => {
 
               logger.info(`加载分类: ${category} (来源: ${mode})`);
               const categoryApps = await fetchWithRetry<AppJson[]>(
-                cacheBuster(path),
+                path,
               );
 
               const normalizedApps = (categoryApps || []).map((appJson) => ({
