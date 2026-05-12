@@ -152,6 +152,12 @@
       @success="onUninstallSuccess"
     />
 
+    <ApmInstallConfirmModal
+      :show="showApmInstallDialog"
+      @close="closeApmInstallDialog"
+      @confirm="confirmApmInstall"
+    />
+
     <AboutModal :show="showAboutModal" @close="closeAboutModal" />
 
     <SettingsModal :show="showSettingsModal" @close="closeSettingsModal" />
@@ -173,6 +179,7 @@ import DownloadDetail from "./components/DownloadDetail.vue";
 import InstalledAppsModal from "./components/InstalledAppsModal.vue";
 import UpdateCenterModal from "./components/UpdateCenterModal.vue";
 import UninstallConfirmModal from "./components/UninstallConfirmModal.vue";
+import ApmInstallConfirmModal from "./components/ApmInstallConfirmModal.vue";
 import AboutModal from "./components/AboutModal.vue";
 import SettingsModal from "./components/SettingsModal.vue";
 import {
@@ -181,6 +188,7 @@ import {
   currentAppSparkInstalled,
   currentAppApmInstalled,
   currentStoreMode,
+  showApmInstallDialog,
   getHybridDefaultOrigin,
   loadPriorityConfig,
 } from "./global/storeConfig";
@@ -964,6 +972,22 @@ const onUninstallSuccess = () => {
   }
 };
 
+const closeApmInstallDialog = () => {
+  showApmInstallDialog.value = false;
+};
+
+const confirmApmInstall = async () => {
+  showApmInstallDialog.value = false;
+  closeDetail();
+  await nextTick();
+  const apmApp = apps.value.find((a) => a.pkgname === "apm");
+  if (apmApp) {
+    openDetail(apmApp);
+  } else {
+    searchQuery.value = "apm";
+  }
+};
+
 const installCompleteCallback = (pkgname?: string) => {
   if (currentApp.value && (!pkgname || currentApp.value.pkgname === pkgname)) {
     checkAppInstalled(currentApp.value);
@@ -1274,6 +1298,10 @@ onMounted(async () => {
     } else {
       openInstalledModal();
     }
+  });
+
+  window.ipcRenderer.on("trigger-apm-install-dialog", () => {
+    showApmInstallDialog.value = true;
   });
 
   window.ipcRenderer.on(

@@ -11,6 +11,7 @@ export const APM_STORE_STATS_BASE_URL: string =
 export const currentApp = ref<App | null>(null);
 export const currentAppSparkInstalled = ref(false);
 export const currentAppApmInstalled = ref(false);
+export const showApmInstallDialog = ref(false);
 
 export const currentStoreMode = ref<StoreMode>("hybrid");
 

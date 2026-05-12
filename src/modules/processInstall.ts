@@ -5,6 +5,7 @@ import {
   currentApp,
   currentAppSparkInstalled,
   currentAppApmInstalled,
+  showApmInstallDialog,
 } from "../global/storeConfig";
 import { APM_STORE_BASE_URL } from "../global/storeConfig";
 import { downloads, getNextDownloadId } from "../global/downloadStatus";
@@ -28,14 +29,8 @@ export const handleInstall = async (appObj?: App) => {
   if (targetApp.origin === "apm") {
     const hasApm = await window.ipcRenderer.invoke("check-apm-available");
     if (!hasApm) {
-      // 发送事件到主进程显示 APM 安装对话框
-      const { success, cancelled } = await window.ipcRenderer.invoke(
-        "show-apm-install-dialog",
-      );
-      if (!success || cancelled) {
-        // 用户取消或未安装成功，不继续安装应用
-        return;
-      }
+      showApmInstallDialog.value = true;
+      return;
     }
   }
 
@@ -119,14 +114,8 @@ export const handleUpgrade = async (app: App) => {
   if (app.origin === "apm") {
     const hasApm = await window.ipcRenderer.invoke("check-apm-available");
     if (!hasApm) {
-      // 发送事件到主进程显示 APM 安装对话框
-      const { success, cancelled } = await window.ipcRenderer.invoke(
-        "show-apm-install-dialog",
-      );
-      if (!success || cancelled) {
-        // 用户取消或未安装成功，不继续更新应用
-        return;
-      }
+      showApmInstallDialog.value = true;
+      return;
     }
   }
 
