@@ -405,8 +405,8 @@ async function processNextInQueue() {
 
       sendStatus("downloading");
 
-      // 下载重试逻辑：每次超时时间递增，最多3次
-      const timeoutList = [3000, 5000, 15000]; // 第一次3秒，第二次5秒，第三次15秒
+      // 下载重试逻辑：共10次，5次3秒，3次5秒，2次10秒
+      const timeoutList = [3000, 3000, 3000, 3000, 3000, 5000, 5000, 5000, 10000, 10000];
       let retryCount = 0;
       let downloadSuccess = false;
 
