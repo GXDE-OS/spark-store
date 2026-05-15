@@ -37,6 +37,7 @@ void DownloadManager::startDownload(const QString &packageName, const QString &u
     QStringList arguments = {
         "--enable-rpc=false",
         "--console-log-level=warn",
+        "--async-dns=false",
         "--summary-interval=1",
         "--allow-overwrite=true",
         "--connect-timeout=30",

@@ -89,6 +89,7 @@ export const downloadPackage = async ({
   const aria2Args = [
     `--dir=${downloadDir}`,
     "--allow-overwrite=true",
+    "--async-dns=false",
     "--summary-interval=1",
     "--connect-timeout=10",
     "--timeout=15",
