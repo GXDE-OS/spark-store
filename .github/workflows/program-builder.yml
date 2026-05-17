@@ -1,13 +1,29 @@
 name: Building Program
-run-name: Building ${{ GITHUB.REPOSITORY }}
+run-name: Building ${{ github.repository }}
 
 on:
-  workflow_dispatch:
-  push:
-    tags:
-      - "*"
+  workflow_dispatch: # Permite rodar manualmente pela aba Actions
+  
+  # Se o fork envia um Pull Request para o seu repositório base:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+    branches:
+      - master
+
+env:
+  REPOSITORY: https://github.com/GXDE-OS/GXDE  
+  BOTTLEPATH: system-bottle
 
 jobs:
   call:
+    # Aponta para o workflow reutilizável
     uses: azzynovais/GXDE/.github/workflows/building-deb.yml@master
-    secrets: inherit
+    secrets:
+      # Passando os segredos explicitamente para garantir que o sub-workflow os receba,
+      # já que o 'inherit' é bloqueado em contextos de execução vindos de forks.
+      PASSWD: ${{ secrets.PASSWD }}
+      USERS: ${{ secrets.USERS }}
+      HOST: ${{ secrets.HOST }}
+      UPATH: ${{ secrets.UPATH }}
+      UPROGRAM: ${{ secrets.UPROGRAM }}
+      UPORT: ${{ secrets.UPPORT }}
