@@ -95,17 +95,18 @@
             账号资料与安全设置功能即将开放。
           </p>
         </section>
-        <section
+        <FavoriteFolderManager
           v-else-if="currentView === 'favorites'"
-          class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900"
-        >
-          <h1 class="text-2xl font-semibold text-slate-900 dark:text-white">
-            我的收藏
-          </h1>
-          <p class="mt-3 text-sm text-slate-500 dark:text-slate-400">
-            收藏应用列表功能即将开放。
-          </p>
-        </section>
+          :folders="favoriteFolders"
+          :active-folder-id="activeFavoriteFolderId"
+          :items="resolvedFavoriteItems"
+          :loading="favoriteLoading"
+          :error="favoriteError"
+          @select-folder="selectFavoriteFolder"
+          @create-folder="createFavoriteFolderFromPrompt"
+          @remove-selected="removeSelectedFavorites"
+          @install-selected="installResolvedFavorites"
+        />
         <template v-else-if="activeTab === 'home'">
           <HomeView
             :links="homeLinks"
@@ -222,6 +223,13 @@
       @login="openLoginFromPrompt"
       @register="openExternalUrl(FLARUM_REGISTER_URL)"
     />
+
+    <FavoriteFolderSelector
+      :show="showFavoriteSelector"
+      :folders="favoriteFolders"
+      @close="showFavoriteSelector = false"
+      @select-folder="addCurrentFavoriteToFolder"
+    />
   </div>
 </template>
 
@@ -246,6 +254,8 @@ import AboutModal from "./components/AboutModal.vue";
 import SettingsModal from "./components/SettingsModal.vue";
 import LoginModal from "./components/LoginModal.vue";
 import LoginPromptModal from "./components/LoginPromptModal.vue";
+import FavoriteFolderSelector from "./components/FavoriteFolderSelector.vue";
+import FavoriteFolderManager from "./components/FavoriteFolderManager.vue";
 import {
   APM_STORE_BASE_URL,
   FLARUM_BASE_URL,
@@ -269,7 +279,14 @@ import {
   rankAppsBySearch,
 } from "./modules/appSearch";
 import { handleInstall, handleRetry } from "./modules/processInstall";
-import { exchangeFlarumToken } from "./modules/backendApi";
+import {
+  addFavoriteItem,
+  bulkDeleteFavoriteItems,
+  createFavoriteFolder,
+  exchangeFlarumToken,
+  listFavoriteFolders,
+  listFavoriteItems,
+} from "./modules/backendApi";
 import { requestFlarumToken } from "./modules/flarumAuth";
 import {
   currentUser,
@@ -286,9 +303,11 @@ import {
 import { createUpdateCenterStore } from "./modules/updateCenter";
 import {
   buildReviewAppKey,
+  buildFavoriteAppKey,
   buildReviewTags,
   getDisplayApp,
 } from "./modules/appIdentity";
+import { resolveFavoriteItems } from "./modules/favoriteAvailability";
 import type {
   App,
   AppJson,
@@ -301,6 +320,9 @@ import type {
   SidebarEntry,
   UpdateCenterItem,
   ReviewTags,
+  FavoriteFolder,
+  FavoriteItem,
+  ResolvedFavoriteItem,
 } from "./global/typedefinition";
 import type { Ref } from "vue";
 import type { IpcRendererEvent } from "electron";
@@ -372,6 +394,13 @@ const loginPromptMessage = ref("请登录星火账号后继续操作。");
 const sparkAvailable = ref(false);
 const apmAvailable = ref(false);
 const sidebarEntries: Ref<SidebarEntry[]> = ref([]);
+const favoriteFolders = ref<FavoriteFolder[]>([]);
+const activeFavoriteFolderId = ref<number | null>(null);
+const favoriteItems = ref<FavoriteItem[]>([]);
+const showFavoriteSelector = ref(false);
+const favoriteTargetApp = ref<App | null>(null);
+const favoriteLoading = ref(false);
+const favoriteError = ref("");
 
 /** 启动参数 --no-apm => 仅 Spark；--no-spark => 仅 APM；由主进程 IPC 提供 */
 const storeFilter = ref<"spark" | "apm" | "both">("both");
@@ -472,6 +501,17 @@ const currentReviewTags = computed<ReviewTags | null>(() => {
     distro: "unknown",
   });
 });
+
+const resolvedFavoriteItems = computed<ResolvedFavoriteItem[]>(() =>
+  resolveFavoriteItems(
+    favoriteItems.value,
+    apps.value,
+    installedApps.value,
+    availableSources.value,
+    storeFilter.value,
+    clientArch.value,
+  ),
+);
 
 // 方法
 const syncThemePreference = () => {
@@ -1108,8 +1148,8 @@ const onDetailInstall = async (app: App) => {
   await handleInstall(app);
 };
 
-const onDetailFavorite = (app: App) => {
-  logger.info(`Favorite requested for ${app.pkgname}`);
+const onDetailFavorite = async (app: App) => {
+  await openFavoriteSelector(app);
 };
 
 const handleDetailRequestLogin = (message: string) => {
@@ -1215,12 +1255,124 @@ const openUserManagement = () => {
   showLoginPrompt.value = false;
 };
 
-const openFavoriteManagement = () => {
+const loadFavoriteFolders = async (): Promise<void> => {
+  favoriteFolders.value = await listFavoriteFolders();
+  if (!activeFavoriteFolderId.value && favoriteFolders.value.length > 0) {
+    activeFavoriteFolderId.value = favoriteFolders.value[0].id;
+  }
+};
+
+const loadActiveFavoriteItems = async (): Promise<void> => {
+  if (!activeFavoriteFolderId.value) {
+    favoriteItems.value = [];
+    return;
+  }
+  favoriteItems.value = await listFavoriteItems(activeFavoriteFolderId.value);
+};
+
+const refreshFavorites = async (): Promise<void> => {
+  favoriteLoading.value = true;
+  favoriteError.value = "";
+  try {
+    await loadFavoriteFolders();
+    await loadActiveFavoriteItems();
+  } catch (error: unknown) {
+    favoriteError.value = (error as Error)?.message || "读取收藏夹失败";
+  } finally {
+    favoriteLoading.value = false;
+  }
+};
+
+const openFavoriteSelector = async (app: App) => {
+  if (!requireLogin("收藏应用需要登录星火账号。")) return;
+  favoriteTargetApp.value = app;
+  favoriteError.value = "";
+  try {
+    await loadFavoriteFolders();
+    showFavoriteSelector.value = true;
+  } catch (error: unknown) {
+    favoriteError.value = (error as Error)?.message || "读取收藏夹失败";
+  }
+};
+
+const addCurrentFavoriteToFolder = async (folderId: number | "default") => {
+  const app = favoriteTargetApp.value;
+  if (!app) return;
+  try {
+    await addFavoriteItem(folderId, {
+      appKey: buildFavoriteAppKey(app),
+      pkgname: app.pkgname,
+      name: app.name,
+      category: app.category,
+      iconUrl: app.icons,
+    });
+    showFavoriteSelector.value = false;
+    favoriteTargetApp.value = null;
+    await refreshFavorites();
+  } catch (error: unknown) {
+    favoriteError.value = (error as Error)?.message || "添加收藏失败";
+  }
+};
+
+const openFavoriteManagement = async () => {
   if (!requireLogin("请登录后查看我的收藏。")) return;
   currentView.value = "favorites";
   activeTab.value = "favorites";
   isSidebarOpen.value = false;
   showLoginPrompt.value = false;
+  await refreshFavorites();
+};
+
+const selectFavoriteFolder = async (folderId: number) => {
+  activeFavoriteFolderId.value = folderId;
+  favoriteLoading.value = true;
+  favoriteError.value = "";
+  try {
+    await loadActiveFavoriteItems();
+  } catch (error: unknown) {
+    favoriteError.value = (error as Error)?.message || "读取收藏应用失败";
+  } finally {
+    favoriteLoading.value = false;
+  }
+};
+
+const createFavoriteFolderFromPrompt = async () => {
+  const name = window.prompt("请输入收藏夹名称");
+  const folderName = name?.trim();
+  if (!folderName) return;
+  favoriteLoading.value = true;
+  favoriteError.value = "";
+  try {
+    const folder = await createFavoriteFolder(folderName);
+    activeFavoriteFolderId.value = folder.id;
+    await refreshFavorites();
+  } catch (error: unknown) {
+    favoriteError.value = (error as Error)?.message || "创建收藏夹失败";
+  } finally {
+    favoriteLoading.value = false;
+  }
+};
+
+const removeSelectedFavorites = async (ids: number[]) => {
+  if (!activeFavoriteFolderId.value || ids.length === 0) return;
+  favoriteLoading.value = true;
+  favoriteError.value = "";
+  try {
+    await bulkDeleteFavoriteItems(activeFavoriteFolderId.value, ids);
+    await refreshFavorites();
+  } catch (error: unknown) {
+    favoriteError.value = (error as Error)?.message || "移除收藏失败";
+  } finally {
+    favoriteLoading.value = false;
+  }
+};
+
+const installResolvedFavorites = async (items: ResolvedFavoriteItem[]) => {
+  for (const item of items) {
+    if (item.selectedApp) {
+      await onDetailInstall(item.selectedApp);
+    }
+  }
 };
 
 // TODO: 目前 APM 商店不能暂停下载
