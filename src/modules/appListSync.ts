@@ -28,3 +28,22 @@ export const buildSyncItems = (apps: App[]): SyncedAppListItem[] => {
 export const cloudItemKey = (
   item: Pick<SyncedAppListItem, "origin" | "pkgname">,
 ): string => `${item.origin}:${item.pkgname}`;
+
+export const mergeInstalledApps = (
+  currentApps: App[],
+  refreshedApps: App[],
+  refreshedOrigins: Array<"spark" | "apm">,
+): App[] => {
+  const refreshedKeys = new Set(
+    refreshedApps.map((app) => `${app.origin}:${app.pkgname}`),
+  );
+
+  return [
+    ...currentApps.filter(
+      (app) =>
+        !refreshedOrigins.includes(app.origin) &&
+        !refreshedKeys.has(`${app.origin}:${app.pkgname}`),
+    ),
+    ...refreshedApps,
+  ];
+};

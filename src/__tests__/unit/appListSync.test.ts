@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { buildSyncItems, cloudItemKey } from "@/modules/appListSync";
+import {
+  buildSyncItems,
+  cloudItemKey,
+  mergeInstalledApps,
+} from "@/modules/appListSync";
 import type { App } from "@/global/typedefinition";
 
 const createApp = (overrides: Partial<App> = {}): App => ({
@@ -70,5 +74,20 @@ describe("appListSync", () => {
     expect(cloudItemKey({ origin: "apm", pkgname: "amber-ce" })).toBe(
       "apm:amber-ce",
     );
+  });
+
+  it("merges refreshed apps without mutating active modal origin lists", () => {
+    const current = [createApp({ origin: "apm", pkgname: "apm-installed" })];
+    const refreshed = [
+      createApp({ origin: "spark", pkgname: "spark-installed" }),
+    ];
+
+    expect(mergeInstalledApps(current, refreshed, ["spark"])).toEqual([
+      expect.objectContaining({ origin: "apm", pkgname: "apm-installed" }),
+      expect.objectContaining({ origin: "spark", pkgname: "spark-installed" }),
+    ]);
+    expect(current).toEqual([
+      expect.objectContaining({ origin: "apm", pkgname: "apm-installed" }),
+    ]);
   });
 });

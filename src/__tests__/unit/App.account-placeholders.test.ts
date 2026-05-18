@@ -1,4 +1,10 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/vue";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/vue";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import App from "@/App.vue";
@@ -6,12 +12,14 @@ import {
   fetchSyncedAppList,
   listDownloadedApps,
   listFavoriteFolders,
+  uploadSyncedAppList,
 } from "@/modules/backendApi";
 import { setAuthSession } from "@/global/authState";
 import type {
   DownloadedAppList,
   FavoriteFolder,
   FavoriteItem,
+  SyncedAppList,
 } from "@/global/typedefinition";
 
 const invoke = vi.fn();
@@ -54,6 +62,14 @@ const downloadedList = (
   total: items.length,
   page: 1,
   pageSize: 50,
+});
+
+const syncedList = (items: SyncedAppList["items"]): SyncedAppList => ({
+  snapshotName: "默认列表",
+  clientArch: "amd64",
+  distro: "deepin 25",
+  updatedAt: "2026-05-18T00:00:00Z",
+  items,
 });
 
 const setSecondUserSession = () => {
@@ -153,6 +169,7 @@ vi.mock("@/modules/backendApi", () => ({
 
 describe("App account placeholders", () => {
   beforeEach(() => {
+    vi.clearAllMocks();
     invoke.mockReset();
     invoke.mockImplementation(async (channel: string) => {
       if (channel === "get-store-filter") return "both";
@@ -491,5 +508,79 @@ describe("App account placeholders", () => {
         expect.stringContaining('"pkgname":"wps"'),
       );
     });
+  });
+
+  it("keeps the installed modal scoped to the active origin after sync", async () => {
+    invoke.mockImplementation(async (channel: string, payload?: unknown) => {
+      if (channel === "get-store-filter") return "both";
+      if (channel === "check-spark-available") return true;
+      if (channel === "check-apm-available") return true;
+      if (channel === "get-app-version") return "5.0.0";
+      if (channel === "get-system-info") return { distro: "deepin 25" };
+      if (channel === "list-installed") {
+        const request = payload as { origin?: string };
+        if (request.origin === "spark") {
+          return {
+            success: true,
+            apps: [
+              {
+                pkgname: "wps",
+                name: "WPS",
+                version: "1.0.0",
+                arch: "amd64",
+                flags: "installed",
+                origin: "spark",
+              },
+            ],
+          };
+        }
+        return { success: true, apps: [] };
+      }
+      return [];
+    });
+    vi.mocked(uploadSyncedAppList).mockResolvedValueOnce(syncedList([]));
+    render(App);
+
+    await fireEvent.click(await screen.findByText("应用管理"));
+    const modal = screen.getByText("已安装应用").closest(".fixed");
+    if (!(modal instanceof HTMLElement)) throw new Error("modal not found");
+    expect(within(modal).getByText("暂无已安装应用")).toBeTruthy();
+
+    await fireEvent.click(
+      within(modal).getByRole("button", { name: /同步到账号/ }),
+    );
+
+    await waitFor(() => {
+      expect(uploadSyncedAppList).toHaveBeenCalled();
+    });
+    expect(within(modal).queryByText("WPS")).toBeNull();
+    expect(within(modal).getByText("暂无已安装应用")).toBeTruthy();
+  });
+
+  it("ignores overlapping installed sync requests", async () => {
+    const syncUpload = createDeferred<SyncedAppList>();
+    vi.mocked(uploadSyncedAppList).mockReturnValue(syncUpload.promise);
+    invoke.mockImplementation(async (channel: string) => {
+      if (channel === "get-store-filter") return "apm";
+      if (channel === "check-spark-available") return false;
+      if (channel === "check-apm-available") return true;
+      if (channel === "get-app-version") return "5.0.0";
+      if (channel === "get-system-info") return { distro: "deepin 25" };
+      if (channel === "list-installed") return { success: true, apps: [] };
+      return [];
+    });
+    render(App);
+
+    await fireEvent.click(await screen.findByRole("button", { name: /Momen/ }));
+    await fireEvent.click(screen.getByText("用户管理"));
+    await fireEvent.click(
+      await screen.findByRole("button", { name: "立即同步" }),
+    );
+    await fireEvent.click(screen.getByRole("button", { name: "立即同步" }));
+
+    await waitFor(() => {
+      expect(uploadSyncedAppList).toHaveBeenCalledTimes(1);
+    });
+    syncUpload.resolve(syncedList([]));
   });
 });

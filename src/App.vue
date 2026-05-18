@@ -295,6 +295,7 @@ import {
 } from "./global/downloadStatus";
 import {
   installedSyncEnabled,
+  loadInstalledSyncPreference,
   setInstalledSyncEnabled,
 } from "./global/accountSyncState";
 import {
@@ -336,7 +337,11 @@ import {
   parsePackageArch,
 } from "./modules/appIdentity";
 import { resolveFavoriteItems } from "./modules/favoriteAvailability";
-import { buildSyncItems, cloudItemKey } from "./modules/appListSync";
+import {
+  buildSyncItems,
+  cloudItemKey,
+  mergeInstalledApps,
+} from "./modules/appListSync";
 import type {
   App,
   AppJson,
@@ -441,6 +446,8 @@ const downloadedLoading = ref(false);
 const downloadedError = ref("");
 const downloadedRequestGeneration = ref(0);
 const syncLoading = ref(false);
+const syncRequestGeneration = ref(0);
+const syncCandidateApps = ref<App[]>([]);
 const restoreLoading = ref(false);
 const restoreError = ref("");
 const showRestoreModal = ref(false);
@@ -1477,6 +1484,10 @@ const handleLogout = () => {
   clearFavoriteState();
   clearDownloadedState();
   clearRestoreState();
+  syncRequestGeneration.value += 1;
+  syncLoading.value = false;
+  syncCandidateApps.value = [];
+  loadInstalledSyncPreference(null);
   showLoginModal.value = false;
   showLoginPrompt.value = false;
   isSidebarOpen.value = false;
@@ -1498,6 +1509,7 @@ const handleFlarumLogin = async (payload: FlarumLoginPayload) => {
       flarumToken: flarumToken.token,
     });
     setAuthSession(session);
+    loadInstalledSyncPreference(session.user.id);
     showLoginModal.value = false;
   } catch (error: unknown) {
     loginError.value = (error as Error)?.message || "登录失败，请稍后重试";
@@ -1530,25 +1542,87 @@ const loadDownloadedHistory = async (): Promise<void> => {
 };
 
 const refreshInstalledSyncCandidates = async (): Promise<void> => {
-  await refreshFavoriteInstalledApps();
+  const origins: Array<"spark" | "apm"> = [];
+  if (isOriginEnabled(storeFilter.value, "spark") && sparkAvailable.value) {
+    origins.push("spark");
+  }
+  if (isOriginEnabled(storeFilter.value, "apm") && apmAvailable.value) {
+    origins.push("apm");
+  }
+
+  const refreshedApps: App[] = [];
+  await Promise.all(
+    origins.map(async (origin) => {
+      const pkgnameList =
+        origin === "spark"
+          ? apps.value
+              .filter((app) => app.origin === "spark")
+              .map((app) => app.pkgname)
+          : undefined;
+      const result = await window.ipcRenderer.invoke("list-installed", {
+        origin,
+        pkgnameList,
+      });
+      if (!result?.success) return;
+
+      for (const app of result.apps as InstalledAppInfo[]) {
+        const appInfo = mapInstalledAppToCatalogApp(app, origin);
+        if (appInfo) refreshedApps.push(appInfo);
+      }
+    }),
+  );
+
+  syncCandidateApps.value = mergeInstalledApps(
+    syncCandidateApps.value,
+    refreshedApps,
+    origins,
+  );
 };
 
 const syncInstalledAppsToAccount = async (): Promise<void> => {
   if (!requireLogin("云端同步需要登录星火账号。")) return;
+  if (syncLoading.value) return;
+  const userId = currentUser.value?.id;
+  if (userId === undefined) return;
+  const generation = syncRequestGeneration.value + 1;
+  syncRequestGeneration.value = generation;
   syncLoading.value = true;
   try {
     await refreshInstalledSyncCandidates();
-    const items = buildSyncItems(installedApps.value);
+    if (
+      syncRequestGeneration.value !== generation ||
+      currentUser.value?.id !== userId
+    ) {
+      return;
+    }
+    const items = buildSyncItems(syncCandidateApps.value);
     await uploadSyncedAppList({
       clientArch: window.apm_store.arch || "amd64",
       distro: systemInfo.value.distro,
       items,
     });
+    if (
+      syncRequestGeneration.value !== generation ||
+      currentUser.value?.id !== userId
+    ) {
+      return;
+    }
     downloadedError.value = "";
   } catch (error: unknown) {
+    if (
+      syncRequestGeneration.value !== generation ||
+      currentUser.value?.id !== userId
+    ) {
+      return;
+    }
     downloadedError.value = (error as Error)?.message || "同步已安装应用失败";
   } finally {
-    syncLoading.value = false;
+    if (
+      syncRequestGeneration.value === generation &&
+      currentUser.value?.id === userId
+    ) {
+      syncLoading.value = false;
+    }
   }
 };
 
@@ -2215,6 +2289,19 @@ onUnmounted(() => {
 });
 
 // 观察器
+watch(
+  () => currentUser.value?.id ?? null,
+  (userId, previousUserId) => {
+    loadInstalledSyncPreference(userId);
+    if (previousUserId !== undefined && userId !== previousUserId) {
+      syncRequestGeneration.value += 1;
+      syncLoading.value = false;
+      syncCandidateApps.value = [];
+    }
+  },
+  { immediate: true },
+);
+
 watch(themeMode, (newVal) => {
   localStorage.setItem("theme", newVal);
   window.ipcRenderer.send(
