@@ -72,6 +72,7 @@ describe("account shared types", () => {
     };
 
     expect(typeof SPARK_BACKEND_BASE_URL).toBe("string");
+    expect(SPARK_BACKEND_BASE_URL).toMatch(/^https?:\/\//);
     expect(FLARUM_BASE_URL).toContain("bbs.spark-app.store");
     expect(FLARUM_REGISTER_URL).toContain("register");
     expect(user.forumGroups).toEqual(["管理员"]);
