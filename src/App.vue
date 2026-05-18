@@ -314,6 +314,7 @@ import type {
   App,
   AppJson,
   DownloadItem,
+  DownloadResult,
   ChannelPayload,
   CategoryInfo,
   HomeLink,
@@ -327,6 +328,7 @@ import type {
   InstalledAppInfo,
   ResolvedFavoriteItem,
   SystemInfo,
+  DownloadedAppRecord,
 } from "./global/typedefinition";
 import type { Ref } from "vue";
 import type { IpcRendererEvent } from "electron";
@@ -407,6 +409,8 @@ const favoriteLoading = ref(false);
 const favoriteError = ref("");
 const favoriteRequestGeneration = ref(0);
 const systemInfo = ref<SystemInfo>({ distro: "unknown" });
+type PendingDownloadRecord = Omit<DownloadedAppRecord, "id" | "downloadedAt">;
+const pendingDownloadRecords = new Map<number, PendingDownloadRecord>();
 
 /** 启动参数 --no-apm => 仅 Spark；--no-spark => 仅 APM；由主进程 IPC 提供 */
 const storeFilter = ref<"spark" | "apm" | "both">("both");
@@ -1243,16 +1247,29 @@ const onDetailInstall = async (app: App) => {
   const download = await handleInstall(app);
   if (!download || !isLoggedIn.value) return;
 
+  pendingDownloadRecords.set(download.id, {
+    appKey: buildFavoriteAppKey(app),
+    pkgname: app.pkgname,
+    name: app.name,
+    category: app.category,
+    selectedOrigin: app.origin,
+    version: app.version,
+    packageArch: app.arch || parsePackageArch(app.filename),
+  });
+};
+
+const handleInstallCompleteForDownloadRecord = async (
+  _event: IpcRendererEvent,
+  result: DownloadResult,
+) => {
+  const pendingRecord = pendingDownloadRecords.get(result.id);
+  if (!pendingRecord) return;
+
+  pendingDownloadRecords.delete(result.id);
+  if (!result.success || !isLoggedIn.value) return;
+
   try {
-    await recordDownloadedApp({
-      appKey: buildFavoriteAppKey(app),
-      pkgname: app.pkgname,
-      name: app.name,
-      category: app.category,
-      selectedOrigin: app.origin,
-      version: app.version,
-      packageArch: app.arch || parsePackageArch(app.filename),
-    });
+    await recordDownloadedApp(pendingRecord);
   } catch (error: unknown) {
     logger.warn({ err: error }, "记录下载应用失败");
   }
@@ -1953,6 +1970,11 @@ onMounted(async () => {
   );
 
   window.ipcRenderer.on(
+    "install-complete",
+    handleInstallCompleteForDownloadRecord,
+  );
+
+  window.ipcRenderer.on(
     "remove-complete",
     (_event: IpcRendererEvent, payload: ChannelPayload) => {
       const pkgname = currentApp.value?.pkgname;
@@ -1968,6 +1990,10 @@ onMounted(async () => {
 
 onUnmounted(() => {
   updateCenterStore.unbind();
+  window.ipcRenderer.off(
+    "install-complete",
+    handleInstallCompleteForDownloadRecord,
+  );
 });
 
 // 观察器

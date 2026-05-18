@@ -214,7 +214,11 @@ import {
   APM_STORE_BASE_URL,
   getHybridDefaultOrigin,
 } from "@/global/storeConfig";
-import { getDisplayApp } from "@/modules/appIdentity";
+import {
+  buildReviewAppKey,
+  buildReviewTags,
+  getDisplayApp,
+} from "@/modules/appIdentity";
 import type { App, ReviewTags } from "@/global/typedefinition";
 
 const props = defineProps<{
@@ -298,6 +302,22 @@ const iconPath = computed(() => {
 const detailHtml = computed(
   () => displayApp.value?.more.replace(/\n/g, "<br>") ?? "",
 );
+
+const reviewAppKey = computed(() => {
+  if (!displayApp.value) return "";
+  return buildReviewAppKey(
+    displayApp.value,
+    props.reviewTags?.clientArch ?? "amd64",
+  );
+});
+
+const reviewTags = computed<ReviewTags | null>(() => {
+  if (!displayApp.value || !props.reviewTags) return null;
+  return buildReviewTags(displayApp.value, {
+    clientArch: props.reviewTags.clientArch,
+    distro: props.reviewTags.distro,
+  });
+});
 
 const selectOrigin = (origin: "spark" | "apm") => {
   viewingOrigin.value = origin;

@@ -145,6 +145,7 @@ const summary = ref<RatingSummary | null>(null);
 const loading = ref(false);
 const submitting = ref(false);
 const error = ref("");
+const loadGeneration = ref(0);
 
 const ratingText = computed(() => {
   if (!summary.value || summary.value.reviewCount === 0) return "暂无评分";
@@ -153,37 +154,50 @@ const ratingText = computed(() => {
 
 const loadReviews = async () => {
   if (!props.appKey) return;
+  const generation = loadGeneration.value + 1;
+  loadGeneration.value = generation;
+  const appKey = props.appKey;
   loading.value = true;
   error.value = "";
   try {
     const [nextSummary, nextReviews] = await Promise.all([
-      fetchRatingSummary(props.appKey),
-      fetchReviews(props.appKey),
+      fetchRatingSummary(appKey),
+      fetchReviews(appKey),
     ]);
+    if (generation !== loadGeneration.value || appKey !== props.appKey) return;
     summary.value = nextSummary;
     reviews.value = nextReviews;
   } catch (caught: unknown) {
+    if (generation !== loadGeneration.value || appKey !== props.appKey) return;
     error.value = (caught as Error)?.message || "加载评价失败";
   } finally {
-    loading.value = false;
+    if (generation === loadGeneration.value && appKey === props.appKey) {
+      loading.value = false;
+    }
   }
 };
 
 const submit = async () => {
+  const appKey = props.appKey;
+  const tags = props.tags;
   submitting.value = true;
   error.value = "";
   try {
-    await submitReview(props.appKey, {
+    await submitReview(appKey, {
       rating: rating.value,
       content: content.value.trim(),
-      tags: props.tags,
+      tags,
     });
+    if (appKey !== props.appKey) return;
     content.value = "";
     await loadReviews();
   } catch (caught: unknown) {
+    if (appKey !== props.appKey) return;
     error.value = (caught as Error)?.message || "发表评论失败";
   } finally {
-    submitting.value = false;
+    if (appKey === props.appKey) {
+      submitting.value = false;
+    }
   }
 };
 
