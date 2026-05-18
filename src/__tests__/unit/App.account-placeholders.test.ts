@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/vue";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import App from "@/App.vue";
+import { listFavoriteFolders } from "@/modules/backendApi";
 import { setAuthSession } from "@/global/authState";
 import type { FavoriteFolder, FavoriteItem } from "@/global/typedefinition";
 
@@ -28,6 +29,15 @@ const favoriteItems: FavoriteItem[] = [
     createdAt: "2026-05-18T00:00:00Z",
   },
 ];
+
+const createDeferred = <T>() => {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((promiseResolve) => {
+    resolve = promiseResolve;
+  });
+
+  return { promise, resolve };
+};
 
 vi.mock("axios", () => {
   const get = vi.fn(async (url: string) => {
@@ -146,6 +156,13 @@ describe("App account placeholders", () => {
         removeEventListener: vi.fn(),
       })),
     );
+    vi.stubGlobal("scrollTo", vi.fn());
+    class MockIntersectionObserver {
+      observe = vi.fn();
+      disconnect = vi.fn();
+      unobserve = vi.fn();
+    }
+    vi.stubGlobal("IntersectionObserver", MockIntersectionObserver);
   });
 
   it("shows the user management placeholder from the logged-in quick menu", async () => {
@@ -290,5 +307,48 @@ describe("App account placeholders", () => {
     expect(screen.queryByText("默认收藏夹 (1)")).toBeNull();
     expect(screen.queryByText("wps · office")).toBeNull();
     expect(screen.queryByRole("heading", { name: "我的收藏" })).toBeNull();
+  });
+
+  it("does not reopen the favorite selector when folder loading resolves after logout", async () => {
+    const slowFolders = createDeferred<FavoriteFolder[]>();
+    vi.mocked(listFavoriteFolders).mockReturnValueOnce(slowFolders.promise);
+    render(App);
+
+    await fireEvent.click(await screen.findByText("全部应用"));
+    await fireEvent.click(await screen.findByText("wps · 1.0.0"));
+    expect(await screen.findByRole("heading", { name: "WPS" })).toBeTruthy();
+    await fireEvent.click(screen.getByRole("button", { name: "收藏" }));
+
+    await fireEvent.click(
+      await screen.findByRole("button", { name: /^Momen$/ }),
+    );
+    if (!screen.queryByText("退出登录")) {
+      await fireEvent.click(
+        await screen.findByRole("button", { name: /^Momen$/ }),
+      );
+    }
+    await fireEvent.click(screen.getByText("退出登录"));
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "登录 / 注册" })).toBeTruthy();
+    });
+
+    slowFolders.resolve([
+      {
+        id: 42,
+        name: "旧账号收藏夹",
+        itemCount: 1,
+        createdAt: "2026-05-18T00:00:00Z",
+        updatedAt: "2026-05-18T00:00:00Z",
+      },
+    ]);
+    await slowFolders.promise;
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(screen.queryByText("旧账号收藏夹 (1)")).toBeNull();
+    expect(screen.queryByText("wps · office")).toBeNull();
+    expect(screen.queryByText("旧账号收藏夹")).toBeNull();
+    expect(screen.queryByRole("dialog", { name: "选择收藏夹" })).toBeNull();
   });
 });

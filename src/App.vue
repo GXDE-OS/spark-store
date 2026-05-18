@@ -402,6 +402,7 @@ const showFavoriteSelector = ref(false);
 const favoriteTargetApp = ref<App | null>(null);
 const favoriteLoading = ref(false);
 const favoriteError = ref("");
+const favoriteRequestGeneration = ref(0);
 
 /** 启动参数 --no-apm => 仅 Spark；--no-spark => 仅 APM；由主进程 IPC 提供 */
 const storeFilter = ref<"spark" | "apm" | "both">("both");
@@ -1319,6 +1320,7 @@ const openLoginFromPrompt = () => {
 };
 
 const clearFavoriteState = () => {
+  favoriteRequestGeneration.value += 1;
   favoriteFolders.value = [];
   activeFavoriteFolderId.value = null;
   favoriteItems.value = [];
@@ -1327,6 +1329,9 @@ const clearFavoriteState = () => {
   favoriteLoading.value = false;
   favoriteError.value = "";
 };
+
+const isCurrentFavoriteRequest = (generation: number): boolean =>
+  favoriteRequestGeneration.value === generation && isLoggedIn.value;
 
 const handleLogout = () => {
   logout();
@@ -1368,50 +1373,73 @@ const openUserManagement = () => {
   showLoginPrompt.value = false;
 };
 
-const loadFavoriteFolders = async (): Promise<void> => {
-  favoriteFolders.value = await listFavoriteFolders();
-  const activeFolderExists = favoriteFolders.value.some(
+const loadFavoriteFolders = async (
+  generation = favoriteRequestGeneration.value,
+): Promise<boolean> => {
+  const folders = await listFavoriteFolders();
+  if (!isCurrentFavoriteRequest(generation)) return false;
+
+  favoriteFolders.value = folders;
+  const activeFolderExists = folders.some(
     (folder) => folder.id === activeFavoriteFolderId.value,
   );
   if (!activeFolderExists) {
-    activeFavoriteFolderId.value = favoriteFolders.value[0]?.id ?? null;
+    activeFavoriteFolderId.value = folders[0]?.id ?? null;
   }
+  return true;
 };
 
-const loadActiveFavoriteItems = async (): Promise<void> => {
+const loadActiveFavoriteItems = async (
+  generation = favoriteRequestGeneration.value,
+): Promise<boolean> => {
   if (!activeFavoriteFolderId.value) {
+    if (!isCurrentFavoriteRequest(generation)) return false;
     favoriteItems.value = [];
-    return;
+    return true;
   }
-  favoriteItems.value = await listFavoriteItems(activeFavoriteFolderId.value);
+  const items = await listFavoriteItems(activeFavoriteFolderId.value);
+  if (!isCurrentFavoriteRequest(generation)) return false;
+
+  favoriteItems.value = items;
+  return true;
 };
 
 const refreshFavorites = async (): Promise<void> => {
+  const generation = favoriteRequestGeneration.value;
   favoriteLoading.value = true;
   favoriteError.value = "";
   try {
-    await Promise.all([refreshFavoriteInstalledApps(), loadFavoriteFolders()]);
-    await loadActiveFavoriteItems();
+    await Promise.all([
+      refreshFavoriteInstalledApps(),
+      loadFavoriteFolders(generation),
+    ]);
+    if (!isCurrentFavoriteRequest(generation)) return;
+    await loadActiveFavoriteItems(generation);
   } catch (error: unknown) {
+    if (!isCurrentFavoriteRequest(generation)) return;
     favoriteError.value = (error as Error)?.message || "读取收藏夹失败";
   } finally {
-    favoriteLoading.value = false;
+    if (isCurrentFavoriteRequest(generation)) favoriteLoading.value = false;
   }
 };
 
 const openFavoriteSelector = async (app: App) => {
   if (!requireLogin("收藏应用需要登录星火账号。")) return;
+  const generation = favoriteRequestGeneration.value;
   favoriteTargetApp.value = app;
   favoriteError.value = "";
   try {
-    await loadFavoriteFolders();
+    const foldersLoaded = await loadFavoriteFolders(generation);
+    if (!foldersLoaded || !isCurrentFavoriteRequest(generation)) return;
     showFavoriteSelector.value = true;
   } catch (error: unknown) {
+    if (!isCurrentFavoriteRequest(generation)) return;
     favoriteError.value = (error as Error)?.message || "读取收藏夹失败";
   }
 };
 
 const addCurrentFavoriteToFolder = async (folderId: number | "default") => {
+  const generation = favoriteRequestGeneration.value;
   const app = favoriteTargetApp.value;
   if (!app) return;
   try {
@@ -1422,10 +1450,12 @@ const addCurrentFavoriteToFolder = async (folderId: number | "default") => {
       category: app.category,
       iconUrl: app.icons,
     });
+    if (!isCurrentFavoriteRequest(generation)) return;
     showFavoriteSelector.value = false;
     favoriteTargetApp.value = null;
     await refreshFavorites();
   } catch (error: unknown) {
+    if (!isCurrentFavoriteRequest(generation)) return;
     favoriteError.value = (error as Error)?.message || "添加收藏失败";
   }
 };
@@ -1440,15 +1470,17 @@ const openFavoriteManagement = async () => {
 };
 
 const selectFavoriteFolder = async (folderId: number) => {
+  const generation = favoriteRequestGeneration.value;
   activeFavoriteFolderId.value = folderId;
   favoriteLoading.value = true;
   favoriteError.value = "";
   try {
-    await loadActiveFavoriteItems();
+    await loadActiveFavoriteItems(generation);
   } catch (error: unknown) {
+    if (!isCurrentFavoriteRequest(generation)) return;
     favoriteError.value = (error as Error)?.message || "读取收藏应用失败";
   } finally {
-    favoriteLoading.value = false;
+    if (isCurrentFavoriteRequest(generation)) favoriteLoading.value = false;
   }
 };
 
@@ -1456,30 +1488,36 @@ const createFavoriteFolderFromPrompt = async () => {
   const name = window.prompt("请输入收藏夹名称");
   const folderName = name?.trim();
   if (!folderName) return;
+  const generation = favoriteRequestGeneration.value;
   favoriteLoading.value = true;
   favoriteError.value = "";
   try {
     const folder = await createFavoriteFolder(folderName);
+    if (!isCurrentFavoriteRequest(generation)) return;
     activeFavoriteFolderId.value = folder.id;
     await refreshFavorites();
   } catch (error: unknown) {
+    if (!isCurrentFavoriteRequest(generation)) return;
     favoriteError.value = (error as Error)?.message || "创建收藏夹失败";
   } finally {
-    favoriteLoading.value = false;
+    if (isCurrentFavoriteRequest(generation)) favoriteLoading.value = false;
   }
 };
 
 const removeSelectedFavorites = async (ids: number[]) => {
   if (!activeFavoriteFolderId.value || ids.length === 0) return;
+  const generation = favoriteRequestGeneration.value;
   favoriteLoading.value = true;
   favoriteError.value = "";
   try {
     await bulkDeleteFavoriteItems(activeFavoriteFolderId.value, ids);
+    if (!isCurrentFavoriteRequest(generation)) return;
     await refreshFavorites();
   } catch (error: unknown) {
+    if (!isCurrentFavoriteRequest(generation)) return;
     favoriteError.value = (error as Error)?.message || "移除收藏失败";
   } finally {
-    favoriteLoading.value = false;
+    if (isCurrentFavoriteRequest(generation)) favoriteLoading.value = false;
   }
 };
 
