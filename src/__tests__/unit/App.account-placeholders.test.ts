@@ -2,9 +2,13 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/vue";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import App from "@/App.vue";
-import { listFavoriteFolders } from "@/modules/backendApi";
+import { listDownloadedApps, listFavoriteFolders } from "@/modules/backendApi";
 import { setAuthSession } from "@/global/authState";
-import type { FavoriteFolder, FavoriteItem } from "@/global/typedefinition";
+import type {
+  DownloadedAppList,
+  FavoriteFolder,
+  FavoriteItem,
+} from "@/global/typedefinition";
 
 const invoke = vi.fn();
 
@@ -37,6 +41,31 @@ const createDeferred = <T>() => {
   });
 
   return { promise, resolve };
+};
+
+const downloadedList = (
+  items: DownloadedAppList["items"],
+): DownloadedAppList => ({
+  items,
+  total: items.length,
+  page: 1,
+  pageSize: 50,
+});
+
+const setSecondUserSession = () => {
+  setAuthSession({
+    accessToken: "backend-token-b",
+    tokenType: "bearer",
+    user: {
+      id: 2,
+      flarumUserId: "84",
+      username: "second",
+      displayName: "Second User",
+      avatarUrl: "https://bbs.spark-app.store/avatar-b.png",
+      forumLevel: "用户",
+      forumGroups: ["用户"],
+    },
+  });
 };
 
 vi.mock("axios", () => {
@@ -109,6 +138,7 @@ vi.mock("@/modules/backendApi", () => ({
   bulkDeleteFavoriteItems: vi.fn(),
   createFavoriteFolder: vi.fn(),
   exchangeFlarumToken: vi.fn(),
+  listDownloadedApps: vi.fn(async () => downloadedList([])),
   listFavoriteFolders: vi.fn(async () => favoriteFolders),
   listFavoriteItems: vi.fn(async () => favoriteItems),
   setBackendToken: vi.fn(),
@@ -350,5 +380,61 @@ describe("App account placeholders", () => {
     expect(screen.queryByText("wps · office")).toBeNull();
     expect(screen.queryByText("旧账号收藏夹")).toBeNull();
     expect(screen.queryByRole("dialog", { name: "选择收藏夹" })).toBeNull();
+  });
+
+  it("ignores downloaded history that resolves after switching users", async () => {
+    const firstHistory = createDeferred<DownloadedAppList>();
+    const secondHistory = createDeferred<DownloadedAppList>();
+    vi.mocked(listDownloadedApps)
+      .mockReturnValueOnce(firstHistory.promise)
+      .mockReturnValueOnce(secondHistory.promise);
+    render(App);
+
+    await fireEvent.click(await screen.findByRole("button", { name: /Momen/ }));
+    await fireEvent.click(screen.getByText("用户管理"));
+    expect(await screen.findByText("正在加载下载历史...")).toBeTruthy();
+
+    await fireEvent.click(
+      await screen.findByRole("button", { name: /^Momen$/ }),
+    );
+    if (!screen.queryByText("退出登录")) {
+      await fireEvent.click(
+        await screen.findByRole("button", { name: /^Momen$/ }),
+      );
+    }
+    await fireEvent.click(screen.getByText("退出登录"));
+    setSecondUserSession();
+
+    const secondUserButton = await screen.findByRole("button", {
+      name: /^Second User$/,
+    });
+    if (!screen.queryByText("用户管理")) {
+      await fireEvent.click(secondUserButton);
+    }
+    await fireEvent.click(await screen.findByText("用户管理"));
+    secondHistory.resolve(downloadedList([]));
+    expect(await screen.findByText("暂无下载记录。")).toBeTruthy();
+
+    firstHistory.resolve(
+      downloadedList([
+        {
+          id: 77,
+          appKey: "app:office:old-account-app",
+          pkgname: "old-account-app",
+          name: "旧账号应用",
+          category: "office",
+          selectedOrigin: "apm",
+          version: "1.0.0",
+          packageArch: "amd64",
+          downloadedAt: "2026-05-18T00:00:00Z",
+        },
+      ]),
+    );
+    await firstHistory.promise;
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(screen.queryByText("旧账号应用")).toBeNull();
+    expect(screen.getByText("暂无下载记录。")).toBeTruthy();
   });
 });

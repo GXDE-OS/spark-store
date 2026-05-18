@@ -419,6 +419,7 @@ const favoriteRequestGeneration = ref(0);
 const downloadedApps = ref<DownloadedAppRecord[]>([]);
 const downloadedLoading = ref(false);
 const downloadedError = ref("");
+const downloadedRequestGeneration = ref(0);
 const systemInfo = ref<SystemInfo>({ distro: "unknown" });
 type PendingDownloadRecord = Omit<
   DownloadedAppRecord,
@@ -1411,6 +1412,7 @@ const clearFavoriteState = () => {
 };
 
 const clearDownloadedState = () => {
+  downloadedRequestGeneration.value += 1;
   downloadedApps.value = [];
   downloadedLoading.value = false;
   downloadedError.value = "";
@@ -1418,6 +1420,13 @@ const clearDownloadedState = () => {
 
 const isCurrentFavoriteRequest = (generation: number): boolean =>
   favoriteRequestGeneration.value === generation && isLoggedIn.value;
+
+const isCurrentDownloadedRequest = (
+  generation: number,
+  userId: number,
+): boolean =>
+  downloadedRequestGeneration.value === generation &&
+  currentUser.value?.id === userId;
 
 const handleLogout = () => {
   logout();
@@ -1455,17 +1464,24 @@ const handleFlarumLogin = async (payload: FlarumLoginPayload) => {
 
 const loadDownloadedHistory = async (): Promise<void> => {
   if (!requireLogin("请登录后查看和管理账号信息。")) return;
+  const userId = currentUser.value?.id;
+  if (userId === undefined) return;
+  const generation = downloadedRequestGeneration.value;
 
   downloadedLoading.value = true;
   downloadedError.value = "";
   try {
     const result = await listDownloadedApps(1, 50);
+    if (!isCurrentDownloadedRequest(generation, userId)) return;
     downloadedApps.value = result.items;
   } catch (error: unknown) {
+    if (!isCurrentDownloadedRequest(generation, userId)) return;
     downloadedApps.value = [];
     downloadedError.value = (error as Error)?.message || "读取下载历史失败";
   } finally {
-    downloadedLoading.value = false;
+    if (isCurrentDownloadedRequest(generation, userId)) {
+      downloadedLoading.value = false;
+    }
   }
 };
 
