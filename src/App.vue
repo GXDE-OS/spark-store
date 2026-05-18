@@ -1541,7 +1541,9 @@ const loadDownloadedHistory = async (): Promise<void> => {
   }
 };
 
-const refreshInstalledSyncCandidates = async (): Promise<void> => {
+const refreshInstalledSyncCandidates = async (
+  isCurrentRequest: () => boolean,
+): Promise<boolean> => {
   const origins: Array<"spark" | "apm"> = [];
   if (isOriginEnabled(storeFilter.value, "spark") && sparkAvailable.value) {
     origins.push("spark");
@@ -1572,11 +1574,16 @@ const refreshInstalledSyncCandidates = async (): Promise<void> => {
     }),
   );
 
+  if (!isCurrentRequest()) {
+    return false;
+  }
+
   syncCandidateApps.value = mergeInstalledApps(
     syncCandidateApps.value,
     refreshedApps,
     origins,
   );
+  return true;
 };
 
 const syncInstalledAppsToAccount = async (): Promise<void> => {
@@ -1588,13 +1595,12 @@ const syncInstalledAppsToAccount = async (): Promise<void> => {
   syncRequestGeneration.value = generation;
   syncLoading.value = true;
   try {
-    await refreshInstalledSyncCandidates();
-    if (
-      syncRequestGeneration.value !== generation ||
-      currentUser.value?.id !== userId
-    ) {
-      return;
-    }
+    const refreshed = await refreshInstalledSyncCandidates(
+      () =>
+        syncRequestGeneration.value === generation &&
+        currentUser.value?.id === userId,
+    );
+    if (!refreshed) return;
     const items = buildSyncItems(syncCandidateApps.value);
     await uploadSyncedAppList({
       clientArch: window.apm_store.arch || "amd64",
@@ -1641,7 +1647,10 @@ const openRestoreFromAccount = async (): Promise<void> => {
   restoreError.value = "";
   restoreItems.value = [];
   try {
-    await refreshInstalledSyncCandidates();
+    const refreshed = await refreshInstalledSyncCandidates(() =>
+      isCurrentRestoreRequest(generation, userId),
+    );
+    if (!refreshed) return;
     const result = await fetchSyncedAppList();
     if (!isCurrentRestoreRequest(generation, userId)) return;
     restoreItems.value = result?.items || [];

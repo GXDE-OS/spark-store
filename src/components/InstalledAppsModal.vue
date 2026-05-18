@@ -254,11 +254,21 @@ const emit = defineEmits<{
 }>();
 
 const handleSyncClick = () => {
-  emit(props.loggedIn ? "sync-to-account" : "request-login");
+  if (props.loggedIn) {
+    emit("sync-to-account");
+    return;
+  }
+
+  emit("request-login");
 };
 
 const handleRestoreClick = () => {
-  emit(props.loggedIn ? "restore-from-account" : "request-login");
+  if (props.loggedIn) {
+    emit("restore-from-account");
+    return;
+  }
+
+  emit("request-login");
 };
 
 const onOverlayWheel = (e: WheelEvent) => {

@@ -583,4 +583,83 @@ describe("App account placeholders", () => {
     });
     syncUpload.resolve(syncedList([]));
   });
+
+  it("does not upload stale sync candidates after logout", async () => {
+    const slowInstalled = createDeferred<{
+      success: true;
+      apps: Array<{
+        pkgname: string;
+        name: string;
+        version: string;
+        arch: string;
+        flags: string;
+        origin: "apm";
+      }>;
+    }>();
+    let listInstalledCalls = 0;
+    invoke.mockImplementation(async (channel: string) => {
+      if (channel === "get-store-filter") return "apm";
+      if (channel === "check-spark-available") return false;
+      if (channel === "check-apm-available") return true;
+      if (channel === "get-app-version") return "5.0.0";
+      if (channel === "get-system-info") return { distro: "deepin 25" };
+      if (channel === "list-installed") {
+        listInstalledCalls += 1;
+        if (listInstalledCalls === 1) return slowInstalled.promise;
+        return { success: true, apps: [] };
+      }
+      return [];
+    });
+    vi.mocked(uploadSyncedAppList).mockResolvedValue(syncedList([]));
+    render(App);
+
+    await fireEvent.click(await screen.findByRole("button", { name: /Momen/ }));
+    await fireEvent.click(screen.getByText("用户管理"));
+    await fireEvent.click(
+      await screen.findByRole("button", { name: "立即同步" }),
+    );
+    await fireEvent.click(
+      await screen.findByRole("button", { name: /^Momen$/ }),
+    );
+    if (!screen.queryByText("退出登录")) {
+      await fireEvent.click(
+        await screen.findByRole("button", { name: /^Momen$/ }),
+      );
+    }
+    await fireEvent.click(screen.getByText("退出登录"));
+
+    slowInstalled.resolve({
+      success: true,
+      apps: [
+        {
+          pkgname: "wps",
+          name: "WPS",
+          version: "1.0.0",
+          arch: "amd64",
+          flags: "installed",
+          origin: "apm",
+        },
+      ],
+    });
+    await slowInstalled.promise;
+    await Promise.resolve();
+
+    setSecondUserSession();
+    const secondUserButton = await screen.findByRole("button", {
+      name: /^Second User$/,
+    });
+    if (!screen.queryByText("用户管理")) {
+      await fireEvent.click(secondUserButton);
+    }
+    await fireEvent.click(await screen.findByText("用户管理"));
+    await fireEvent.click(
+      await screen.findByRole("button", { name: "立即同步" }),
+    );
+
+    await waitFor(() => {
+      expect(uploadSyncedAppList).toHaveBeenCalledWith(
+        expect.objectContaining({ items: [] }),
+      );
+    });
+  });
 });
