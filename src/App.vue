@@ -286,6 +286,7 @@ import {
   exchangeFlarumToken,
   listFavoriteFolders,
   listFavoriteItems,
+  recordDownloadedApp,
 } from "./modules/backendApi";
 import { requestFlarumToken } from "./modules/flarumAuth";
 import {
@@ -306,6 +307,7 @@ import {
   buildFavoriteAppKey,
   buildReviewTags,
   getDisplayApp,
+  parsePackageArch,
 } from "./modules/appIdentity";
 import { resolveFavoriteItems } from "./modules/favoriteAvailability";
 import type {
@@ -324,6 +326,7 @@ import type {
   FavoriteItem,
   InstalledAppInfo,
   ResolvedFavoriteItem,
+  SystemInfo,
 } from "./global/typedefinition";
 import type { Ref } from "vue";
 import type { IpcRendererEvent } from "electron";
@@ -403,6 +406,7 @@ const favoriteTargetApp = ref<App | null>(null);
 const favoriteLoading = ref(false);
 const favoriteError = ref("");
 const favoriteRequestGeneration = ref(0);
+const systemInfo = ref<SystemInfo>({ distro: "unknown" });
 
 /** 启动参数 --no-apm => 仅 Spark；--no-spark => 仅 APM；由主进程 IPC 提供 */
 const storeFilter = ref<"spark" | "apm" | "both">("both");
@@ -500,7 +504,7 @@ const currentReviewTags = computed<ReviewTags | null>(() => {
   if (!currentDisplayApp.value) return null;
   return buildReviewTags(currentDisplayApp.value, {
     clientArch: clientArch.value,
-    distro: "unknown",
+    distro: systemInfo.value.distro,
   });
 });
 
@@ -1236,7 +1240,22 @@ const onDetailRemove = (app: App) => {
 };
 
 const onDetailInstall = async (app: App) => {
-  await handleInstall(app);
+  const download = await handleInstall(app);
+  if (!download || !isLoggedIn.value) return;
+
+  try {
+    await recordDownloadedApp({
+      appKey: buildFavoriteAppKey(app),
+      pkgname: app.pkgname,
+      name: app.name,
+      category: app.category,
+      selectedOrigin: app.origin,
+      version: app.version,
+      packageArch: app.arch || parsePackageArch(app.filename),
+    });
+  } catch (error: unknown) {
+    logger.warn({ err: error }, "记录下载应用失败");
+  }
 };
 
 const onDetailFavorite = async (app: App) => {
@@ -1782,6 +1801,13 @@ const handleSearchFocus = () => {
 onMounted(async () => {
   initTheme();
   updateCenterStore.bind();
+
+  try {
+    systemInfo.value = await window.ipcRenderer.invoke("get-system-info");
+  } catch (error: unknown) {
+    logger.warn({ err: error }, "读取系统信息失败");
+    systemInfo.value = { distro: "unknown" };
+  }
 
   // 从主进程获取启动参数（--no-apm / --no-spark），再加载数据
   storeFilter.value = await window.ipcRenderer.invoke("get-store-filter");

@@ -194,6 +194,14 @@
           </div>
           <p v-else class="text-sm text-slate-400">暂无应用截图</p>
         </div>
+
+        <ReviewsPanel
+          v-if="reviewAppKey && reviewTags"
+          :app-key="reviewAppKey"
+          :tags="reviewTags"
+          :logged-in="loggedIn"
+          @request-login="$emit('request-login', $event)"
+        />
       </div>
     </div>
   </section>
@@ -201,6 +209,7 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
+import ReviewsPanel from "@/components/ReviewsPanel.vue";
 import {
   APM_STORE_BASE_URL,
   getHybridDefaultOrigin,

@@ -40,6 +40,23 @@ function getAppVersion(): string {
   }
 }
 
+function getSystemInfo(): { distro: string } {
+  try {
+    const raw = fs.readFileSync("/etc/os-release", "utf8");
+    const fields = Object.fromEntries(
+      raw
+        .split("\n")
+        .map((line) => line.match(/^([A-Z_]+)=(.*)$/))
+        .filter((match): match is RegExpMatchArray => match !== null)
+        .map((match) => [match[1], match[2].replace(/^"|"$/g, "")]),
+    );
+    const distro = fields.PRETTY_NAME || fields.NAME || "unknown";
+    return { distro };
+  } catch {
+    return { distro: "unknown" };
+  }
+}
+
 // 处理 --version 参数（在单实例检查之前）
 if (process.argv.includes("--version") || process.argv.includes("-v")) {
   console.log(getAppVersion());
@@ -118,6 +135,7 @@ ipcMain.handle("get-store-filter", (): "spark" | "apm" | "both" =>
 );
 
 ipcMain.handle("get-app-version", (): string => getAppVersion());
+ipcMain.handle("get-system-info", (): { distro: string } => getSystemInfo());
 
 ipcMain.handle("request-flarum-token", async (_event, payload: unknown) => {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) {

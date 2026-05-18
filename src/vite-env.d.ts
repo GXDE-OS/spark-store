@@ -1,7 +1,7 @@
 /* eslint-disable */
 /// <reference types="vite/client" />
 
-import type { UpdateCenterBridge } from "@/global/typedefinition";
+import type { SystemInfo, UpdateCenterBridge } from "@/global/typedefinition";
 
 declare module "*.vue" {
   import type { DefineComponent } from "vue";
@@ -34,6 +34,7 @@ interface IpcRendererFacade {
 // IPC channel type definitions
 declare interface IpcChannels {
   "get-app-version": () => string;
+  "get-system-info": () => Promise<SystemInfo>;
   "request-flarum-token": (payload: {
     identification: string;
     password: string;
