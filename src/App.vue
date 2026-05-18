@@ -1265,13 +1265,14 @@ const handleInstallCompleteForDownloadRecord = async (
   const pendingRecord = pendingDownloadRecords.get(result.id);
   if (!pendingRecord) return;
 
-  pendingDownloadRecords.delete(result.id);
   if (!result.success || !isLoggedIn.value) return;
 
   try {
     await recordDownloadedApp(pendingRecord);
   } catch (error: unknown) {
     logger.warn({ err: error }, "记录下载应用失败");
+  } finally {
+    pendingDownloadRecords.delete(result.id);
   }
 };
 
