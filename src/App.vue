@@ -62,7 +62,29 @@
         @select-category="selectSubCategory"
       />
       <div class="px-4 py-6 lg:px-10">
-        <template v-if="activeTab === 'home'">
+        <section
+          v-if="currentView === 'account'"
+          class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900"
+        >
+          <h1 class="text-2xl font-semibold text-slate-900 dark:text-white">
+            用户管理
+          </h1>
+          <p class="mt-3 text-sm text-slate-500 dark:text-slate-400">
+            账号资料与安全设置功能即将开放。
+          </p>
+        </section>
+        <section
+          v-else-if="currentView === 'favorites'"
+          class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900"
+        >
+          <h1 class="text-2xl font-semibold text-slate-900 dark:text-white">
+            我的收藏
+          </h1>
+          <p class="mt-3 text-sm text-slate-500 dark:text-slate-400">
+            收藏应用列表功能即将开放。
+          </p>
+        </section>
+        <template v-else-if="activeTab === 'home'">
           <HomeView
             :links="homeLinks"
             :lists="homeLists"
@@ -307,6 +329,7 @@ const isDarkTheme = computed(() => {
 const categories: Ref<Record<string, CategoryInfo>> = ref({});
 const apps: Ref<App[]> = ref([]);
 const activeTab = ref("home");
+const currentView = ref<"default" | "account" | "favorites">("default");
 const selectedCategory = ref("all");
 const searchQuery = ref("");
 const isSidebarOpen = ref(false);
@@ -456,6 +479,7 @@ const toggleTheme = () => {
 };
 
 const selectTab = (tab: string) => {
+  currentView.value = "default";
   activeTab.value = tab;
   selectedCategory.value = "all";
   isSidebarOpen.value = false;
@@ -470,6 +494,7 @@ const selectTab = (tab: string) => {
 };
 
 const selectSubCategory = (category: string) => {
+  currentView.value = "default";
   selectedCategory.value = category;
   window.scrollTo({ top: 0, behavior: "smooth" });
 };
@@ -532,6 +557,7 @@ const fetchAppFromStore = async (
 };
 
 const openDetail = async (app: App | Record<string, unknown>) => {
+  currentView.value = "default";
   // 提取 pkgname 和 category（必须存在）
   const pkgname = (app as Record<string, unknown>).pkgname as string;
   const category =
@@ -1142,11 +1168,17 @@ const handleFlarumLogin = async (payload: FlarumLoginPayload) => {
 
 const openUserManagement = () => {
   if (!requireLogin("请登录后查看和管理账号信息。")) return;
+  currentView.value = "account";
+  activeTab.value = "account";
+  isSidebarOpen.value = false;
   showLoginPrompt.value = false;
 };
 
 const openFavoriteManagement = () => {
   if (!requireLogin("请登录后查看我的收藏。")) return;
+  currentView.value = "favorites";
+  activeTab.value = "favorites";
+  isSidebarOpen.value = false;
   showLoginPrompt.value = false;
 };
 
@@ -1390,10 +1422,12 @@ const loadApps = async (onFirstBatch?: () => void) => {
 };
 
 const handleSearchInput = (value: string) => {
+  currentView.value = "default";
   searchQuery.value = value;
 };
 
 const handleSearchFocus = () => {
+  currentView.value = "default";
   if (activeTab.value === "home") activeTab.value = "all";
 };
 
@@ -1517,6 +1551,7 @@ onMounted(async () => {
       // 根据包名直接打开应用详情
       const tryOpen = () => {
         // 先切换到"全部应用"分类
+        currentView.value = "default";
         activeTab.value = "all";
         // 使用类似 HomeView 的方式打开应用，从两个仓库获取完整信息
         const target = apps.value.find((a) => a.pkgname === data.pkgname);

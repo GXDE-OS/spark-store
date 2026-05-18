@@ -1,6 +1,3 @@
-import axios from "axios";
-
-import { FLARUM_BASE_URL } from "@/global/storeConfig";
 import type { FlarumLoginPayload } from "@/global/typedefinition";
 
 type FlarumTokenResponse = {
@@ -18,8 +15,9 @@ const asRecord = (value: unknown): Record<string, unknown> => {
 export const requestFlarumToken = async (
   payload: FlarumLoginPayload,
 ): Promise<FlarumTokenResponse> => {
-  const response = await axios.post(`${FLARUM_BASE_URL}/api/token`, payload);
-  const data = asRecord(response.data);
+  const data = asRecord(
+    await window.ipcRenderer.invoke("request-flarum-token", payload),
+  );
 
   return {
     token: String(data.token || ""),

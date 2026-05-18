@@ -55,6 +55,7 @@ import "./backend/install-manager.js";
 import "./handle-url-scheme.js";
 
 const logger = pino({ name: "index.ts" });
+const FLARUM_TOKEN_URL = "https://bbs.spark-app.store/api/token";
 
 // The built directory structure
 //
@@ -117,6 +118,52 @@ ipcMain.handle("get-store-filter", (): "spark" | "apm" | "both" =>
 );
 
 ipcMain.handle("get-app-version", (): string => getAppVersion());
+
+ipcMain.handle("request-flarum-token", async (_event, payload: unknown) => {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    throw new Error("登录信息格式不正确，请重新输入。");
+  }
+
+  const credentials = payload as Record<string, unknown>;
+  if (
+    typeof credentials.identification !== "string" ||
+    typeof credentials.password !== "string"
+  ) {
+    throw new Error("登录信息格式不正确，请重新输入。");
+  }
+
+  const response = await fetch(FLARUM_TOKEN_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+      "User-Agent": getUserAgent(),
+    },
+    body: JSON.stringify({
+      identification: credentials.identification,
+      password: credentials.password,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error("论坛登录失败，请检查账号和密码。");
+  }
+
+  const data = (await response.json()) as Record<string, unknown>;
+  const userId = data.userId ?? data.user_id;
+  if (
+    typeof data.token !== "string" ||
+    userId === undefined ||
+    userId === null
+  ) {
+    throw new Error("论坛登录响应异常，请稍后重试。");
+  }
+
+  return {
+    token: data.token,
+    userId: String(userId),
+  };
+});
 
 const getMainWindowCloseGuardState = (): MainWindowCloseGuardState => ({
   installTaskCount: tasks.size,

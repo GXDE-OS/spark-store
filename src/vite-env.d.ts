@@ -34,6 +34,10 @@ interface IpcRendererFacade {
 // IPC channel type definitions
 declare interface IpcChannels {
   "get-app-version": () => string;
+  "request-flarum-token": (payload: {
+    identification: string;
+    password: string;
+  }) => Promise<{ token: string; userId: string }>;
 }
 
 declare const __APP_VERSION__: string;
