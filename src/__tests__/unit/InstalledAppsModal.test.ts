@@ -37,6 +37,8 @@ describe("InstalledAppsModal", () => {
         storeFilter: "both",
         sparkAvailable: true,
         apmAvailable: true,
+        loggedIn: false,
+        syncing: false,
       },
     });
 
@@ -57,6 +59,8 @@ describe("InstalledAppsModal", () => {
         storeFilter: "both",
         sparkAvailable: true,
         apmAvailable: true,
+        loggedIn: false,
+        syncing: false,
       },
     });
 
@@ -75,6 +79,8 @@ describe("InstalledAppsModal", () => {
         storeFilter: "both",
         sparkAvailable: true,
         apmAvailable: true,
+        loggedIn: false,
+        syncing: false,
       },
     });
 
@@ -97,6 +103,8 @@ describe("InstalledAppsModal", () => {
         storeFilter: "both",
         sparkAvailable: true,
         apmAvailable: true,
+        loggedIn: false,
+        syncing: false,
       },
     });
 
@@ -119,6 +127,8 @@ describe("InstalledAppsModal", () => {
         storeFilter: "both",
         sparkAvailable: true,
         apmAvailable: true,
+        loggedIn: false,
+        syncing: false,
       },
     });
 
@@ -136,9 +146,75 @@ describe("InstalledAppsModal", () => {
         storeFilter: "both",
         sparkAvailable: true,
         apmAvailable: true,
+        loggedIn: false,
+        syncing: false,
       },
     });
 
     expect(screen.queryByRole("button", { name: "查看详情" })).toBeNull();
+  });
+
+  it("requests login for cloud actions when logged out", async () => {
+    const rendered = render(InstalledAppsModal, {
+      props: {
+        show: true,
+        apps: [],
+        loading: false,
+        error: "",
+        activeOrigin: "spark",
+        storeFilter: "both",
+        sparkAvailable: true,
+        apmAvailable: true,
+        loggedIn: false,
+        syncing: false,
+      },
+    });
+
+    await fireEvent.click(screen.getByRole("button", { name: "同步到账号" }));
+    await fireEvent.click(screen.getByRole("button", { name: "从账号恢复" }));
+
+    expect(rendered.emitted("request-login")).toHaveLength(2);
+  });
+
+  it("emits cloud sync and restore events when logged in", async () => {
+    const rendered = render(InstalledAppsModal, {
+      props: {
+        show: true,
+        apps: [],
+        loading: false,
+        error: "",
+        activeOrigin: "spark",
+        storeFilter: "both",
+        sparkAvailable: true,
+        apmAvailable: true,
+        loggedIn: true,
+        syncing: false,
+      },
+    });
+
+    await fireEvent.click(screen.getByRole("button", { name: "同步到账号" }));
+    await fireEvent.click(screen.getByRole("button", { name: "从账号恢复" }));
+
+    expect(rendered.emitted("sync-to-account")).toHaveLength(1);
+    expect(rendered.emitted("restore-from-account")).toHaveLength(1);
+  });
+
+  it("disables sync button while syncing", () => {
+    render(InstalledAppsModal, {
+      props: {
+        show: true,
+        apps: [],
+        loading: false,
+        error: "",
+        activeOrigin: "spark",
+        storeFilter: "both",
+        sparkAvailable: true,
+        apmAvailable: true,
+        loggedIn: true,
+        syncing: true,
+      },
+    });
+
+    expect(screen.getByRole("button", { name: "同步中" })).toBeDisabled();
   });
 });

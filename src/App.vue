@@ -170,12 +170,27 @@
       :store-filter="storeFilter"
       :spark-available="sparkAvailable"
       :apm-available="apmAvailable"
+      :logged-in="isLoggedIn"
+      :syncing="syncLoading"
       @close="closeInstalledModal"
       @refresh="refreshInstalledApps"
       @open-app="openDownloadedApp($event.pkgname, $event.origin)"
       @open-detail="openDetail"
       @uninstall="uninstallInstalledApp"
       @switch-origin="handleSwitchOrigin"
+      @sync-to-account="syncInstalledAppsToAccount"
+      @restore-from-account="openRestoreFromAccount"
+      @request-login="requireLogin('云端同步需要登录星火账号。')"
+    />
+
+    <AppListRestoreModal
+      :show="showRestoreModal"
+      :loading="restoreLoading"
+      :error="restoreError"
+      :items="restoreItems"
+      :installed-keys="installedCloudKeys"
+      @close="showRestoreModal = false"
+      @install-selected="installCloudItems"
     />
 
     <UpdateCenterModal
@@ -249,6 +264,7 @@ import ScreenPreview from "./components/ScreenPreview.vue";
 import DownloadQueue from "./components/DownloadQueue.vue";
 import DownloadDetail from "./components/DownloadDetail.vue";
 import InstalledAppsModal from "./components/InstalledAppsModal.vue";
+import AppListRestoreModal from "./components/AppListRestoreModal.vue";
 import UpdateCenterModal from "./components/UpdateCenterModal.vue";
 import UninstallConfirmModal from "./components/UninstallConfirmModal.vue";
 import ApmInstallConfirmModal from "./components/ApmInstallConfirmModal.vue";
@@ -291,10 +307,12 @@ import {
   bulkDeleteFavoriteItems,
   createFavoriteFolder,
   exchangeFlarumToken,
+  fetchSyncedAppList,
   listDownloadedApps,
   listFavoriteFolders,
   listFavoriteItems,
   recordDownloadedApp,
+  uploadSyncedAppList,
 } from "./modules/backendApi";
 import { requestFlarumToken } from "./modules/flarumAuth";
 import {
@@ -318,6 +336,7 @@ import {
   parsePackageArch,
 } from "./modules/appIdentity";
 import { resolveFavoriteItems } from "./modules/favoriteAvailability";
+import { buildSyncItems, cloudItemKey } from "./modules/appListSync";
 import type {
   App,
   AppJson,
@@ -337,6 +356,7 @@ import type {
   ResolvedFavoriteItem,
   SystemInfo,
   DownloadedAppRecord,
+  SyncedAppListItem,
 } from "./global/typedefinition";
 import type { Ref } from "vue";
 import type { IpcRendererEvent } from "electron";
@@ -420,6 +440,13 @@ const downloadedApps = ref<DownloadedAppRecord[]>([]);
 const downloadedLoading = ref(false);
 const downloadedError = ref("");
 const downloadedRequestGeneration = ref(0);
+const syncLoading = ref(false);
+const restoreLoading = ref(false);
+const restoreError = ref("");
+const showRestoreModal = ref(false);
+const restoreItems = ref<SyncedAppListItem[]>([]);
+const restoreRequestGeneration = ref(0);
+const installedSyncPromptShown = ref(false);
 const systemInfo = ref<SystemInfo>({ distro: "unknown" });
 type PendingDownloadRecord = Omit<
   DownloadedAppRecord,
@@ -538,6 +565,10 @@ const resolvedFavoriteItems = computed<ResolvedFavoriteItem[]>(() =>
     storeFilter.value,
     clientArch.value,
   ),
+);
+
+const installedCloudKeys = computed(
+  () => new Set(installedApps.value.map((app) => cloudItemKey(app))),
 );
 
 // 方法
@@ -1418,6 +1449,14 @@ const clearDownloadedState = () => {
   downloadedError.value = "";
 };
 
+const clearRestoreState = () => {
+  restoreRequestGeneration.value += 1;
+  restoreItems.value = [];
+  restoreLoading.value = false;
+  restoreError.value = "";
+  showRestoreModal.value = false;
+};
+
 const isCurrentFavoriteRequest = (generation: number): boolean =>
   favoriteRequestGeneration.value === generation && isLoggedIn.value;
 
@@ -1428,11 +1467,16 @@ const isCurrentDownloadedRequest = (
   downloadedRequestGeneration.value === generation &&
   currentUser.value?.id === userId;
 
+const isCurrentRestoreRequest = (generation: number, userId: number): boolean =>
+  restoreRequestGeneration.value === generation &&
+  currentUser.value?.id === userId;
+
 const handleLogout = () => {
   logout();
   pendingDownloadRecords.clear();
   clearFavoriteState();
   clearDownloadedState();
+  clearRestoreState();
   showLoginModal.value = false;
   showLoginPrompt.value = false;
   isSidebarOpen.value = false;
@@ -1485,8 +1529,91 @@ const loadDownloadedHistory = async (): Promise<void> => {
   }
 };
 
-const syncInstalledAppsNow = () => {
-  logger.warn("已安装应用同步将在后续任务中启用");
+const refreshInstalledSyncCandidates = async (): Promise<void> => {
+  await refreshFavoriteInstalledApps();
+};
+
+const syncInstalledAppsToAccount = async (): Promise<void> => {
+  if (!requireLogin("云端同步需要登录星火账号。")) return;
+  syncLoading.value = true;
+  try {
+    await refreshInstalledSyncCandidates();
+    const items = buildSyncItems(installedApps.value);
+    await uploadSyncedAppList({
+      clientArch: window.apm_store.arch || "amd64",
+      distro: systemInfo.value.distro,
+      items,
+    });
+    downloadedError.value = "";
+  } catch (error: unknown) {
+    downloadedError.value = (error as Error)?.message || "同步已安装应用失败";
+  } finally {
+    syncLoading.value = false;
+  }
+};
+
+const syncInstalledAppsNow = (): void => {
+  void syncInstalledAppsToAccount();
+};
+
+const openRestoreFromAccount = async (): Promise<void> => {
+  if (!requireLogin("云端同步需要登录星火账号。")) return;
+  const userId = currentUser.value?.id;
+  if (userId === undefined) return;
+  const generation = restoreRequestGeneration.value + 1;
+  restoreRequestGeneration.value = generation;
+  showRestoreModal.value = true;
+  restoreLoading.value = true;
+  restoreError.value = "";
+  restoreItems.value = [];
+  try {
+    await refreshInstalledSyncCandidates();
+    const result = await fetchSyncedAppList();
+    if (!isCurrentRestoreRequest(generation, userId)) return;
+    restoreItems.value = result?.items || [];
+  } catch (error: unknown) {
+    if (!isCurrentRestoreRequest(generation, userId)) return;
+    restoreError.value = (error as Error)?.message || "读取云端应用列表失败";
+  } finally {
+    if (isCurrentRestoreRequest(generation, userId)) {
+      restoreLoading.value = false;
+    }
+  }
+};
+
+const installCloudItems = (items: SyncedAppListItem[]): void => {
+  for (const item of items) {
+    const app = apps.value.find(
+      (candidate) =>
+        candidate.pkgname === item.pkgname &&
+        candidate.origin === item.origin &&
+        candidate.category === item.category,
+    );
+    if (!app) continue;
+    void onDetailInstall(app);
+  }
+  showRestoreModal.value = false;
+};
+
+const maybePromptInstalledSync = async (): Promise<void> => {
+  if (
+    import.meta.env.MODE === "test" ||
+    !isLoggedIn.value ||
+    installedSyncPromptShown.value ||
+    installedSyncEnabled.value !== null
+  ) {
+    if (isLoggedIn.value && installedSyncEnabled.value === true) {
+      await syncInstalledAppsToAccount();
+    }
+    return;
+  }
+
+  installedSyncPromptShown.value = true;
+  const enabled = window.confirm(
+    "是否启用已安装应用列表自动同步到星火账号？仅同步商店识别的非依赖应用。",
+  );
+  setInstalledSyncEnabled(enabled);
+  if (enabled) await syncInstalledAppsToAccount();
 };
 
 const openUserManagement = async () => {
@@ -1954,6 +2081,7 @@ onMounted(async () => {
   ]).then(() => {
     // 所有数据加载完成后的回调（可选）
     logger.info("所有应用数据加载完成");
+    void maybePromptInstalledSync();
   });
 
   // 设置键盘导航
