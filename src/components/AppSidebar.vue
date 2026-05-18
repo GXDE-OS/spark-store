@@ -1,21 +1,44 @@
 <template>
   <div class="flex h-full flex-col gap-6">
-    <div class="flex items-center justify-between gap-3">
-      <div class="flex items-center gap-3">
-        <img
-          :src="amberLogo"
-          alt="Amber PM"
-          class="h-11 w-11 rounded-2xl bg-white/70 p-2 shadow-sm ring-1 ring-slate-900/5 dark:bg-slate-800"
+    <div class="flex items-start justify-between gap-3">
+      <div class="relative min-w-0 flex-1">
+        <button
+          type="button"
+          class="flex w-full min-w-0 items-center gap-3 rounded-2xl p-1 text-left transition hover:bg-slate-100 dark:hover:bg-slate-800"
+          :aria-label="accountLabel"
+          @click="handleAccountClick"
+        >
+          <img
+            v-if="!currentUser || !currentUser.avatarUrl"
+            :src="amberLogo"
+            alt="Amber PM"
+            class="h-11 w-11 rounded-2xl bg-white/70 p-2 shadow-sm ring-1 ring-slate-900/5 dark:bg-slate-800"
+          />
+          <img
+            v-else
+            :src="currentUser.avatarUrl"
+            :alt="accountLabel"
+            class="h-11 w-11 rounded-2xl object-cover shadow-sm ring-1 ring-slate-900/5"
+          />
+          <div class="flex flex-col">
+            <span
+              class="text-xs uppercase tracking-[0.3em] text-slate-500 dark:text-slate-400"
+              >{{ currentUser ? currentUser.forumLevel : "Spark Store" }}</span
+            >
+            <span
+              class="text-lg font-semibold text-slate-900 dark:text-white"
+              >{{ accountLabel }}</span
+            >
+          </div>
+        </button>
+        <AccountQuickMenu
+          v-if="currentUser && showAccountMenu"
+          @open-user-management="emit('open-user-management')"
+          @open-favorites="emit('open-favorites')"
+          @open-forum="emit('open-forum')"
+          @edit-profile="emit('edit-profile')"
+          @logout="emit('logout')"
         />
-        <div class="flex flex-col">
-          <span
-            class="text-xs uppercase tracking-[0.3em] text-slate-500 dark:text-slate-400"
-            >Spark Store</span
-          >
-          <span class="text-lg font-semibold text-slate-900 dark:text-white"
-            >星火应用商店</span
-          >
-        </div>
       </div>
       <div class="flex items-center gap-1">
         <ThemeToggle :theme-mode="themeMode" @toggle="toggleTheme" />
@@ -105,10 +128,11 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref } from "vue";
+import AccountQuickMenu from "./AccountQuickMenu.vue";
 import ThemeToggle from "./ThemeToggle.vue";
 import amberLogo from "../assets/imgs/spark-store.svg";
-import type { SidebarEntry } from "../global/typedefinition";
+import type { SidebarEntry, SparkUser } from "../global/typedefinition";
 
 const props = defineProps<{
   activeTab: string;
@@ -119,6 +143,7 @@ const props = defineProps<{
   storeFilter: "spark" | "apm" | "both";
   sidebarEntries: SidebarEntry[];
   entryCounts: Record<string, number>;
+  currentUser: SparkUser | null;
 }>();
 
 const emit = defineEmits<{
@@ -127,7 +152,30 @@ const emit = defineEmits<{
   (e: "close"): void;
   (e: "list"): void;
   (e: "update"): void;
+  (e: "request-login"): void;
+  (e: "open-user-management"): void;
+  (e: "open-favorites"): void;
+  (e: "open-forum"): void;
+  (e: "edit-profile"): void;
+  (e: "logout"): void;
 }>();
+
+const showAccountMenu = ref(false);
+
+const accountLabel = computed(() => {
+  return props.currentUser
+    ? props.currentUser.displayName || props.currentUser.username
+    : "登录 / 注册";
+});
+
+const handleAccountClick = () => {
+  if (!props.currentUser) {
+    emit("request-login");
+    return;
+  }
+
+  showAccountMenu.value = !showAccountMenu.value;
+};
 
 const toggleTheme = () => {
   emit("toggle-theme");

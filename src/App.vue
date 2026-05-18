@@ -24,11 +24,18 @@
         :store-filter="storeFilter"
         :sidebar-entries="sidebarEntries"
         :entry-counts="entryCounts"
+        :current-user="currentUser"
         @toggle-theme="toggleTheme"
         @select-tab="selectTab"
         @close="isSidebarOpen = false"
         @list="handleList"
         @update="handleUpdate"
+        @request-login="showLoginModal = true"
+        @open-user-management="openUserManagement"
+        @open-favorites="openFavoriteManagement"
+        @open-forum="openExternalUrl(FLARUM_BASE_URL)"
+        @edit-profile="openExternalUrl(FLARUM_SETTINGS_URL)"
+        @logout="logout"
       />
     </aside>
 
@@ -169,6 +176,23 @@
     <AboutModal :show="showAboutModal" @close="closeAboutModal" />
 
     <SettingsModal :show="showSettingsModal" @close="closeSettingsModal" />
+
+    <LoginModal
+      :show="showLoginModal"
+      :loading="loginLoading"
+      :error="loginError"
+      @close="showLoginModal = false"
+      @login="handleFlarumLogin"
+      @register="openExternalUrl(FLARUM_REGISTER_URL)"
+    />
+
+    <LoginPromptModal
+      :show="showLoginPrompt"
+      :message="loginPromptMessage"
+      @close="showLoginPrompt = false"
+      @login="openLoginFromPrompt"
+      @register="openExternalUrl(FLARUM_REGISTER_URL)"
+    />
   </div>
 </template>
 
@@ -191,8 +215,13 @@ import UninstallConfirmModal from "./components/UninstallConfirmModal.vue";
 import ApmInstallConfirmModal from "./components/ApmInstallConfirmModal.vue";
 import AboutModal from "./components/AboutModal.vue";
 import SettingsModal from "./components/SettingsModal.vue";
+import LoginModal from "./components/LoginModal.vue";
+import LoginPromptModal from "./components/LoginPromptModal.vue";
 import {
   APM_STORE_BASE_URL,
+  FLARUM_BASE_URL,
+  FLARUM_REGISTER_URL,
+  FLARUM_SETTINGS_URL,
   currentApp,
   currentAppSparkInstalled,
   currentAppApmInstalled,
@@ -211,6 +240,14 @@ import {
   rankAppsBySearch,
 } from "./modules/appSearch";
 import { handleInstall, handleRetry } from "./modules/processInstall";
+import { exchangeFlarumToken } from "./modules/backendApi";
+import { requestFlarumToken } from "./modules/flarumAuth";
+import {
+  currentUser,
+  isLoggedIn,
+  logout,
+  setAuthSession,
+} from "./global/authState";
 import {
   getAllowedInstalledOrigin,
   getEffectiveStoreFilter,
@@ -226,6 +263,7 @@ import type {
   CategoryInfo,
   HomeLink,
   HomeList,
+  FlarumLoginPayload,
   SidebarEntry,
   UpdateCenterItem,
 } from "./global/typedefinition";
@@ -289,6 +327,11 @@ const showUninstallModal = ref(false);
 const uninstallTargetApp: Ref<App | null> = ref(null);
 const showAboutModal = ref(false);
 const showSettingsModal = ref(false);
+const showLoginModal = ref(false);
+const loginLoading = ref(false);
+const loginError = ref("");
+const showLoginPrompt = ref(false);
+const loginPromptMessage = ref("请登录星火账号后继续操作。");
 const sparkAvailable = ref(false);
 const apmAvailable = ref(false);
 const sidebarEntries: Ref<SidebarEntry[]> = ref([]);
@@ -1062,6 +1105,51 @@ const closeSettingsModal = () => {
   showSettingsModal.value = false;
 };
 
+const openExternalUrl = (url: string) => {
+  window.open(url, "_blank", "noopener,noreferrer");
+};
+
+const requireLogin = (message: string): boolean => {
+  if (isLoggedIn.value) return true;
+  loginPromptMessage.value = message;
+  showLoginPrompt.value = true;
+  return false;
+};
+
+const openLoginFromPrompt = () => {
+  showLoginPrompt.value = false;
+  showLoginModal.value = true;
+};
+
+const handleFlarumLogin = async (payload: FlarumLoginPayload) => {
+  loginLoading.value = true;
+  loginError.value = "";
+
+  try {
+    const flarumToken = await requestFlarumToken(payload);
+    const session = await exchangeFlarumToken({
+      flarumUserId: flarumToken.userId,
+      flarumToken: flarumToken.token,
+    });
+    setAuthSession(session);
+    showLoginModal.value = false;
+  } catch (error: unknown) {
+    loginError.value = (error as Error)?.message || "登录失败，请稍后重试";
+  } finally {
+    loginLoading.value = false;
+  }
+};
+
+const openUserManagement = () => {
+  if (!requireLogin("请登录后查看和管理账号信息。")) return;
+  showLoginPrompt.value = false;
+};
+
+const openFavoriteManagement = () => {
+  if (!requireLogin("请登录后查看我的收藏。")) return;
+  showLoginPrompt.value = false;
+};
+
 // TODO: 目前 APM 商店不能暂停下载
 const pauseDownload = (id: DownloadItem) => {
   const download = downloads.value.find((d) => d.id === id.id);
@@ -1195,7 +1283,7 @@ const loadSidebarConfig = async () => {
       try {
         const response = await axiosInstance.get(path);
         const data = response.data;
-        const entries = Array.isArray(data) ? data : (data.entries || []);
+        const entries = Array.isArray(data) ? data : data.entries || [];
 
         for (const entry of entries) {
           if (entry.id && entry.name) {
@@ -1249,9 +1337,7 @@ const loadApps = async (onFirstBatch?: () => void) => {
               const path = `/${finalArch}/${category}/applist.json`;
 
               logger.info(`加载分类: ${category} (来源: ${mode})`);
-              const categoryApps = await fetchWithRetry<AppJson[]>(
-                path,
-              );
+              const categoryApps = await fetchWithRetry<AppJson[]>(path);
 
               const normalizedApps = (categoryApps || []).map((appJson) => ({
                 name: appJson.Name,

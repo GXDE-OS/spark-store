@@ -131,8 +131,14 @@ const toSyncedAppList = (
 });
 
 export const setBackendToken = (token: string | null): void => {
-  if (token) backend.defaults.headers.common.Authorization = `Bearer ${token}`;
-  else delete backend.defaults.headers.common.Authorization;
+  const backendWithOptionalDefaults = backend as typeof backend & {
+    defaults?: { headers?: { common?: Record<string, unknown> } };
+  };
+  const commonHeaders = backendWithOptionalDefaults.defaults?.headers?.common;
+  if (!commonHeaders) return;
+
+  if (token) commonHeaders.Authorization = `Bearer ${token}`;
+  else delete commonHeaders.Authorization;
 };
 
 export const exchangeFlarumToken = async (payload: {
