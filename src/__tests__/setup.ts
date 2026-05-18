@@ -20,11 +20,13 @@ Object.defineProperty(window, "ipcRenderer", {
     invoke: vi.fn(),
     removeListener: vi.fn(),
   },
+  writable: true,
 });
 
 // Mock window.apm_store
 Object.defineProperty(window, "apm_store", {
   value: {
-    arch: "amd64-store",
+    arch: "amd64",
   },
+  writable: true,
 });

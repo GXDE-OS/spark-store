@@ -7,6 +7,14 @@ export const APM_STORE_BASE_URL: string =
 export const APM_STORE_STATS_BASE_URL: string =
   import.meta.env.VITE_APM_STORE_STATS_BASE_URL || "";
 
+export const SPARK_BACKEND_BASE_URL: string =
+  import.meta.env.VITE_SPARK_BACKEND_BASE_URL || "";
+
+export const FLARUM_BASE_URL = "https://bbs.spark-app.store";
+export const FLARUM_REGISTER_URL = `${FLARUM_BASE_URL}/register`;
+export const FLARUM_PROFILE_URL = `${FLARUM_BASE_URL}/u`;
+export const FLARUM_SETTINGS_URL = `${FLARUM_BASE_URL}/settings`;
+
 // 下面的变量用于存储当前应用的信息，其实用在多个组件中
 export const currentApp = ref<App | null>(null);
 export const currentAppSparkInstalled = ref(false);

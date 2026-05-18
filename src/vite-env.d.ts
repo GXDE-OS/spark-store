@@ -10,6 +10,10 @@ declare module "*.vue" {
 }
 
 declare global {
+  interface ImportMetaEnv {
+    readonly VITE_SPARK_BACKEND_BASE_URL?: string;
+  }
+
   interface Window {
     // expose in the `electron/preload/index.ts`
     ipcRenderer: IpcRendererFacade;
