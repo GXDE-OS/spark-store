@@ -114,7 +114,7 @@ const password = ref("");
 const submitLogin = () => {
   emit("login", {
     identification: identification.value.trim(),
-    password: password.value,
+    password: password.value.trim(),
   });
 };
 </script>

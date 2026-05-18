@@ -9,8 +9,8 @@ describe("LoginModal", () => {
       props: { show: true, loading: false, error: "" },
     });
 
-    await fireEvent.update(screen.getByLabelText("论坛账号"), "momen");
-    await fireEvent.update(screen.getByLabelText("论坛密码"), "secret");
+    await fireEvent.update(screen.getByLabelText("论坛账号"), "  momen  ");
+    await fireEvent.update(screen.getByLabelText("论坛密码"), "  secret  ");
     await fireEvent.click(screen.getByRole("button", { name: "登录" }));
     await fireEvent.click(screen.getByRole("button", { name: "注册账号" }));
 
