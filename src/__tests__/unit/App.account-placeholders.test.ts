@@ -163,7 +163,9 @@ describe("App account placeholders", () => {
   it("shows the favorites placeholder from the logged-in quick menu", async () => {
     render(App);
 
-    await fireEvent.click(await screen.findByRole("button", { name: /Momen/ }));
+    await fireEvent.click(
+      await screen.findByRole("button", { name: /^Momen$/ }),
+    );
     await fireEvent.click(screen.getByText("我的收藏"));
 
     expect(
@@ -258,5 +260,35 @@ describe("App account placeholders", () => {
       origin: "spark",
       pkgnameList: ["wps"],
     });
+  });
+
+  it("clears favorite data and leaves protected favorites view after logout", async () => {
+    render(App);
+
+    await fireEvent.click(await screen.findByRole("button", { name: /Momen/ }));
+    await fireEvent.click(screen.getByText("我的收藏"));
+
+    expect(
+      await screen.findByRole("heading", { name: "我的收藏" }),
+    ).toBeTruthy();
+    expect(await screen.findByText("默认收藏夹 (1)")).toBeTruthy();
+    expect(await screen.findByText("wps · office")).toBeTruthy();
+
+    await fireEvent.click(
+      await screen.findByRole("button", { name: /^Momen$/ }),
+    );
+    if (!screen.queryByText("退出登录")) {
+      await fireEvent.click(
+        await screen.findByRole("button", { name: /^Momen$/ }),
+      );
+    }
+    await fireEvent.click(screen.getByText("退出登录"));
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "登录 / 注册" })).toBeTruthy();
+    });
+    expect(screen.queryByText("默认收藏夹 (1)")).toBeNull();
+    expect(screen.queryByText("wps · office")).toBeNull();
+    expect(screen.queryByRole("heading", { name: "我的收藏" })).toBeNull();
   });
 });

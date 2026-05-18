@@ -35,7 +35,7 @@
         @open-favorites="openFavoriteManagement"
         @open-forum="openExternalUrl(FLARUM_BASE_URL)"
         @edit-profile="openExternalUrl(FLARUM_SETTINGS_URL)"
-        @logout="logout"
+        @logout="handleLogout"
       />
     </aside>
 
@@ -1318,6 +1318,29 @@ const openLoginFromPrompt = () => {
   showLoginModal.value = true;
 };
 
+const clearFavoriteState = () => {
+  favoriteFolders.value = [];
+  activeFavoriteFolderId.value = null;
+  favoriteItems.value = [];
+  showFavoriteSelector.value = false;
+  favoriteTargetApp.value = null;
+  favoriteLoading.value = false;
+  favoriteError.value = "";
+};
+
+const handleLogout = () => {
+  logout();
+  clearFavoriteState();
+  showLoginModal.value = false;
+  showLoginPrompt.value = false;
+  isSidebarOpen.value = false;
+  if (currentView.value === "favorites" || currentView.value === "account") {
+    currentView.value = "default";
+    activeTab.value = "home";
+    selectedCategory.value = "all";
+  }
+};
+
 const handleFlarumLogin = async (payload: FlarumLoginPayload) => {
   loginLoading.value = true;
   loginError.value = "";
@@ -1347,8 +1370,11 @@ const openUserManagement = () => {
 
 const loadFavoriteFolders = async (): Promise<void> => {
   favoriteFolders.value = await listFavoriteFolders();
-  if (!activeFavoriteFolderId.value && favoriteFolders.value.length > 0) {
-    activeFavoriteFolderId.value = favoriteFolders.value[0].id;
+  const activeFolderExists = favoriteFolders.value.some(
+    (folder) => folder.id === activeFavoriteFolderId.value,
+  );
+  if (!activeFolderExists) {
+    activeFavoriteFolderId.value = favoriteFolders.value[0]?.id ?? null;
   }
 };
 
