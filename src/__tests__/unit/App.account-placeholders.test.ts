@@ -2,7 +2,11 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/vue";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import App from "@/App.vue";
-import { listDownloadedApps, listFavoriteFolders } from "@/modules/backendApi";
+import {
+  fetchSyncedAppList,
+  listDownloadedApps,
+  listFavoriteFolders,
+} from "@/modules/backendApi";
 import { setAuthSession } from "@/global/authState";
 import type {
   DownloadedAppList,
@@ -97,10 +101,11 @@ vi.mock("axios", () => {
     }
     return { data: [] };
   });
+  const post = vi.fn(async () => ({ data: { ok: true } }));
 
   return {
     default: {
-      create: () => ({ get }),
+      create: () => ({ get, post }),
     },
   };
 });
@@ -138,9 +143,11 @@ vi.mock("@/modules/backendApi", () => ({
   bulkDeleteFavoriteItems: vi.fn(),
   createFavoriteFolder: vi.fn(),
   exchangeFlarumToken: vi.fn(),
+  fetchSyncedAppList: vi.fn(async () => null),
   listDownloadedApps: vi.fn(async () => downloadedList([])),
   listFavoriteFolders: vi.fn(async () => favoriteFolders),
   listFavoriteItems: vi.fn(async () => favoriteItems),
+  uploadSyncedAppList: vi.fn(),
   setBackendToken: vi.fn(),
 }));
 
@@ -436,5 +443,53 @@ describe("App account placeholders", () => {
 
     expect(screen.queryByText("旧账号应用")).toBeNull();
     expect(screen.getByText("暂无下载记录。")).toBeTruthy();
+  });
+
+  it("restores cloud apps by origin and package when category changed", async () => {
+    vi.mocked(fetchSyncedAppList).mockResolvedValueOnce({
+      snapshotName: "默认列表",
+      clientArch: "amd64",
+      distro: "deepin 25",
+      updatedAt: "2026-05-18T00:00:00Z",
+      items: [
+        {
+          pkgname: "wps",
+          origin: "apm",
+          category: "legacy-office",
+          version: "1.0.0",
+          packageArch: "amd64",
+          appName: "WPS Cloud",
+          iconUrl: "",
+        },
+      ],
+    });
+    invoke.mockImplementation(async (channel: string, payload?: unknown) => {
+      if (channel === "get-store-filter") return "apm";
+      if (channel === "check-spark-available") return false;
+      if (channel === "check-apm-available") return true;
+      if (channel === "get-app-version") return "5.0.0";
+      if (channel === "get-system-info") return { distro: "deepin 25" };
+      if (channel === "check-installed") return false;
+      if (channel === "list-installed") {
+        const request = payload as { origin?: string };
+        if (request.origin === "apm") return { success: true, apps: [] };
+      }
+      return [];
+    });
+    render(App);
+
+    await fireEvent.click(await screen.findByText("应用管理"));
+    await fireEvent.click(
+      await screen.findByRole("button", { name: /从账号恢复/ }),
+    );
+    await fireEvent.click(await screen.findByLabelText("WPS Cloud"));
+    await fireEvent.click(screen.getByRole("button", { name: "加入安装队列" }));
+
+    await waitFor(() => {
+      expect(window.ipcRenderer.send).toHaveBeenCalledWith(
+        "queue-install",
+        expect.stringContaining('"pkgname":"wps"'),
+      );
+    });
   });
 });

@@ -150,8 +150,16 @@ const isInstalled = (item: SyncedAppListItem): boolean =>
   props.installedKeys.has(cloudItemKey(item));
 
 const selectedItems = computed(() =>
-  props.items.filter((item) => selectedKeys.value.has(cloudItemKey(item))),
+  props.items.filter(
+    (item) => selectedKeys.value.has(cloudItemKey(item)) && !isInstalled(item),
+  ),
 );
+
+const pruneSelectedKeys = (): void => {
+  selectedKeys.value = new Set(
+    [...selectedKeys.value].filter((key) => !props.installedKeys.has(key)),
+  );
+};
 
 const toggleSelection = (item: SyncedAppListItem): void => {
   if (isInstalled(item)) return;
@@ -166,6 +174,14 @@ watch(
   () => [props.show, props.items] as const,
   () => {
     selectedKeys.value = new Set();
+  },
+  { deep: true },
+);
+
+watch(
+  () => props.installedKeys,
+  () => {
+    pruneSelectedKeys();
   },
   { deep: true },
 );

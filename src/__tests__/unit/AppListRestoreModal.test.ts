@@ -54,4 +54,22 @@ describe("AppListRestoreModal", () => {
     expect(screen.getByLabelText("Spark Notes")).toBeDisabled();
     expect(screen.getByText("已安装")).toBeTruthy();
   });
+
+  it("removes selected items when they become installed", async () => {
+    const rendered = render(AppListRestoreModal, {
+      props: {
+        show: true,
+        loading: false,
+        error: "",
+        items: [createItem()],
+        installedKeys: new Set<string>(),
+      },
+    });
+
+    await fireEvent.click(screen.getByLabelText("Spark Notes"));
+    await rendered.rerender({ installedKeys: new Set(["spark:spark-notes"]) });
+
+    expect(screen.getByLabelText("Spark Notes")).toBeDisabled();
+    expect(screen.getByRole("button", { name: "加入安装队列" })).toBeDisabled();
+  });
 });

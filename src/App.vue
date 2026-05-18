@@ -1583,12 +1583,13 @@ const openRestoreFromAccount = async (): Promise<void> => {
 
 const installCloudItems = (items: SyncedAppListItem[]): void => {
   for (const item of items) {
-    const app = apps.value.find(
+    const candidates = apps.value.filter(
       (candidate) =>
-        candidate.pkgname === item.pkgname &&
-        candidate.origin === item.origin &&
-        candidate.category === item.category,
+        candidate.pkgname === item.pkgname && candidate.origin === item.origin,
     );
+    const app =
+      candidates.find((candidate) => candidate.category === item.category) ??
+      candidates[0];
     if (!app) continue;
     void onDetailInstall(app);
   }
