@@ -40,3 +40,4 @@ yarn.lock
 
 test-results.json
 .worktrees/
+.superpowers/
