@@ -17,6 +17,46 @@ const invoke = vi.fn();
 const send = vi.fn();
 const ipcHandlers = new Map<string, (...args: unknown[]) => void>();
 
+const setSecondUserSession = () => {
+  setAuthSession({
+    accessToken: "backend-token-b",
+    tokenType: "bearer",
+    user: {
+      id: 2,
+      flarumUserId: "84",
+      username: "second",
+      displayName: "Second User",
+      avatarUrl: "https://bbs.spark-app.store/avatar-b.png",
+      forumLevel: "用户",
+      forumGroups: ["用户"],
+    },
+  });
+};
+
+const setInitialUserSession = () => {
+  setAuthSession({
+    accessToken: "backend-token",
+    tokenType: "bearer",
+    user: {
+      id: 1,
+      flarumUserId: "42",
+      username: "momen",
+      displayName: "Momen",
+      avatarUrl: "https://bbs.spark-app.store/avatar.png",
+      forumLevel: "管理员",
+      forumGroups: ["管理员"],
+    },
+  });
+};
+
+const createControlledPromise = <T>() => {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((promiseResolve) => {
+    resolve = promiseResolve;
+  });
+  return { promise, resolve };
+};
+
 vi.mock("axios", () => {
   const get = vi.fn(async (url: string) => {
     if (url.includes("categories.json")) {
@@ -124,19 +164,7 @@ describe("App download records", () => {
     });
     window.apm_store.arch = "amd64";
     localStorage.clear();
-    setAuthSession({
-      accessToken: "backend-token",
-      tokenType: "bearer",
-      user: {
-        id: 1,
-        flarumUserId: "42",
-        username: "momen",
-        displayName: "Momen",
-        avatarUrl: "https://bbs.spark-app.store/avatar.png",
-        forumLevel: "管理员",
-        forumGroups: ["管理员"],
-      },
-    });
+    setInitialUserSession();
 
     vi.stubGlobal(
       "matchMedia",
@@ -296,19 +324,7 @@ describe("App download records", () => {
     await fireEvent.click(screen.getByRole("button", { name: "Momen" }));
     await fireEvent.click(await screen.findByText("退出登录"));
 
-    setAuthSession({
-      accessToken: "backend-token-b",
-      tokenType: "bearer",
-      user: {
-        id: 2,
-        flarumUserId: "84",
-        username: "second",
-        displayName: "Second User",
-        avatarUrl: "https://bbs.spark-app.store/avatar-b.png",
-        forumLevel: "用户",
-        forumGroups: ["用户"],
-      },
-    });
+    setSecondUserSession();
 
     const completion: DownloadResult = {
       id: queuedDownload.id,
@@ -320,6 +336,113 @@ describe("App download records", () => {
       origin: "apm",
     };
 
+    ipcHandlers.get("install-complete")?.({}, completion);
+
+    await waitFor(() => {
+      expect(recordDownloadedApp).not.toHaveBeenCalled();
+    });
+  });
+
+  it("does not bind a queued install to a user who logged in during the APM availability check", async () => {
+    const apmCheck = createControlledPromise<boolean>();
+    let apmCheckCalls = 0;
+    invoke.mockImplementation(async (channel: string) => {
+      if (channel === "get-store-filter") return "apm";
+      if (channel === "check-spark-available") return false;
+      if (channel === "check-apm-available") {
+        apmCheckCalls += 1;
+        return apmCheckCalls === 1 ? true : apmCheck.promise;
+      }
+      if (channel === "get-app-version") return "5.0.0";
+      if (channel === "get-system-info") return { distro: "deepin 25" };
+      if (channel === "list-installed") return { success: true, apps: [] };
+      if (channel === "check-installed") return false;
+      return [];
+    });
+    render(App);
+
+    await fireEvent.click(
+      await screen.findByRole("button", { name: "全部应用 1" }),
+    );
+    await fireEvent.click(await screen.findByText("WPS"));
+    await fireEvent.click(await screen.findByRole("button", { name: "安装" }));
+
+    await waitFor(() => {
+      expect(apmCheckCalls).toBe(2);
+    });
+    setSecondUserSession();
+    apmCheck.resolve(true);
+
+    await waitFor(() => {
+      expect(send).toHaveBeenCalledWith(
+        "queue-install",
+        expect.stringContaining('"pkgname":"wps"'),
+      );
+    });
+
+    const queuedPayload = vi
+      .mocked(send)
+      .mock.calls.find(
+        ([channel]) => channel === "queue-install",
+      )?.[1] as string;
+    const queuedDownload = JSON.parse(queuedPayload) as { id: number };
+    const completion: DownloadResult = {
+      id: queuedDownload.id,
+      time: Date.now(),
+      message: "installed",
+      success: true,
+      exitCode: 0,
+      status: "completed",
+      origin: "apm",
+    };
+
+    ipcHandlers.get("install-complete")?.({}, completion);
+
+    await waitFor(() => {
+      expect(recordDownloadedApp).not.toHaveBeenCalled();
+    });
+  });
+
+  it("cleans up a successful pending record even when the active user does not match", async () => {
+    render(App);
+
+    await fireEvent.click(
+      await screen.findByRole("button", { name: "全部应用 1" }),
+    );
+    await fireEvent.click(await screen.findByText("WPS"));
+    await fireEvent.click(await screen.findByRole("button", { name: "安装" }));
+
+    await waitFor(() => {
+      expect(send).toHaveBeenCalledWith(
+        "queue-install",
+        expect.stringContaining('"pkgname":"wps"'),
+      );
+    });
+
+    const queuedPayload = vi
+      .mocked(send)
+      .mock.calls.find(
+        ([channel]) => channel === "queue-install",
+      )?.[1] as string;
+    const queuedDownload = JSON.parse(queuedPayload) as { id: number };
+    const completion: DownloadResult = {
+      id: queuedDownload.id,
+      time: Date.now(),
+      message: "installed",
+      success: true,
+      exitCode: 0,
+      status: "completed",
+      origin: "apm",
+    };
+
+    setSecondUserSession();
+    ipcHandlers.get("install-complete")?.({}, completion);
+
+    await waitFor(() => {
+      expect(recordDownloadedApp).not.toHaveBeenCalled();
+    });
+
+    setInitialUserSession();
     ipcHandlers.get("install-complete")?.({}, completion);
 
     await waitFor(() => {

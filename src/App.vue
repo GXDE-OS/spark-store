@@ -1249,9 +1249,16 @@ const onDetailRemove = (app: App) => {
 };
 
 const onDetailInstall = async (app: App) => {
+  const initiatingUserId = currentUser.value?.id ?? null;
   const download = await handleInstall(app);
-  const initiatingUserId = currentUser.value?.id;
-  if (!download || !isLoggedIn.value || initiatingUserId === undefined) return;
+  if (
+    !download ||
+    initiatingUserId === null ||
+    !isLoggedIn.value ||
+    currentUser.value?.id !== initiatingUserId
+  ) {
+    return;
+  }
 
   pendingDownloadRecords.set(download.id, {
     userId: initiatingUserId,
@@ -1271,6 +1278,10 @@ const handleInstallCompleteForDownloadRecord = async (
 ) => {
   const pendingRecord = pendingDownloadRecords.get(result.id);
   if (!pendingRecord) return;
+
+  if (result.success) {
+    pendingDownloadRecords.delete(result.id);
+  }
 
   if (
     !result.success ||
@@ -1294,8 +1305,6 @@ const handleInstallCompleteForDownloadRecord = async (
     await recordDownloadedApp(downloadRecord);
   } catch (error: unknown) {
     logger.warn({ err: error }, "记录下载应用失败");
-  } finally {
-    pendingDownloadRecords.delete(result.id);
   }
 };
 
