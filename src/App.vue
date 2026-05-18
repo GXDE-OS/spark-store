@@ -322,6 +322,7 @@ import type {
   ReviewTags,
   FavoriteFolder,
   FavoriteItem,
+  InstalledAppInfo,
   ResolvedFavoriteItem,
 } from "./global/typedefinition";
 import type { Ref } from "vue";
@@ -1134,6 +1135,95 @@ const refreshInstalledApps = async () => {
   }
 };
 
+const mapInstalledAppToCatalogApp = (
+  app: InstalledAppInfo,
+  origin: "spark" | "apm",
+): App | null => {
+  let appInfo = apps.value.find(
+    (catalogApp) =>
+      catalogApp.pkgname === app.pkgname && catalogApp.origin === origin,
+  );
+
+  if (origin === "spark" && !appInfo) {
+    return null;
+  }
+
+  if (appInfo) {
+    appInfo.flags = app.flags;
+    appInfo.arch = app.arch;
+    appInfo.currentStatus = "installed";
+    appInfo.isDependency = app.isDependency;
+    return appInfo;
+  }
+
+  return {
+    name: app.name || app.pkgname,
+    pkgname: app.pkgname,
+    version: app.version,
+    category: "unknown",
+    tags: "",
+    more: "",
+    filename: "",
+    torrent_address: "",
+    author: "",
+    contributor: "",
+    website: "",
+    update: "",
+    size: "",
+    img_urls: [],
+    icons: app.icon || "",
+    origin: app.origin || (app.arch?.includes("apm") ? "apm" : "spark"),
+    currentStatus: "installed",
+    arch: app.arch,
+    flags: app.flags,
+    isDependency: app.isDependency,
+  };
+};
+
+const refreshFavoriteInstalledApps = async (): Promise<void> => {
+  const origins: Array<"spark" | "apm"> = [];
+  if (isOriginEnabled(storeFilter.value, "spark") && sparkAvailable.value) {
+    origins.push("spark");
+  }
+  if (isOriginEnabled(storeFilter.value, "apm") && apmAvailable.value) {
+    origins.push("apm");
+  }
+
+  const refreshedApps: App[] = [];
+  await Promise.all(
+    origins.map(async (origin) => {
+      const pkgnameList =
+        origin === "spark"
+          ? apps.value
+              .filter((app) => app.origin === "spark")
+              .map((app) => app.pkgname)
+          : undefined;
+      const result = await window.ipcRenderer.invoke("list-installed", {
+        origin,
+        pkgnameList,
+      });
+      if (!result?.success) return;
+
+      for (const app of result.apps as InstalledAppInfo[]) {
+        const appInfo = mapInstalledAppToCatalogApp(app, origin);
+        if (appInfo) refreshedApps.push(appInfo);
+      }
+    }),
+  );
+
+  const refreshedKeys = new Set(
+    refreshedApps.map((app) => `${app.origin}:${app.pkgname}`),
+  );
+  installedApps.value = [
+    ...installedApps.value.filter(
+      (app) =>
+        !origins.includes(app.origin) &&
+        !refreshedKeys.has(`${app.origin}:${app.pkgname}`),
+    ),
+    ...refreshedApps,
+  ];
+};
+
 const requestUninstall = (app: App) => {
   uninstallTargetApp.value = app;
   showUninstallModal.value = true;
@@ -1274,7 +1364,7 @@ const refreshFavorites = async (): Promise<void> => {
   favoriteLoading.value = true;
   favoriteError.value = "";
   try {
-    await Promise.all([refreshInstalledApps(), loadFavoriteFolders()]);
+    await Promise.all([refreshFavoriteInstalledApps(), loadFavoriteFolders()]);
     await loadActiveFavoriteItems();
   } catch (error: unknown) {
     favoriteError.value = (error as Error)?.message || "读取收藏夹失败";

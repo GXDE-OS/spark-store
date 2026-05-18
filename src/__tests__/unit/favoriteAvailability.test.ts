@@ -112,4 +112,15 @@ describe("favoriteAvailability", () => {
     )[0];
     expect(resolved.status).toBe("installed");
   });
+
+  it("marks installed favorites from all-category catalog matches", () => {
+    const resolved = resolveFavoriteItems(
+      [favorite],
+      [app("spark")],
+      [app("spark", { category: "all", currentStatus: "installed" })],
+      { spark: true, apm: true },
+      "both",
+    )[0];
+    expect(resolved.status).toBe("installed");
+  });
 });

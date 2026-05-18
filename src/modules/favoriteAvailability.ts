@@ -19,7 +19,9 @@ const appMatchesFavorite = (app: App, item: FavoriteItem): boolean =>
 
 const installedAppMatchesFavorite = (app: App, item: FavoriteItem): boolean =>
   app.pkgname === item.pkgname &&
-  (app.category === item.category || app.category === "unknown");
+  (app.category === item.category ||
+    app.category === "all" ||
+    app.category === "unknown");
 
 const appMatchesClientArch = (app: App, clientArch: string): boolean => {
   if (!app.arch) return true;

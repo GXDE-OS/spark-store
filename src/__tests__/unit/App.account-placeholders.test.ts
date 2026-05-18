@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/vue";
+import { fireEvent, render, screen, waitFor } from "@testing-library/vue";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import App from "@/App.vue";
@@ -197,6 +197,10 @@ describe("App account placeholders", () => {
     });
     render(App);
 
+    await waitFor(() => {
+      expect(screen.getByText("2")).toBeTruthy();
+    });
+
     await fireEvent.click(await screen.findByRole("button", { name: /Momen/ }));
     await fireEvent.click(screen.getByText("我的收藏"));
 
@@ -207,6 +211,52 @@ describe("App account placeholders", () => {
     expect(invoke).toHaveBeenCalledWith("list-installed", {
       origin: "apm",
       pkgnameList: undefined,
+    });
+  });
+
+  it("refreshes Spark installed state for favorites in both mode", async () => {
+    invoke.mockImplementation(async (channel: string, payload?: unknown) => {
+      if (channel === "get-store-filter") return "both";
+      if (channel === "check-spark-available") return true;
+      if (channel === "check-apm-available") return true;
+      if (channel === "get-app-version") return "5.0.0";
+      if (channel === "list-installed") {
+        const request = payload as { origin?: string };
+        if (request.origin === "spark") {
+          return {
+            success: true,
+            apps: [
+              {
+                pkgname: "wps",
+                name: "WPS",
+                version: "1.0.0",
+                arch: "amd64",
+                flags: "installed",
+                origin: "spark",
+              },
+            ],
+          };
+        }
+        return { success: true, apps: [] };
+      }
+      return [];
+    });
+    render(App);
+
+    await waitFor(() => {
+      expect(screen.getByText("2")).toBeTruthy();
+    });
+
+    await fireEvent.click(await screen.findByRole("button", { name: /Momen/ }));
+    await fireEvent.click(screen.getByText("我的收藏"));
+
+    expect(
+      await screen.findByRole("heading", { name: "我的收藏" }),
+    ).toBeTruthy();
+    expect(await screen.findByText("已安装")).toBeTruthy();
+    expect(invoke).toHaveBeenCalledWith("list-installed", {
+      origin: "spark",
+      pkgnameList: ["wps"],
     });
   });
 });
