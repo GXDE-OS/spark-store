@@ -661,5 +661,11 @@ describe("App account placeholders", () => {
         expect.objectContaining({ items: [] }),
       );
     });
+    const uploadedItemNames = vi
+      .mocked(uploadSyncedAppList)
+      .mock.calls.flatMap(([payload]) =>
+        payload.items.map((item) => item.pkgname),
+      );
+    expect(uploadedItemNames).not.toContain("wps");
   });
 });
