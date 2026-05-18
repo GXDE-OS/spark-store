@@ -72,7 +72,6 @@
           class="group block overflow-hidden rounded-xl transition-transform duration-300 hover:scale-[1.02]"
           :title="link.more as string"
         >
-          <!-- 图片区域 - 850:400 比例 -->
           <div
             class="relative w-full aspect-[850/400] overflow-hidden rounded-xl bg-slate-100 dark:bg-slate-800"
           >
@@ -88,7 +87,6 @@
                   imageLoaded[link.url + link.name],
               }"
             />
-            <!-- 图片加载占位符 -->
             <div
               v-if="!imageLoaded[link.url + link.name]"
               class="absolute inset-0 flex items-center justify-center"
@@ -98,7 +96,6 @@
               ></div>
             </div>
           </div>
-          <!-- 文字信息区域 -->
           <div class="mt-3 px-1">
             <div
               class="text-base font-semibold text-slate-900 dark:text-white group-hover:text-brand dark:group-hover:text-brand transition-colors"

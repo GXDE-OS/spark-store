@@ -51,13 +51,6 @@
         </button>
       </div>
     </div>
-    <div
-      v-if="activeCategory !== 'home'"
-      class="text-sm text-slate-500 dark:text-slate-400"
-      id="currentCount"
-    >
-      <!-- 共 {{ appsCount }} 个应用 -->
-    </div>
   </div>
 </template>
 
@@ -66,7 +59,7 @@ import { ref, watch } from "vue";
 
 const props = defineProps<{
   searchQuery: string;
-  activeCategory: string;
+  activeTab: string;
   appsCount: number;
 }>();
 const emit = defineEmits<{

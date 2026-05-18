@@ -8,13 +8,14 @@ const renderSidebar = (
 ) => {
   return render(AppSidebar, {
     props: {
-      categories: {},
-      activeCategory: "all",
+      activeTab: "all",
       categoryCounts: { all: 0 },
       themeMode: "auto",
       storeFilter: "both",
       sparkAvailable: true,
       apmAvailable: true,
+      sidebarEntries: [],
+      entryCounts: {},
       ...overrides,
     },
   });

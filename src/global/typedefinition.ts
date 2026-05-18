@@ -241,3 +241,11 @@ export interface HomeList {
   title: string;
   apps: App[];
 }
+
+export interface SidebarEntry {
+  id: string;
+  name: string;
+  icon?: string;
+  type?: "category" | "search" | "link";
+  value?: string;
+}

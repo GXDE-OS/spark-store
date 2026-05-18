@@ -30,59 +30,53 @@
       </div>
     </div>
 
-    <StoreModeSwitcher />
-
-    <div class="flex-1 space-y-2 overflow-y-auto scrollbar-muted px-2 py-1">
+    <div class="flex-1 space-y-1 overflow-y-auto scrollbar-muted px-1 py-1">
       <button
         type="button"
-        class="flex w-full items-center gap-3 rounded-2xl border border-transparent px-4 py-3 text-left text-sm font-medium text-slate-600 transition hover:border-brand/30 hover:bg-brand/5 hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 dark:text-slate-300 dark:hover:bg-slate-800"
-        :class="
-          activeCategory === 'home'
-            ? 'border-brand/40 bg-brand/10 text-brand dark:bg-brand/15'
-            : ''
-        "
-        @click="selectCategory('home')"
+        class="sidebar-tab"
+        :class="{ 'sidebar-tab-active': activeTab === 'home' }"
+        @click="selectTab('home')"
       >
-        <span>主页</span>
+        <span class="sidebar-tab-icon"><i class="fas fa-star"></i></span>
+        <span class="sidebar-tab-label">首页推荐</span>
       </button>
 
       <button
         type="button"
-        class="flex w-full items-center gap-3 rounded-2xl border border-transparent px-4 py-3 text-left text-sm font-medium text-slate-600 transition hover:border-brand/30 hover:bg-brand/5 hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 dark:text-slate-300 dark:hover:bg-slate-800"
-        :class="
-          activeCategory === 'all'
-            ? 'border-brand/40 bg-brand/10 text-brand dark:bg-brand/15'
-            : ''
-        "
-        @click="selectCategory('all')"
+        class="sidebar-tab"
+        :class="{ 'sidebar-tab-active': activeTab === 'all' }"
+        @click="selectTab('all')"
       >
-        <span>全部应用</span>
+        <span class="sidebar-tab-icon"><i class="fas fa-th-large"></i></span>
+        <span class="sidebar-tab-label">全部应用</span>
         <span
           class="ml-auto rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-500 dark:bg-slate-800/70 dark:text-slate-300"
           >{{ categoryCounts.all || 0 }}</span
         >
       </button>
 
+      <div
+        v-if="sidebarEntries.length > 0"
+        class="my-3 border-t border-slate-100 dark:border-slate-800"
+      ></div>
+
       <button
-        v-for="(category, key) in categories"
-        :key="key"
+        v-for="entry in sidebarEntries"
+        :key="entry.id"
         type="button"
-        class="flex w-full items-center gap-3 rounded-2xl border border-transparent px-4 py-3 text-left text-sm font-medium text-slate-600 transition hover:border-brand/30 hover:bg-brand/5 hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 dark:text-slate-300 dark:hover:bg-slate-800"
-        :class="
-          activeCategory === key
-            ? 'border-brand/40 bg-brand/10 text-brand dark:bg-brand/15'
-            : ''
-        "
-        @click="selectCategory(key)"
+        class="sidebar-tab"
+        :class="{ 'sidebar-tab-active': activeTab === entry.id }"
+        @click="selectTab(entry.id)"
       >
-        <span class="flex flex-col">
-          <span>
-            <div class="text-left">{{ category.zh }}</div>
-          </span>
+        <span class="sidebar-tab-icon">
+          <i v-if="entry.icon" :class="entry.icon"></i>
+          <i v-else class="fas fa-folder"></i>
         </span>
+        <span class="sidebar-tab-label">{{ entry.name }}</span>
         <span
+          v-if="entryCounts[entry.id]"
           class="ml-auto rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-500 dark:bg-slate-800/70 dark:text-slate-300"
-          >{{ categoryCounts[key] || 0 }}</span
+          >{{ entryCounts[entry.id] }}</span
         >
       </button>
     </div>
@@ -91,20 +85,20 @@
       <button
         v-if="canManageApps"
         type="button"
-        class="flex w-full items-center gap-3 rounded-2xl border border-transparent px-4 py-3 text-left text-sm font-medium text-slate-600 transition hover:border-brand/30 hover:bg-brand/5 hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 dark:text-slate-300 dark:hover:bg-slate-800"
+        class="sidebar-tab"
         @click="$emit('list')"
       >
-        <i class="fas fa-download"></i>
-        <span>应用管理</span>
+        <span class="sidebar-tab-icon"><i class="fas fa-download"></i></span>
+        <span class="sidebar-tab-label">应用管理</span>
       </button>
       <button
         v-if="canOpenUpdateCenter"
         type="button"
-        class="flex w-full items-center gap-3 rounded-2xl border border-transparent px-4 py-3 text-left text-sm font-medium text-slate-600 transition hover:border-brand/30 hover:bg-brand/5 hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 dark:text-slate-300 dark:hover:bg-slate-800"
+        class="sidebar-tab"
         @click="$emit('update')"
       >
-        <i class="fas fa-sync-alt"></i>
-        <span>软件更新</span>
+        <span class="sidebar-tab-icon"><i class="fas fa-sync-alt"></i></span>
+        <span class="sidebar-tab-label">软件更新</span>
       </button>
     </div>
   </div>
@@ -114,21 +108,22 @@
 import { computed } from "vue";
 import ThemeToggle from "./ThemeToggle.vue";
 import amberLogo from "../assets/imgs/spark-store.svg";
+import type { SidebarEntry } from "../global/typedefinition";
 
 const props = defineProps<{
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  categories: Record<string, any>;
-  activeCategory: string;
+  activeTab: string;
   categoryCounts: Record<string, number>;
   themeMode: "light" | "dark" | "auto";
   sparkAvailable: boolean;
   apmAvailable: boolean;
   storeFilter: "spark" | "apm" | "both";
+  sidebarEntries: SidebarEntry[];
+  entryCounts: Record<string, number>;
 }>();
 
 const emit = defineEmits<{
   (e: "toggle-theme"): void;
-  (e: "select-category", category: string): void;
+  (e: "select-tab", tab: string): void;
   (e: "close"): void;
   (e: "list"): void;
   (e: "update"): void;
@@ -147,7 +142,62 @@ const canManageApps = computed(() => {
 
 const canOpenUpdateCenter = canManageApps;
 
-const selectCategory = (category: string) => {
-  emit("select-category", category);
+const selectTab = (tab: string) => {
+  emit("select-tab", tab);
 };
 </script>
+
+<style scoped>
+.sidebar-tab {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 0.75rem;
+  border: 1px solid transparent;
+  border-radius: 0.75rem;
+  padding: 0.625rem 0.875rem;
+  text-align: left;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #64748b;
+  transition: all 0.15s ease;
+  background: transparent;
+  cursor: pointer;
+}
+
+.sidebar-tab:hover {
+  background: rgba(0, 113, 227, 0.06);
+  color: #0071e3;
+}
+
+.dark .sidebar-tab:hover {
+  background: rgba(64, 156, 255, 0.1);
+  color: #409cff;
+}
+
+.sidebar-tab-active {
+  background: rgba(0, 113, 227, 0.1);
+  color: #0066cc;
+  border-color: rgba(0, 113, 227, 0.2);
+}
+
+.dark .sidebar-tab-active {
+  background: rgba(64, 156, 255, 0.15);
+  color: #409cff;
+  border-color: rgba(64, 156, 255, 0.25);
+}
+
+.sidebar-tab-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  font-size: 0.875rem;
+  flex-shrink: 0;
+}
+
+.sidebar-tab-label {
+  flex: 1;
+}
+</style>

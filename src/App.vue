@@ -10,21 +10,22 @@
     ></div>
 
     <aside
-      class="fixed inset-y-0 left-0 z-50 w-72 transform border-r border-slate-200/70 bg-white/95 px-5 py-6 backdrop-blur transition-transform duration-300 ease-in-out dark:border-slate-800/70 dark:bg-slate-900 lg:sticky lg:top-0 lg:flex lg:h-screen lg:translate-x-0 lg:flex-col lg:border-b-0"
+      class="fixed inset-y-0 left-0 z-50 w-64 shrink-0 transform border-r border-slate-200/70 bg-white/95 px-4 py-6 backdrop-blur transition-transform duration-300 ease-in-out dark:border-slate-800/70 dark:bg-slate-900 lg:sticky lg:top-0 lg:flex lg:h-screen lg:translate-x-0 lg:flex-col lg:border-b-0"
       :class="
         isSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
       "
     >
       <AppSidebar
-        :categories="categories"
-        :active-category="activeCategory"
+        :active-tab="activeTab"
         :category-counts="categoryCounts"
         :theme-mode="themeMode"
         :spark-available="sparkAvailable"
         :apm-available="apmAvailable"
         :store-filter="storeFilter"
+        :sidebar-entries="sidebarEntries"
+        :entry-counts="entryCounts"
         @toggle-theme="toggleTheme"
-        @select-category="selectCategory"
+        @select-tab="selectTab"
         @close="isSidebarOpen = false"
         @list="handleList"
         @update="handleUpdate"
@@ -37,7 +38,7 @@
       >
         <AppHeader
           :search-query="searchQuery"
-          :active-category="activeCategory"
+          :active-tab="activeTab"
           :apps-count="filteredApps.length"
           @update-search="handleSearchInput"
           @search-focus="handleSearchFocus"
@@ -46,8 +47,15 @@
           @toggle-sidebar="isSidebarOpen = !isSidebarOpen"
         />
       </div>
+      <CategoryBar
+        v-if="activeTab !== 'home' && Object.keys(categories).length > 0"
+        :categories="categories"
+        :selected-category="selectedCategory"
+        :category-counts="categoryCounts"
+        @select-category="selectSubCategory"
+      />
       <div class="px-4 py-6 lg:px-10">
-        <template v-if="activeCategory === 'home'">
+        <template v-if="activeTab === 'home'">
           <HomeView
             :links="homeLinks"
             :lists="homeLists"
@@ -61,7 +69,7 @@
           <AppGrid
             :apps="filteredApps"
             :loading="loading"
-            :scroll-key="activeCategory"
+            :scroll-key="activeTab + '-' + selectedCategory"
             :store-filter="storeFilter"
             @open-detail="openDetail"
           />
@@ -172,6 +180,7 @@ import AppSidebar from "./components/AppSidebar.vue";
 import AppHeader from "./components/AppHeader.vue";
 import AppGrid from "./components/AppGrid.vue";
 import HomeView from "./components/HomeView.vue";
+import CategoryBar from "./components/CategoryBar.vue";
 import AppDetailModal from "./components/AppDetailModal.vue";
 import ScreenPreview from "./components/ScreenPreview.vue";
 import DownloadQueue from "./components/DownloadQueue.vue";
@@ -217,6 +226,7 @@ import type {
   CategoryInfo,
   HomeLink,
   HomeList,
+  SidebarEntry,
   UpdateCenterItem,
 } from "./global/typedefinition";
 import type { Ref } from "vue";
@@ -258,7 +268,8 @@ const isDarkTheme = computed(() => {
 
 const categories: Ref<Record<string, CategoryInfo>> = ref({});
 const apps: Ref<App[]> = ref([]);
-const activeCategory = ref("home");
+const activeTab = ref("home");
+const selectedCategory = ref("all");
 const searchQuery = ref("");
 const isSidebarOpen = ref(false);
 const showModal = ref(false);
@@ -280,6 +291,7 @@ const showAboutModal = ref(false);
 const showSettingsModal = ref(false);
 const sparkAvailable = ref(false);
 const apmAvailable = ref(false);
+const sidebarEntries: Ref<SidebarEntry[]> = ref([]);
 
 /** 启动参数 --no-apm => 仅 Spark；--no-spark => 仅 APM；由主进程 IPC 提供 */
 const storeFilter = ref<"spark" | "apm" | "both">("both");
@@ -322,9 +334,9 @@ const baseApps = computed(() => {
 const filteredApps = computed(() => {
   let result = [...baseApps.value];
 
-  // 按分类筛选
-  if (activeCategory.value !== "all") {
-    result = result.filter((app) => app.category === activeCategory.value);
+  const effectiveCategory = getEffectiveCategory();
+  if (effectiveCategory && effectiveCategory !== "all") {
+    result = result.filter((app) => app.category === effectiveCategory);
   }
 
   if (searchQuery.value.trim()) {
@@ -339,12 +351,28 @@ const categoryCounts = computed(() => {
     return countSearchMatchesByCategory(baseApps.value, searchQuery.value);
   }
 
-  // 无搜索时显示总数量
   const counts: Record<string, number> = { all: apps.value.length };
   apps.value.forEach((app) => {
     if (!counts[app.category]) counts[app.category] = 0;
     counts[app.category]++;
   });
+  return counts;
+});
+
+const entryCounts = computed(() => {
+  const counts: Record<string, number> = {};
+  const allApps = baseApps.value;
+
+  sidebarEntries.value.forEach((entry) => {
+    if (entry.type === "category" && entry.value) {
+      counts[entry.id] = allApps.filter(
+        (app) => app.category === entry.value,
+      ).length;
+    } else {
+      counts[entry.id] = 0;
+    }
+  });
+
   return counts;
 });
 
@@ -384,17 +412,39 @@ const toggleTheme = () => {
   else themeMode.value = "auto";
 };
 
-const selectCategory = (category: string) => {
-  activeCategory.value = category;
+const selectTab = (tab: string) => {
+  activeTab.value = tab;
+  selectedCategory.value = "all";
   isSidebarOpen.value = false;
   window.scrollTo({ top: 0, behavior: "smooth" });
   if (
-    category === "home" &&
+    tab === "home" &&
     homeLinks.value.length === 0 &&
     homeLists.value.length === 0
   ) {
     loadHome();
   }
+};
+
+const selectSubCategory = (category: string) => {
+  selectedCategory.value = category;
+  window.scrollTo({ top: 0, behavior: "smooth" });
+};
+
+const getEffectiveCategory = (): string => {
+  if (activeTab.value === "home") return "";
+  if (activeTab.value === "all") return selectedCategory.value;
+
+  const entry = sidebarEntries.value.find((e) => e.id === activeTab.value);
+  if (entry) {
+    if (entry.type === "category" && entry.value) return entry.value;
+    if (entry.type === "search") {
+      searchQuery.value = entry.value || "";
+      return selectedCategory.value;
+    }
+  }
+
+  return selectedCategory.value;
 };
 
 // 从仓库获取应用详细信息的辅助函数
@@ -1130,6 +1180,50 @@ const loadCategories = async () => {
   }
 };
 
+const loadSidebarConfig = async () => {
+  try {
+    const arch = window.apm_store.arch || "amd64";
+    const modes: Array<"spark" | "apm"> =
+      storeFilter.value === "both" ? ["spark", "apm"] : [storeFilter.value];
+
+    const entryMap = new Map<string, SidebarEntry>();
+
+    for (const mode of modes) {
+      const finalArch = mode === "spark" ? `${arch}-store` : `${arch}-apm`;
+      const path = `/${finalArch}/sidebar-config.json`;
+
+      try {
+        const response = await axiosInstance.get(path);
+        const data = response.data;
+        const entries = Array.isArray(data) ? data : (data.entries || []);
+
+        for (const entry of entries) {
+          if (entry.id && entry.name) {
+            if (!entryMap.has(entry.id)) {
+              entryMap.set(entry.id, {
+                id: entry.id,
+                name: entry.name,
+                icon: entry.icon || "",
+                type: entry.type || "category",
+                value: entry.value || entry.id,
+              });
+            }
+          }
+        }
+      } catch (e) {
+        logger.warn(`读取 ${mode} sidebar-config.json 失败: ${e}`);
+      }
+    }
+
+    sidebarEntries.value = Array.from(entryMap.values());
+    if (sidebarEntries.value.length > 0) {
+      logger.info(`已加载 ${sidebarEntries.value.length} 个侧边栏配置入口`);
+    }
+  } catch (error) {
+    logger.warn(`读取 sidebar-config 失败: ${error}`);
+  }
+};
+
 const loadApps = async (onFirstBatch?: () => void) => {
   try {
     logger.info("开始加载应用数据（全并发带重试）...");
@@ -1214,7 +1308,7 @@ const handleSearchInput = (value: string) => {
 };
 
 const handleSearchFocus = () => {
-  if (activeCategory.value === "home") activeCategory.value = "all";
+  if (activeTab.value === "home") activeTab.value = "all";
 };
 
 // 生命周期钩子
@@ -1241,6 +1335,8 @@ onMounted(async () => {
     "spark";
 
   await loadCategories();
+
+  await loadSidebarConfig();
 
   // 分类目录加载后，并行加载主页数据和所有应用列表
   // 使用非阻塞方式加载，让UI先展示出来
@@ -1335,7 +1431,7 @@ onMounted(async () => {
       // 根据包名直接打开应用详情
       const tryOpen = () => {
         // 先切换到"全部应用"分类
-        activeCategory.value = "all";
+        activeTab.value = "all";
         // 使用类似 HomeView 的方式打开应用，从两个仓库获取完整信息
         const target = apps.value.find((a) => a.pkgname === data.pkgname);
         if (target) {
