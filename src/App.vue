@@ -63,7 +63,29 @@
       />
       <div class="px-4 py-6 lg:px-10">
         <section
-          v-if="currentView === 'account'"
+          v-if="currentView === 'detail' && currentApp"
+          data-app-detail-page="detail"
+        >
+          <AppDetailPage
+            :app="currentApp"
+            :screenshots="screenshots"
+            :spark-installed="currentAppSparkInstalled"
+            :apm-installed="currentAppApmInstalled"
+            :logged-in="isLoggedIn"
+            :review-app-key="currentReviewAppKey"
+            :review-tags="currentReviewTags"
+            @back="closeDetail"
+            @install="onDetailInstall"
+            @remove="onDetailRemove"
+            @favorite="onDetailFavorite"
+            @request-login="handleDetailRequestLogin"
+            @open-preview="openScreenPreview"
+            @open-app="openDownloadedApp"
+            @check-install="checkAppInstalled"
+          />
+        </section>
+        <section
+          v-else-if="currentView === 'account'"
           class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900"
         >
           <h1 class="text-2xl font-semibold text-slate-900 dark:text-white">
@@ -105,21 +127,6 @@
         </template>
       </div>
     </main>
-
-    <AppDetailModal
-      data-app-modal="detail"
-      :show="showModal"
-      :app="currentApp"
-      :screenshots="screenshots"
-      :spark-installed="currentAppSparkInstalled"
-      :apm-installed="currentAppApmInstalled"
-      @close="closeDetail"
-      @install="onDetailInstall"
-      @remove="onDetailRemove"
-      @open-preview="openScreenPreview"
-      @open-app="openDownloadedApp"
-      @check-install="checkAppInstalled"
-    />
 
     <ScreenPreview
       :show="showPreview"
@@ -227,7 +234,7 @@ import AppHeader from "./components/AppHeader.vue";
 import AppGrid from "./components/AppGrid.vue";
 import HomeView from "./components/HomeView.vue";
 import CategoryBar from "./components/CategoryBar.vue";
-import AppDetailModal from "./components/AppDetailModal.vue";
+import AppDetailPage from "./components/AppDetailPage.vue";
 import ScreenPreview from "./components/ScreenPreview.vue";
 import DownloadQueue from "./components/DownloadQueue.vue";
 import DownloadDetail from "./components/DownloadDetail.vue";
@@ -277,6 +284,11 @@ import {
   isOriginEnabled,
 } from "./modules/storeFilter";
 import { createUpdateCenterStore } from "./modules/updateCenter";
+import {
+  buildReviewAppKey,
+  buildReviewTags,
+  getDisplayApp,
+} from "./modules/appIdentity";
 import type {
   App,
   AppJson,
@@ -288,6 +300,7 @@ import type {
   FlarumLoginPayload,
   SidebarEntry,
   UpdateCenterItem,
+  ReviewTags,
 } from "./global/typedefinition";
 import type { Ref } from "vue";
 import type { IpcRendererEvent } from "electron";
@@ -329,11 +342,12 @@ const isDarkTheme = computed(() => {
 const categories: Ref<Record<string, CategoryInfo>> = ref({});
 const apps: Ref<App[]> = ref([]);
 const activeTab = ref("home");
-const currentView = ref<"default" | "account" | "favorites">("default");
+type MainView = "default" | "account" | "favorites" | "detail";
+const currentView = ref<MainView>("default");
+const detailPreviousView = ref<MainView>("default");
 const selectedCategory = ref("all");
 const searchQuery = ref("");
 const isSidebarOpen = ref(false);
-const showModal = ref(false);
 const showPreview = ref(false);
 const currentScreenIndex = ref(0);
 const screenshots = ref<string[]>([]);
@@ -440,6 +454,23 @@ const entryCounts = computed(() => {
   });
 
   return counts;
+});
+
+const currentDisplayApp = computed(() => getDisplayApp(currentApp.value));
+
+const clientArch = computed(() => window.apm_store.arch || "amd64");
+
+const currentReviewAppKey = computed(() => {
+  if (!currentDisplayApp.value) return "";
+  return buildReviewAppKey(currentDisplayApp.value, clientArch.value);
+});
+
+const currentReviewTags = computed<ReviewTags | null>(() => {
+  if (!currentDisplayApp.value) return null;
+  return buildReviewTags(currentDisplayApp.value, {
+    clientArch: clientArch.value,
+    distro: "unknown",
+  });
 });
 
 // 方法
@@ -557,7 +588,8 @@ const fetchAppFromStore = async (
 };
 
 const openDetail = async (app: App | Record<string, unknown>) => {
-  currentView.value = "default";
+  detailPreviousView.value =
+    currentView.value === "detail" ? "default" : currentView.value;
   // 提取 pkgname 和 category（必须存在）
   const pkgname = (app as Record<string, unknown>).pkgname as string;
   const category =
@@ -702,17 +734,14 @@ const openDetail = async (app: App | Record<string, unknown>) => {
   currentApp.value = finalApp;
   currentScreenIndex.value = 0;
   loadScreenshots(displayAppForScreenshots);
-  showModal.value = true;
+  currentView.value = "detail";
 
   currentAppSparkInstalled.value = false;
   currentAppApmInstalled.value = false;
   checkAppInstalled(finalApp);
 
   nextTick(() => {
-    const modal = document.querySelector(
-      '[data-app-modal="detail"] .modal-panel',
-    );
-    if (modal) modal.scrollTop = 0;
+    window.scrollTo({ top: 0, behavior: "smooth" });
   });
 };
 
@@ -762,7 +791,11 @@ const loadScreenshots = (app: App) => {
 };
 
 const closeDetail = () => {
-  showModal.value = false;
+  currentView.value =
+    detailPreviousView.value === "detail"
+      ? "default"
+      : detailPreviousView.value;
+  detailPreviousView.value = "default";
   currentApp.value = null;
 };
 
@@ -1075,6 +1108,14 @@ const onDetailInstall = async (app: App) => {
   await handleInstall(app);
 };
 
+const onDetailFavorite = (app: App) => {
+  logger.info(`Favorite requested for ${app.pkgname}`);
+};
+
+const handleDetailRequestLogin = (message: string) => {
+  requireLogin(message);
+};
+
 const closeUninstallModal = () => {
   showUninstallModal.value = false;
   uninstallTargetApp.value = null;
@@ -1086,7 +1127,7 @@ const onUninstallSuccess = () => {
     refreshInstalledApps();
   }
   // 更新当前详情页状态（如果在显示）
-  if (showModal.value && currentApp.value) {
+  if (currentView.value === "detail" && currentApp.value) {
     checkAppInstalled(currentApp.value);
   }
 };
@@ -1484,7 +1525,7 @@ onMounted(async () => {
       if (e.key === "ArrowLeft") prevScreen();
       if (e.key === "ArrowRight") nextScreen();
     }
-    if (showModal.value && e.key === "Escape") {
+    if (currentView.value === "detail" && e.key === "Escape") {
       closeDetail();
     }
   });
