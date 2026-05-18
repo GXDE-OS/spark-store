@@ -409,7 +409,12 @@ const favoriteLoading = ref(false);
 const favoriteError = ref("");
 const favoriteRequestGeneration = ref(0);
 const systemInfo = ref<SystemInfo>({ distro: "unknown" });
-type PendingDownloadRecord = Omit<DownloadedAppRecord, "id" | "downloadedAt">;
+type PendingDownloadRecord = Omit<
+  DownloadedAppRecord,
+  "id" | "downloadedAt"
+> & {
+  userId: number;
+};
 const pendingDownloadRecords = new Map<number, PendingDownloadRecord>();
 
 /** 启动参数 --no-apm => 仅 Spark；--no-spark => 仅 APM；由主进程 IPC 提供 */
@@ -1245,9 +1250,11 @@ const onDetailRemove = (app: App) => {
 
 const onDetailInstall = async (app: App) => {
   const download = await handleInstall(app);
-  if (!download || !isLoggedIn.value) return;
+  const initiatingUserId = currentUser.value?.id;
+  if (!download || !isLoggedIn.value || initiatingUserId === undefined) return;
 
   pendingDownloadRecords.set(download.id, {
+    userId: initiatingUserId,
     appKey: buildFavoriteAppKey(app),
     pkgname: app.pkgname,
     name: app.name,
@@ -1265,10 +1272,26 @@ const handleInstallCompleteForDownloadRecord = async (
   const pendingRecord = pendingDownloadRecords.get(result.id);
   if (!pendingRecord) return;
 
-  if (!result.success || !isLoggedIn.value) return;
+  if (
+    !result.success ||
+    !isLoggedIn.value ||
+    currentUser.value?.id !== pendingRecord.userId
+  ) {
+    return;
+  }
+
+  const downloadRecord: Omit<DownloadedAppRecord, "id" | "downloadedAt"> = {
+    appKey: pendingRecord.appKey,
+    pkgname: pendingRecord.pkgname,
+    name: pendingRecord.name,
+    category: pendingRecord.category,
+    selectedOrigin: pendingRecord.selectedOrigin,
+    version: pendingRecord.version,
+    packageArch: pendingRecord.packageArch,
+  };
 
   try {
-    await recordDownloadedApp(pendingRecord);
+    await recordDownloadedApp(downloadRecord);
   } catch (error: unknown) {
     logger.warn({ err: error }, "记录下载应用失败");
   } finally {
@@ -1372,6 +1395,7 @@ const isCurrentFavoriteRequest = (generation: number): boolean =>
 
 const handleLogout = () => {
   logout();
+  pendingDownloadRecords.clear();
   clearFavoriteState();
   showLoginModal.value = false;
   showLoginPrompt.value = false;

@@ -269,4 +269,61 @@ describe("App download records", () => {
       );
     });
   });
+
+  it("does not record a queued install under a later logged-in user", async () => {
+    render(App);
+
+    await fireEvent.click(
+      await screen.findByRole("button", { name: "全部应用 1" }),
+    );
+    await fireEvent.click(await screen.findByText("WPS"));
+    await fireEvent.click(await screen.findByRole("button", { name: "安装" }));
+
+    await waitFor(() => {
+      expect(send).toHaveBeenCalledWith(
+        "queue-install",
+        expect.stringContaining('"pkgname":"wps"'),
+      );
+    });
+
+    const queuedPayload = vi
+      .mocked(send)
+      .mock.calls.find(
+        ([channel]) => channel === "queue-install",
+      )?.[1] as string;
+    const queuedDownload = JSON.parse(queuedPayload) as { id: number };
+
+    await fireEvent.click(screen.getByRole("button", { name: "Momen" }));
+    await fireEvent.click(await screen.findByText("退出登录"));
+
+    setAuthSession({
+      accessToken: "backend-token-b",
+      tokenType: "bearer",
+      user: {
+        id: 2,
+        flarumUserId: "84",
+        username: "second",
+        displayName: "Second User",
+        avatarUrl: "https://bbs.spark-app.store/avatar-b.png",
+        forumLevel: "用户",
+        forumGroups: ["用户"],
+      },
+    });
+
+    const completion: DownloadResult = {
+      id: queuedDownload.id,
+      time: Date.now(),
+      message: "installed",
+      success: true,
+      exitCode: 0,
+      status: "completed",
+      origin: "apm",
+    };
+
+    ipcHandlers.get("install-complete")?.({}, completion);
+
+    await waitFor(() => {
+      expect(recordDownloadedApp).not.toHaveBeenCalled();
+    });
+  });
 });
