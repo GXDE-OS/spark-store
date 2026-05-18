@@ -1274,7 +1274,7 @@ const refreshFavorites = async (): Promise<void> => {
   favoriteLoading.value = true;
   favoriteError.value = "";
   try {
-    await loadFavoriteFolders();
+    await Promise.all([refreshInstalledApps(), loadFavoriteFolders()]);
     await loadActiveFavoriteItems();
   } catch (error: unknown) {
     favoriteError.value = (error as Error)?.message || "读取收藏夹失败";

@@ -1,7 +1,4 @@
-import {
-  HYBRID_DEFAULT_PRIORITY,
-  getHybridDefaultOrigin,
-} from "@/global/storeConfig";
+import { getHybridDefaultOrigin } from "@/global/storeConfig";
 import type {
   App,
   FavoriteItem,
@@ -19,6 +16,10 @@ const normalizeArch = (arch: string): string =>
 
 const appMatchesFavorite = (app: App, item: FavoriteItem): boolean =>
   app.pkgname === item.pkgname && app.category === item.category;
+
+const installedAppMatchesFavorite = (app: App, item: FavoriteItem): boolean =>
+  app.pkgname === item.pkgname &&
+  (app.category === item.category || app.category === "unknown");
 
 const appMatchesClientArch = (app: App, clientArch: string): boolean => {
   if (!app.arch) return true;
@@ -39,10 +40,7 @@ const choosePreferredApp = (apps: App[]): App => {
   if (apps.length === 1) return apps[0];
 
   const referenceApp = apps.find((app) => app.origin === "spark") ?? apps[0];
-  const preferredOrigin =
-    getHybridDefaultOrigin(referenceApp) === "spark"
-      ? HYBRID_DEFAULT_PRIORITY
-      : getHybridDefaultOrigin(referenceApp);
+  const preferredOrigin = getHybridDefaultOrigin(referenceApp);
   return apps.find((app) => app.origin === preferredOrigin) ?? apps[0];
 };
 
@@ -69,7 +67,7 @@ export const resolveFavoriteItems = (
     }
 
     const installedMatch = installedApps.find((app) =>
-      appMatchesFavorite(app, item),
+      installedAppMatchesFavorite(app, item),
     );
     if (installedMatch) {
       return {

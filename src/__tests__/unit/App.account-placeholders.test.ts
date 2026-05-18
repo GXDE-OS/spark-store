@@ -3,12 +3,59 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import App from "@/App.vue";
 import { setAuthSession } from "@/global/authState";
+import type { FavoriteFolder, FavoriteItem } from "@/global/typedefinition";
 
 const invoke = vi.fn();
 
+const favoriteFolders: FavoriteFolder[] = [
+  {
+    id: 7,
+    name: "默认收藏夹",
+    itemCount: 1,
+    createdAt: "2026-05-18T00:00:00Z",
+    updatedAt: "2026-05-18T00:00:00Z",
+  },
+];
+
+const favoriteItems: FavoriteItem[] = [
+  {
+    id: 11,
+    appKey: "app:office:wps",
+    pkgname: "wps",
+    name: "WPS",
+    category: "office",
+    iconUrl: "",
+    createdAt: "2026-05-18T00:00:00Z",
+  },
+];
+
 vi.mock("axios", () => {
   const get = vi.fn(async (url: string) => {
-    if (url.includes("categories.json")) return { data: {} };
+    if (url.includes("categories.json")) {
+      return { data: { office: { zh: "办公" } } };
+    }
+    if (url.includes("/office/applist.json")) {
+      return {
+        data: [
+          {
+            Name: "WPS",
+            Pkgname: "wps",
+            Version: "1.0.0",
+            Filename: "wps_1.0.0_amd64.deb",
+            Torrent_address: "",
+            Author: "",
+            Contributor: "",
+            Website: "",
+            Update: "",
+            Size: "",
+            More: "",
+            Tags: "",
+            img_urls: [],
+            icons: "",
+          },
+        ],
+      };
+    }
     return { data: [] };
   });
 
@@ -45,6 +92,16 @@ vi.mock("@/modules/updateCenter", () => ({
     startSelected: vi.fn(),
     requestClose: vi.fn(),
   }),
+}));
+
+vi.mock("@/modules/backendApi", () => ({
+  addFavoriteItem: vi.fn(),
+  bulkDeleteFavoriteItems: vi.fn(),
+  createFavoriteFolder: vi.fn(),
+  exchangeFlarumToken: vi.fn(),
+  listFavoriteFolders: vi.fn(async () => favoriteFolders),
+  listFavoriteItems: vi.fn(async () => favoriteItems),
+  setBackendToken: vi.fn(),
 }));
 
 describe("App account placeholders", () => {
@@ -113,5 +170,43 @@ describe("App account placeholders", () => {
       await screen.findByRole("heading", { name: "我的收藏" }),
     ).toBeTruthy();
     expect(screen.queryByText("请登录后查看我的收藏。")).toBeNull();
+  });
+
+  it("refreshes installed apps before resolving favorite management state", async () => {
+    invoke.mockImplementation(async (channel: string) => {
+      if (channel === "get-store-filter") return "both";
+      if (channel === "check-spark-available") return true;
+      if (channel === "check-apm-available") return true;
+      if (channel === "get-app-version") return "5.0.0";
+      if (channel === "list-installed") {
+        return {
+          success: true,
+          apps: [
+            {
+              pkgname: "wps",
+              name: "WPS",
+              version: "1.0.0",
+              arch: "amd64",
+              flags: "installed",
+              origin: "apm",
+            },
+          ],
+        };
+      }
+      return [];
+    });
+    render(App);
+
+    await fireEvent.click(await screen.findByRole("button", { name: /Momen/ }));
+    await fireEvent.click(screen.getByText("我的收藏"));
+
+    expect(
+      await screen.findByRole("heading", { name: "我的收藏" }),
+    ).toBeTruthy();
+    expect(await screen.findByText("已安装")).toBeTruthy();
+    expect(invoke).toHaveBeenCalledWith("list-installed", {
+      origin: "apm",
+      pkgnameList: undefined,
+    });
   });
 });
