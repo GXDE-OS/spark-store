@@ -9,7 +9,8 @@ export const buildStoreArch = (
   origin: "spark" | "apm",
   clientArch: string,
 ): string => {
-  return `${clientArch}-${origin === "spark" ? "store" : "apm"}`;
+  const rawArch = clientArch.replace(/-(store|apm)$/, "");
+  return `${rawArch}-${origin === "spark" ? "store" : "apm"}`;
 };
 
 export const buildFavoriteAppKey = (app: App): string => {

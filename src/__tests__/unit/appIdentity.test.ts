@@ -35,6 +35,15 @@ describe("appIdentity", () => {
     expect(buildReviewAppKey(app, "amd64")).toBe("apm:amd64-apm:office:wps");
   });
 
+  it("builds review keys from already-qualified client arch values", () => {
+    expect(buildReviewAppKey({ ...app, origin: "spark" }, "amd64-store")).toBe(
+      "spark:amd64-store:office:wps",
+    );
+    expect(buildReviewAppKey(app, "amd64-apm")).toBe(
+      "apm:amd64-apm:office:wps",
+    );
+  });
+
   it("parses package arch and review tags", () => {
     expect(parsePackageArch(app.filename)).toBe("amd64");
     expect(
