@@ -84,17 +84,19 @@
             @check-install="checkAppInstalled"
           />
         </section>
-        <section
-          v-else-if="currentView === 'account'"
-          class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900"
-        >
-          <h1 class="text-2xl font-semibold text-slate-900 dark:text-white">
-            用户管理
-          </h1>
-          <p class="mt-3 text-sm text-slate-500 dark:text-slate-400">
-            账号资料与安全设置功能即将开放。
-          </p>
-        </section>
+        <UserManagementView
+          v-else-if="currentView === 'account' && currentUser"
+          :user="currentUser"
+          :downloaded-apps="downloadedApps"
+          :sync-enabled="installedSyncEnabled ?? false"
+          :loading="downloadedLoading"
+          :error="downloadedError"
+          @open-forum="openExternalUrl(FLARUM_BASE_URL)"
+          @edit-profile="openExternalUrl(FLARUM_SETTINGS_URL)"
+          @toggle-sync="setInstalledSyncEnabled"
+          @sync-now="syncInstalledAppsNow"
+          @refresh-downloads="loadDownloadedHistory"
+        />
         <FavoriteFolderManager
           v-else-if="currentView === 'favorites'"
           :folders="favoriteFolders"
@@ -256,6 +258,7 @@ import LoginModal from "./components/LoginModal.vue";
 import LoginPromptModal from "./components/LoginPromptModal.vue";
 import FavoriteFolderSelector from "./components/FavoriteFolderSelector.vue";
 import FavoriteFolderManager from "./components/FavoriteFolderManager.vue";
+import UserManagementView from "./components/UserManagementView.vue";
 import {
   APM_STORE_BASE_URL,
   FLARUM_BASE_URL,
@@ -275,6 +278,10 @@ import {
   watchDownloadsChange,
 } from "./global/downloadStatus";
 import {
+  installedSyncEnabled,
+  setInstalledSyncEnabled,
+} from "./global/accountSyncState";
+import {
   countSearchMatchesByCategory,
   rankAppsBySearch,
 } from "./modules/appSearch";
@@ -284,6 +291,7 @@ import {
   bulkDeleteFavoriteItems,
   createFavoriteFolder,
   exchangeFlarumToken,
+  listDownloadedApps,
   listFavoriteFolders,
   listFavoriteItems,
   recordDownloadedApp,
@@ -408,6 +416,9 @@ const favoriteTargetApp = ref<App | null>(null);
 const favoriteLoading = ref(false);
 const favoriteError = ref("");
 const favoriteRequestGeneration = ref(0);
+const downloadedApps = ref<DownloadedAppRecord[]>([]);
+const downloadedLoading = ref(false);
+const downloadedError = ref("");
 const systemInfo = ref<SystemInfo>({ distro: "unknown" });
 type PendingDownloadRecord = Omit<
   DownloadedAppRecord,
@@ -1399,6 +1410,12 @@ const clearFavoriteState = () => {
   favoriteError.value = "";
 };
 
+const clearDownloadedState = () => {
+  downloadedApps.value = [];
+  downloadedLoading.value = false;
+  downloadedError.value = "";
+};
+
 const isCurrentFavoriteRequest = (generation: number): boolean =>
   favoriteRequestGeneration.value === generation && isLoggedIn.value;
 
@@ -1406,6 +1423,7 @@ const handleLogout = () => {
   logout();
   pendingDownloadRecords.clear();
   clearFavoriteState();
+  clearDownloadedState();
   showLoginModal.value = false;
   showLoginPrompt.value = false;
   isSidebarOpen.value = false;
@@ -1435,12 +1453,33 @@ const handleFlarumLogin = async (payload: FlarumLoginPayload) => {
   }
 };
 
-const openUserManagement = () => {
+const loadDownloadedHistory = async (): Promise<void> => {
+  if (!requireLogin("请登录后查看和管理账号信息。")) return;
+
+  downloadedLoading.value = true;
+  downloadedError.value = "";
+  try {
+    const result = await listDownloadedApps(1, 50);
+    downloadedApps.value = result.items;
+  } catch (error: unknown) {
+    downloadedApps.value = [];
+    downloadedError.value = (error as Error)?.message || "读取下载历史失败";
+  } finally {
+    downloadedLoading.value = false;
+  }
+};
+
+const syncInstalledAppsNow = () => {
+  logger.warn("已安装应用同步将在后续任务中启用");
+};
+
+const openUserManagement = async () => {
   if (!requireLogin("请登录后查看和管理账号信息。")) return;
   currentView.value = "account";
   activeTab.value = "account";
   isSidebarOpen.value = false;
   showLoginPrompt.value = false;
+  await loadDownloadedHistory();
 };
 
 const loadFavoriteFolders = async (
