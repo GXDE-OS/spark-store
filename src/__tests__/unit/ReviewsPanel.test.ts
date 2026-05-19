@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/vue";
+import { fireEvent, render, screen } from "@testing-library/vue";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import ReviewsPanel from "@/components/ReviewsPanel.vue";
@@ -54,6 +54,20 @@ describe("ReviewsPanel", () => {
     expect(screen.getByText("deepin 25")).toBeTruthy();
     expect(fetchRatingSummary).not.toHaveBeenCalled();
     expect(fetchReviews).not.toHaveBeenCalled();
+  });
+
+  it("hides the submit form when reviews are read-only", () => {
+    render(ReviewsPanel, {
+      props: {
+        appKey: "apm:amd64-apm:office:wps",
+        tags,
+        loggedIn: true,
+        canSubmit: false,
+      },
+    });
+
+    expect(screen.queryByRole("button", { name: "发表评论" })).toBeNull();
+    expect(screen.getByText("安装应用后可发表评论。")).toBeTruthy();
   });
 
   it("ignores stale review responses after app key changes", async () => {
@@ -138,5 +152,22 @@ describe("ReviewsPanel", () => {
     expect(screen.getByText("5.0 / 5 (1)")).toBeTruthy();
     expect(screen.queryByText("first review")).toBeNull();
     expect(screen.queryByText("1.0 / 5 (1)")).toBeNull();
+  });
+
+  it("shows a friendly submit error instead of raw network errors", async () => {
+    vi.mocked(submitReview).mockRejectedValueOnce(new Error("Network Error"));
+    render(ReviewsPanel, {
+      props: { appKey: "apm:amd64-apm:office:wps", tags, loggedIn: true },
+    });
+
+    await fireEvent.update(
+      screen.getByPlaceholderText("分享你的使用体验"),
+      "好用",
+    );
+    await fireEvent.click(screen.getByRole("button", { name: "发表评论" }));
+
+    expect(
+      await screen.findByText("无法连接星火账号服务，请稍后重试。"),
+    ).toBeTruthy();
   });
 });

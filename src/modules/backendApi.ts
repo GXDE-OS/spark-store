@@ -56,6 +56,38 @@ const normalizeBackendAuthError = (error: unknown): Error => {
   return new Error(`星火账号服务返回异常 (${status})，请稍后重试。`);
 };
 
+const normalizeBackendMutationError = (error: unknown): Error => {
+  if (!axios.isAxiosError(error)) {
+    return error instanceof Error ? error : new Error("操作失败，请稍后重试。");
+  }
+
+  logger.error(
+    {
+      code: error.code,
+      message: error.message,
+      status: error.response?.status,
+    },
+    "Spark backend mutation failed",
+  );
+
+  if (!error.response) {
+    return new Error("无法连接星火账号服务，请稍后重试。");
+  }
+
+  const status = error.response.status;
+  if (status === 401 || status === 403) {
+    return new Error("请登录星火账号后重试。");
+  }
+  if (status === 422) {
+    return new Error("提交内容格式不正确，请检查后重试。");
+  }
+  if (status >= 500) {
+    return new Error("星火账号服务异常，请稍后重试。");
+  }
+
+  return new Error(`星火账号服务返回异常 (${status})，请稍后重试。`);
+};
+
 const asApiRecord = (value: unknown): ApiRecord => {
   if (value && typeof value === "object" && !Array.isArray(value)) {
     return value as ApiRecord;
@@ -233,22 +265,27 @@ export const submitReview = async (
   appKey: string,
   payload: { rating: number; content: string; tags: ReviewTags },
 ): Promise<AppReview> => {
-  const response = await backend.post(
-    `/apps/${encodeURIComponent(appKey)}/reviews`,
-    {
-      rating: payload.rating,
-      content: payload.content,
-      tags: {
-        origin: payload.tags.origin,
-        category: payload.tags.category,
-        pkgname: payload.tags.pkgname,
-        version: payload.tags.version,
-        package_arch: payload.tags.packageArch,
-        client_arch: payload.tags.clientArch,
-        distro: payload.tags.distro,
+  let response: AxiosResponse;
+  try {
+    response = await backend.post(
+      `/apps/${encodeURIComponent(appKey)}/reviews`,
+      {
+        rating: payload.rating,
+        content: payload.content,
+        tags: {
+          origin: payload.tags.origin,
+          category: payload.tags.category,
+          pkgname: payload.tags.pkgname,
+          version: payload.tags.version,
+          package_arch: payload.tags.packageArch,
+          client_arch: payload.tags.clientArch,
+          distro: payload.tags.distro,
+        },
       },
-    },
-  );
+    );
+  } catch (error) {
+    throw normalizeBackendMutationError(error);
+  }
   return toReview(asApiRecord(response.data));
 };
 

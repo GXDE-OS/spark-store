@@ -179,6 +179,14 @@
                   </button>
                 </div>
               </template>
+              <button
+                type="button"
+                class="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-600 transition hover:bg-slate-50 hover:text-slate-900 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
+                @click="handleFavorite"
+              >
+                <i class="fas fa-star text-xs"></i>
+                <span>收藏</span>
+              </button>
             </div>
 
             <!-- 其他元信息 -->
@@ -312,6 +320,50 @@
             >
               <p class="text-sm text-slate-400">暂无应用截图</p>
             </div>
+
+            <ReviewsPanel
+              v-if="loggedIn && activeReviewAppKey && activeReviewTags"
+              :app-key="activeReviewAppKey"
+              :tags="activeReviewTags"
+              :logged-in="loggedIn"
+              :can-submit="isinstalled"
+              @request-login="$emit('request-login', $event)"
+            />
+            <section
+              v-else-if="!loggedIn && reviewAppKey && reviewTags"
+              class="rounded-2xl border border-slate-200/60 bg-slate-50/50 p-5 dark:border-slate-800/60 dark:bg-slate-800/30"
+            >
+              <h3
+                class="text-base font-semibold text-slate-900 dark:text-white mb-3 flex items-center gap-2"
+              >
+                <i class="fas fa-comments text-slate-400"></i>
+                应用评价
+              </h3>
+              <p class="text-sm text-slate-500 dark:text-slate-400">
+                登录星火账号后可查看评价并发表评论。
+              </p>
+              <button
+                type="button"
+                class="mt-4 inline-flex items-center rounded-xl bg-slate-800 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-700 dark:bg-slate-700 dark:hover:bg-slate-600"
+                @click="emit('request-login', '登录后查看和发表评论。')"
+              >
+                登录后查看评价
+              </button>
+            </section>
+            <section
+              v-else-if="reviewAppKey && reviewTags"
+              class="rounded-2xl border border-slate-200/60 bg-slate-50/50 p-5 dark:border-slate-800/60 dark:bg-slate-800/30"
+            >
+              <h3
+                class="text-base font-semibold text-slate-900 dark:text-white mb-3 flex items-center gap-2"
+              >
+                <i class="fas fa-comments text-slate-400"></i>
+                应用评价
+              </h3>
+              <p class="text-sm text-slate-500 dark:text-slate-400">
+                安装应用后可发表评论。
+              </p>
+            </section>
           </div>
         </div>
       </div>
@@ -439,12 +491,14 @@
 <script setup lang="ts">
 import { computed, useAttrs, ref, watch } from "vue";
 import axios from "axios";
+import ReviewsPanel from "@/components/ReviewsPanel.vue";
 import { useInstallFeedback, downloads } from "../global/downloadStatus";
 import {
   APM_STORE_BASE_URL,
   getHybridDefaultOrigin,
 } from "../global/storeConfig";
-import type { App } from "../global/typedefinition";
+import { buildReviewAppKey, buildReviewTags } from "../modules/appIdentity";
+import type { App, ReviewTags } from "../global/typedefinition";
 
 const attrs = useAttrs();
 
@@ -454,12 +508,17 @@ const props = defineProps<{
   screenshots: string[];
   sparkInstalled: boolean;
   apmInstalled: boolean;
+  loggedIn: boolean;
+  reviewAppKey: string;
+  reviewTags: ReviewTags | null;
 }>();
 
 const emit = defineEmits<{
   (e: "close"): void;
   (e: "install", app: App): void;
   (e: "remove", app: App): void;
+  (e: "favorite", app: App): void;
+  (e: "request-login", message: string): void;
   (e: "open-preview", index: number): void;
   (e: "open-app", pkgname: string, origin?: "spark" | "apm"): void;
   (e: "check-install", app: App): void;
@@ -576,6 +635,22 @@ const iconPath = computed(() => {
   return `${APM_STORE_BASE_URL}/${finalArch}/${displayApp.value.category}/${displayApp.value.pkgname}/icon.png`;
 });
 
+const activeReviewAppKey = computed(() => {
+  if (!displayApp.value) return "";
+  return buildReviewAppKey(
+    displayApp.value,
+    props.reviewTags?.clientArch ?? "amd64",
+  );
+});
+
+const activeReviewTags = computed<ReviewTags | null>(() => {
+  if (!displayApp.value || !props.reviewTags) return null;
+  return buildReviewTags(displayApp.value, {
+    clientArch: props.reviewTags.clientArch,
+    distro: props.reviewTags.distro,
+  });
+});
+
 const downloadCount = ref<string>("");
 
 // 监听 app 变化，获取新app的下载量
@@ -618,6 +693,15 @@ const handleRemove = () => {
   if (displayApp.value) {
     emit("remove", displayApp.value);
   }
+};
+
+const handleFavorite = () => {
+  if (!displayApp.value) return;
+  if (!props.loggedIn) {
+    emit("request-login", "收藏应用需要登录星火账号。");
+    return;
+  }
+  emit("favorite", displayApp.value);
 };
 
 const openPreview = (index: number) => {

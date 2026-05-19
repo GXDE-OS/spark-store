@@ -200,10 +200,11 @@
           :app-key="reviewAppKey"
           :tags="reviewTags"
           :logged-in="loggedIn"
+          :can-submit="isInstalled"
           @request-login="$emit('request-login', $event)"
         />
         <section
-          v-else-if="reviewAppKey && reviewTags"
+          v-else-if="!loggedIn && reviewAppKey && reviewTags"
           class="rounded-2xl border border-slate-200/60 bg-slate-50/50 p-5 dark:border-slate-800/60 dark:bg-slate-800/30"
         >
           <h2 class="mb-2 flex items-center gap-2 text-base font-semibold">
@@ -220,6 +221,18 @@
           >
             登录后查看评价
           </button>
+        </section>
+        <section
+          v-else-if="reviewAppKey && reviewTags"
+          class="rounded-2xl border border-slate-200/60 bg-slate-50/50 p-5 dark:border-slate-800/60 dark:bg-slate-800/30"
+        >
+          <h2 class="mb-2 flex items-center gap-2 text-base font-semibold">
+            <i class="fas fa-comments text-slate-400"></i>
+            应用评价
+          </h2>
+          <p class="text-sm text-slate-500 dark:text-slate-400">
+            安装应用后可发表评论。
+          </p>
         </section>
       </div>
     </div>

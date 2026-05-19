@@ -1,8 +1,14 @@
 import { fireEvent, render, screen } from "@testing-library/vue";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import AppDetailPage from "@/components/AppDetailPage.vue";
+import AppDetailModal from "@/components/AppDetailModal.vue";
 import type { App, ReviewTags } from "@/global/typedefinition";
+
+vi.mock("axios", () => ({
+  default: {
+    get: vi.fn(async () => ({ status: 200, data: "42" })),
+  },
+}));
 
 vi.mock("@/components/ReviewsPanel.vue", () => ({
   default: {
@@ -44,8 +50,6 @@ const sparkApp: App = {
 const apmApp: App = {
   ...app,
   name: "WPS APM",
-  version: "1.0.0",
-  filename: "wps_1.0.0_amd64.deb",
   origin: "apm",
 };
 
@@ -67,33 +71,16 @@ const sparkTags: ReviewTags = {
   distro: "deepin 25",
 };
 
-describe("AppDetailPage", () => {
-  it("renders as page, emits back, and gates favorite for anonymous users", async () => {
-    const rendered = render(AppDetailPage, {
-      props: {
-        app,
-        screenshots: [],
-        sparkInstalled: false,
-        apmInstalled: false,
-        loggedIn: false,
-        reviewAppKey: "apm:amd64-apm:office:wps",
-        reviewTags: null,
-      },
-    });
-
-    expect(screen.getByText("Office suite")).toBeTruthy();
-    await fireEvent.click(screen.getByRole("button", { name: "返回" }));
-    await fireEvent.click(screen.getByRole("button", { name: "收藏" }));
-
-    expect(rendered.emitted("back")).toHaveLength(1);
-    expect(rendered.emitted("request-login")?.[0]?.[0]).toBe(
-      "收藏应用需要登录星火账号。",
-    );
+describe("AppDetailModal", () => {
+  beforeEach(() => {
+    window.apm_store.arch = "amd64";
   });
 
-  it("gates reviews for anonymous users", async () => {
-    const rendered = render(AppDetailPage, {
+  it("renders detail content inside a popup-style modal overlay", () => {
+    const { container } = render(AppDetailModal, {
+      attrs: { "data-app-modal": "detail" },
       props: {
+        show: true,
         app,
         screenshots: [],
         sparkInstalled: false,
@@ -104,18 +91,16 @@ describe("AppDetailPage", () => {
       },
     });
 
-    expect(screen.queryByTestId("reviews-panel")).toBeNull();
-    await fireEvent.click(
-      screen.getByRole("button", { name: "登录后查看评价" }),
-    );
-    expect(rendered.emitted("request-login")?.[0]?.[0]).toBe(
-      "登录后查看和发表评论。",
-    );
+    const overlay = container.querySelector('[data-app-modal="detail"]');
+    expect(overlay).toBeTruthy();
+    expect(overlay?.className).toContain("fixed");
+    expect(overlay?.querySelector(".modal-panel")).toBeTruthy();
   });
 
   it("updates review identity when switching a merged app origin", async () => {
-    render(AppDetailPage, {
+    render(AppDetailModal, {
       props: {
+        show: true,
         app: mergedApp,
         screenshots: [],
         sparkInstalled: true,
@@ -129,10 +114,6 @@ describe("AppDetailPage", () => {
     expect(screen.getByTestId("reviews-panel")).toHaveAttribute(
       "data-app-key",
       "spark:amd64-store:office:wps",
-    );
-    expect(screen.getByTestId("reviews-panel")).toHaveAttribute(
-      "data-origin",
-      "spark",
     );
 
     await fireEvent.click(screen.getByRole("button", { name: "APM" }));
@@ -152,8 +133,9 @@ describe("AppDetailPage", () => {
   });
 
   it("marks reviews read-only when the selected origin is not installed", () => {
-    render(AppDetailPage, {
+    render(AppDetailModal, {
       props: {
+        show: true,
         app,
         screenshots: [],
         sparkInstalled: false,

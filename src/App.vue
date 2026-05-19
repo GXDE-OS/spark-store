@@ -62,30 +62,8 @@
         @select-category="selectSubCategory"
       />
       <div class="px-4 py-6 lg:px-10">
-        <section
-          v-if="currentView === 'detail' && currentApp"
-          data-app-detail-page="detail"
-        >
-          <AppDetailPage
-            :app="currentApp"
-            :screenshots="screenshots"
-            :spark-installed="currentAppSparkInstalled"
-            :apm-installed="currentAppApmInstalled"
-            :logged-in="isLoggedIn"
-            :review-app-key="currentReviewAppKey"
-            :review-tags="currentReviewTags"
-            @back="closeDetail"
-            @install="onDetailInstall"
-            @remove="onDetailRemove"
-            @favorite="onDetailFavorite"
-            @request-login="handleDetailRequestLogin"
-            @open-preview="openScreenPreview"
-            @open-app="openDownloadedApp"
-            @check-install="checkAppInstalled"
-          />
-        </section>
         <UserManagementView
-          v-else-if="currentView === 'account' && currentUser"
+          v-if="currentView === 'account' && currentUser"
           :user="currentUser"
           :downloaded-apps="downloadedApps"
           :sync-enabled="installedSyncEnabled ?? false"
@@ -130,6 +108,26 @@
         </template>
       </div>
     </main>
+
+    <AppDetailModal
+      data-app-modal="detail"
+      :show="showModal"
+      :app="currentApp"
+      :screenshots="screenshots"
+      :spark-installed="currentAppSparkInstalled"
+      :apm-installed="currentAppApmInstalled"
+      :logged-in="isLoggedIn"
+      :review-app-key="currentReviewAppKey"
+      :review-tags="currentReviewTags"
+      @close="closeDetail"
+      @install="onDetailInstall"
+      @remove="onDetailRemove"
+      @favorite="onDetailFavorite"
+      @request-login="handleDetailRequestLogin"
+      @open-preview="openScreenPreview"
+      @open-app="openDownloadedApp"
+      @check-install="checkAppInstalled"
+    />
 
     <ScreenPreview
       :show="showPreview"
@@ -259,7 +257,7 @@ import AppHeader from "./components/AppHeader.vue";
 import AppGrid from "./components/AppGrid.vue";
 import HomeView from "./components/HomeView.vue";
 import CategoryBar from "./components/CategoryBar.vue";
-import AppDetailPage from "./components/AppDetailPage.vue";
+import AppDetailModal from "./components/AppDetailModal.vue";
 import ScreenPreview from "./components/ScreenPreview.vue";
 import DownloadQueue from "./components/DownloadQueue.vue";
 import DownloadDetail from "./components/DownloadDetail.vue";
@@ -403,12 +401,12 @@ const isDarkTheme = computed(() => {
 const categories: Ref<Record<string, CategoryInfo>> = ref({});
 const apps: Ref<App[]> = ref([]);
 const activeTab = ref("home");
-type MainView = "default" | "account" | "favorites" | "detail";
+type MainView = "default" | "account" | "favorites";
 const currentView = ref<MainView>("default");
-const detailPreviousView = ref<MainView>("default");
 const selectedCategory = ref("all");
 const searchQuery = ref("");
 const isSidebarOpen = ref(false);
+const showModal = ref(false);
 const showPreview = ref(false);
 const currentScreenIndex = ref(0);
 const screenshots = ref<string[]>([]);
@@ -693,8 +691,6 @@ const fetchAppFromStore = async (
 };
 
 const openDetail = async (app: App | Record<string, unknown>) => {
-  detailPreviousView.value =
-    currentView.value === "detail" ? "default" : currentView.value;
   // 提取 pkgname 和 category（必须存在）
   const pkgname = (app as Record<string, unknown>).pkgname as string;
   const category =
@@ -839,14 +835,17 @@ const openDetail = async (app: App | Record<string, unknown>) => {
   currentApp.value = finalApp;
   currentScreenIndex.value = 0;
   loadScreenshots(displayAppForScreenshots);
-  currentView.value = "detail";
+  showModal.value = true;
 
   currentAppSparkInstalled.value = false;
   currentAppApmInstalled.value = false;
   checkAppInstalled(finalApp);
 
   nextTick(() => {
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    const modal = document.querySelector(
+      '[data-app-modal="detail"] .modal-panel',
+    );
+    if (modal) modal.scrollTop = 0;
   });
 };
 
@@ -896,11 +895,7 @@ const loadScreenshots = (app: App) => {
 };
 
 const closeDetail = () => {
-  currentView.value =
-    detailPreviousView.value === "detail"
-      ? "default"
-      : detailPreviousView.value;
-  detailPreviousView.value = "default";
+  showModal.value = false;
   currentApp.value = null;
 };
 
@@ -1377,7 +1372,7 @@ const onUninstallSuccess = () => {
     refreshInstalledApps();
   }
   // 更新当前详情页状态（如果在显示）
-  if (currentView.value === "detail" && currentApp.value) {
+  if (showModal.value && currentApp.value) {
     checkAppInstalled(currentApp.value);
   }
 };
@@ -2185,7 +2180,7 @@ onMounted(async () => {
       if (e.key === "ArrowLeft") prevScreen();
       if (e.key === "ArrowRight") nextScreen();
     }
-    if (currentView.value === "detail" && e.key === "Escape") {
+    if (showModal.value && e.key === "Escape") {
       closeDetail();
     }
   });
