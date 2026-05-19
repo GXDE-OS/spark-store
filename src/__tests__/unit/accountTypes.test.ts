@@ -1,3 +1,7 @@
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
 import { describe, expect, it } from "vitest";
 
 import {
@@ -14,7 +18,18 @@ import type {
   SyncedAppListItem,
 } from "@/global/typedefinition";
 
+const productionEnv = readFileSync(
+  resolve(dirname(fileURLToPath(import.meta.url)), "../../../.env.production"),
+  "utf-8",
+);
+
 describe("account shared types", () => {
+  it("points production account requests at the public account service", () => {
+    expect(productionEnv).toContain(
+      "VITE_SPARK_BACKEND_BASE_URL=https://account.spark-app.store",
+    );
+  });
+
   it("exports backend/forum config and account shapes", () => {
     const user: SparkUser = {
       id: 1,
