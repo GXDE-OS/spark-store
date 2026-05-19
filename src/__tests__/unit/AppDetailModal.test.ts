@@ -94,7 +94,19 @@ describe("AppDetailModal", () => {
     const overlay = container.querySelector('[data-app-modal="detail"]');
     expect(overlay).toBeTruthy();
     expect(overlay?.className).toContain("fixed");
-    expect(overlay?.querySelector(".modal-panel")).toBeTruthy();
+    const panel = overlay?.querySelector(".modal-panel");
+    expect(panel).toBeTruthy();
+    expect(panel?.className).toContain("overflow-hidden");
+    expect(panel?.className).toContain("lg:max-h-[85vh]");
+    expect(
+      panel?.querySelector('[data-testid="detail-fixed-sidebar"]'),
+    ).toBeTruthy();
+    expect(
+      panel?.querySelector('[data-testid="detail-scroll-content"]'),
+    ).toBeTruthy();
+    expect(
+      panel?.querySelector('[data-testid="detail-scroll-content"]')?.className,
+    ).toContain("lg:overflow-y-auto");
   });
 
   it("updates review identity when switching a merged app origin", async () => {

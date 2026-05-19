@@ -843,7 +843,7 @@ const openDetail = async (app: App | Record<string, unknown>) => {
 
   nextTick(() => {
     const modal = document.querySelector(
-      '[data-app-modal="detail"] .modal-panel',
+      '[data-app-modal="detail"] [data-testid="detail-scroll-content"]',
     );
     if (modal) modal.scrollTop = 0;
   });

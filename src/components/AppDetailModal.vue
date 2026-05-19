@@ -15,23 +15,24 @@
       @wheel="onOverlayWheel"
     >
       <div
-        class="modal-panel relative w-full max-w-5xl max-h-[85vh] overflow-y-auto overscroll-contain scrollbar-nowidth rounded-3xl border border-white/10 bg-white/95 px-6 pb-6 shadow-2xl dark:border-slate-800 dark:bg-slate-900"
+        class="modal-panel relative flex w-full max-w-5xl max-h-[85vh] overflow-y-auto overscroll-contain scrollbar-nowidth rounded-3xl border border-white/10 bg-white/95 px-6 pb-6 shadow-2xl dark:border-slate-800 dark:bg-slate-900 lg:max-h-[85vh] lg:overflow-hidden lg:pb-0"
       >
-        <!-- 返回按钮 - sticky定位在模态框内部左上角，滚动时始终可见 -->
-        <button
-          type="button"
-          class="sticky top-2 left-0 z-10 inline-flex items-center gap-2 rounded-full border border-slate-200/70 bg-white/90 px-4 py-2 text-sm font-medium text-slate-600 shadow-lg backdrop-blur-sm transition hover:bg-slate-50 hover:text-slate-900 dark:border-slate-700 dark:bg-slate-800/90 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-slate-200 mt-4"
-          @click="closeModal"
-          aria-label="返回"
-        >
-          <i class="fas fa-arrow-left"></i>
-          <span>返回</span>
-        </button>
-
         <!-- 主布局：左侧信息 + 右侧内容 -->
-        <div class="flex flex-col lg:flex-row gap-6">
+        <div class="flex w-full flex-col gap-6 lg:min-h-0 lg:flex-row">
           <!-- 左侧：图标、版本、来源、按钮、元信息 -->
-          <div class="w-full lg:w-72 flex-shrink-0 space-y-5">
+          <div
+            data-testid="detail-fixed-sidebar"
+            class="w-full flex-shrink-0 space-y-5 lg:w-72 lg:self-start lg:py-4"
+          >
+            <button
+              type="button"
+              class="inline-flex items-center gap-2 rounded-full border border-slate-200/70 bg-white/90 px-4 py-2 text-sm font-medium text-slate-600 shadow-lg backdrop-blur-sm transition hover:bg-slate-50 hover:text-slate-900 dark:border-slate-700 dark:bg-slate-800/90 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-slate-200"
+              @click="closeModal"
+              aria-label="返回"
+            >
+              <i class="fas fa-arrow-left"></i>
+              <span>返回</span>
+            </button>
             <!-- 应用图标和名称 -->
             <div class="text-center">
               <div
@@ -269,7 +270,10 @@
           </div>
 
           <!-- 右侧：应用详情（上）+ 截图（下） -->
-          <div class="flex-1 min-w-0 space-y-5">
+          <div
+            data-testid="detail-scroll-content"
+            class="min-w-0 flex-1 space-y-5 lg:max-h-[85vh] lg:overflow-y-auto lg:overscroll-contain lg:py-4 lg:pr-2"
+          >
             <!-- 应用详情 -->
             <div
               v-if="displayApp?.more && displayApp.more.trim() !== ''"
