@@ -32,4 +32,29 @@ describe("requestFlarumToken", () => {
     expect(axios.post).not.toHaveBeenCalled();
     expect(token).toEqual({ token: "forum-token", userId: "42" });
   });
+
+  it("rejects malformed token responses from main-process IPC", async () => {
+    vi.mocked(window.ipcRenderer.invoke).mockResolvedValue({
+      token: "",
+      user_id: 42,
+    });
+
+    await expect(
+      requestFlarumToken({ identification: "momen", password: "secret" }),
+    ).rejects.toThrow("论坛登录响应异常，请稍后重试。");
+  });
+
+  it("strips Electron IPC wrapper text from known login errors", async () => {
+    vi.mocked(window.ipcRenderer.invoke).mockRejectedValue(
+      new Error(
+        "Error invoking remote method 'request-flarum-token': Error: 无法连接星火论坛，请检查网络后重试。",
+      ),
+    );
+
+    await expect(
+      requestFlarumToken({ identification: "momen", password: "secret" }),
+    ).rejects.toMatchObject({
+      message: "无法连接星火论坛，请检查网络后重试。",
+    });
+  });
 });

@@ -1,4 +1,5 @@
-import axios from "axios";
+import axios, { type AxiosResponse } from "axios";
+import pino from "pino";
 
 import { SPARK_BACKEND_BASE_URL } from "@/global/storeConfig";
 import type {
@@ -19,8 +20,41 @@ const backend = axios.create({
   baseURL: SPARK_BACKEND_BASE_URL,
   timeout: 10000,
 });
+const logger = pino({ name: "backendApi" });
 
 type ApiRecord = Record<string, unknown>;
+
+const normalizeBackendAuthError = (error: unknown): Error => {
+  if (!axios.isAxiosError(error)) {
+    return error instanceof Error ? error : new Error("登录失败，请稍后重试。");
+  }
+
+  logger.error(
+    {
+      code: error.code,
+      message: error.message,
+      status: error.response?.status,
+    },
+    "Spark backend auth exchange failed",
+  );
+
+  if (!error.response) {
+    return new Error("无法连接星火账号服务，请确认后端服务已启动或稍后重试。");
+  }
+
+  const status = error.response.status;
+  if (status === 401) {
+    return new Error("论坛登录失败，请检查账号和密码。");
+  }
+  if (status === 503) {
+    return new Error("星火账号服务暂时无法连接论坛，请稍后重试。");
+  }
+  if (status === 500) {
+    return new Error("星火账号服务异常，请确认后端数据库迁移已执行后重试。");
+  }
+
+  return new Error(`星火账号服务返回异常 (${status})，请稍后重试。`);
+};
 
 const asApiRecord = (value: unknown): ApiRecord => {
   if (value && typeof value === "object" && !Array.isArray(value)) {
@@ -145,10 +179,15 @@ export const exchangeFlarumToken = async (payload: {
   flarumUserId: string;
   flarumToken: string;
 }): Promise<AuthSession> => {
-  const response = await backend.post("/auth/flarum", {
-    flarum_user_id: payload.flarumUserId,
-    flarum_token: payload.flarumToken,
-  });
+  let response: AxiosResponse;
+  try {
+    response = await backend.post("/auth/flarum", {
+      flarum_user_id: payload.flarumUserId,
+      flarum_token: payload.flarumToken,
+    });
+  } catch (error) {
+    throw normalizeBackendAuthError(error);
+  }
   const data = asApiRecord(response.data);
 
   return {

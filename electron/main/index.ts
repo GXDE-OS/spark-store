@@ -150,20 +150,35 @@ ipcMain.handle("request-flarum-token", async (_event, payload: unknown) => {
     throw new Error("登录信息格式不正确，请重新输入。");
   }
 
-  const response = await fetch(FLARUM_TOKEN_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Accept: "application/json",
-      "User-Agent": getUserAgent(),
-    },
-    body: JSON.stringify({
-      identification: credentials.identification,
-      password: credentials.password,
-    }),
-  });
+  logger.info({ endpoint: FLARUM_TOKEN_URL }, "Requesting Flarum login token");
+
+  let response: Response;
+  try {
+    response = await fetch(FLARUM_TOKEN_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+        "User-Agent": getUserAgent(),
+      },
+      body: JSON.stringify({
+        identification: credentials.identification,
+        password: credentials.password,
+      }),
+    });
+  } catch (err) {
+    logger.error(
+      { err, endpoint: FLARUM_TOKEN_URL },
+      "Flarum token request failed before response",
+    );
+    throw new Error("无法连接星火论坛，请检查网络后重试。");
+  }
 
   if (!response.ok) {
+    logger.warn(
+      { endpoint: FLARUM_TOKEN_URL, status: response.status },
+      "Flarum rejected login token request",
+    );
     throw new Error("论坛登录失败，请检查账号和密码。");
   }
 
@@ -174,6 +189,14 @@ ipcMain.handle("request-flarum-token", async (_event, payload: unknown) => {
     userId === undefined ||
     userId === null
   ) {
+    logger.warn(
+      {
+        endpoint: FLARUM_TOKEN_URL,
+        hasToken: typeof data.token === "string" && data.token.length > 0,
+        hasUserId: userId !== undefined && userId !== null,
+      },
+      "Flarum token response missing required fields",
+    );
     throw new Error("论坛登录响应异常，请稍后重试。");
   }
 
