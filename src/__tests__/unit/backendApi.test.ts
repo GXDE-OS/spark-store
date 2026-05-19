@@ -101,4 +101,31 @@ describe("backend API auth exchange", () => {
       }),
     ).rejects.toThrow("无法连接星火账号服务，请稍后重试。");
   });
+
+  it("maps review submission server failures separately from connection failures", async () => {
+    const error = Object.assign(
+      new Error("Request failed with status code 500"),
+      {
+        isAxiosError: true,
+        response: { status: 500 },
+      },
+    );
+    axiosMocks.post.mockRejectedValue(error);
+
+    await expect(
+      submitReview("apm:amd64-apm:office:wps", {
+        rating: 5,
+        content: "好用",
+        tags: {
+          origin: "apm",
+          category: "office",
+          pkgname: "wps",
+          version: "1.0.0",
+          packageArch: "amd64",
+          clientArch: "amd64",
+          distro: "deepin 25",
+        },
+      }),
+    ).rejects.toThrow("星火账号服务异常，请稍后重试。");
+  });
 });
