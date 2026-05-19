@@ -107,4 +107,44 @@ describe("processInstall queue forwarding", () => {
       expect.stringContaining('"id":5'),
     );
   });
+
+  it("returns queued download metadata for account records", async () => {
+    vi.doMock("axios", () => ({
+      default: {
+        create: vi.fn(() => ({
+          post: vi.fn(() => Promise.resolve({ data: { ok: true } })),
+        })),
+      },
+    }));
+    Object.assign(window.ipcRenderer, {
+      on: vi.fn(),
+      send: vi.fn(),
+      invoke: vi.fn(() => Promise.resolve(true)),
+    });
+    window.apm_store.arch = "amd64";
+    const { handleInstall } = await import("@/modules/processInstall");
+
+    const result = await handleInstall({
+      name: "WPS",
+      pkgname: "wps",
+      version: "1.0.0",
+      filename: "wps_1.0.0_amd64.deb",
+      torrent_address: "",
+      author: "",
+      contributor: "",
+      website: "",
+      update: "",
+      size: "",
+      more: "",
+      tags: "",
+      img_urls: [],
+      icons: "",
+      category: "office",
+      origin: "apm",
+      currentStatus: "not-installed",
+    });
+
+    expect(result?.pkgname).toBe("wps");
+    expect(result?.origin).toBe("apm");
+  });
 });

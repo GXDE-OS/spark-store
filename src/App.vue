@@ -24,11 +24,18 @@
         :store-filter="storeFilter"
         :sidebar-entries="sidebarEntries"
         :entry-counts="entryCounts"
+        :current-user="currentUser"
         @toggle-theme="toggleTheme"
         @select-tab="selectTab"
         @close="isSidebarOpen = false"
         @list="handleList"
         @update="handleUpdate"
+        @request-login="showLoginModal = true"
+        @open-user-management="openUserManagement"
+        @open-favorites="openFavoriteManagement"
+        @open-forum="openExternalUrl(FLARUM_BASE_URL)"
+        @edit-profile="openExternalUrl(FLARUM_SETTINGS_URL)"
+        @logout="handleLogout"
       />
     </aside>
 
@@ -55,7 +62,54 @@
         @select-category="selectSubCategory"
       />
       <div class="px-4 py-6 lg:px-10">
-        <template v-if="activeTab === 'home'">
+        <section
+          v-if="currentView === 'detail' && currentApp"
+          data-app-detail-page="detail"
+        >
+          <AppDetailPage
+            :app="currentApp"
+            :screenshots="screenshots"
+            :spark-installed="currentAppSparkInstalled"
+            :apm-installed="currentAppApmInstalled"
+            :logged-in="isLoggedIn"
+            :review-app-key="currentReviewAppKey"
+            :review-tags="currentReviewTags"
+            @back="closeDetail"
+            @install="onDetailInstall"
+            @remove="onDetailRemove"
+            @favorite="onDetailFavorite"
+            @request-login="handleDetailRequestLogin"
+            @open-preview="openScreenPreview"
+            @open-app="openDownloadedApp"
+            @check-install="checkAppInstalled"
+          />
+        </section>
+        <UserManagementView
+          v-else-if="currentView === 'account' && currentUser"
+          :user="currentUser"
+          :downloaded-apps="downloadedApps"
+          :sync-enabled="installedSyncEnabled ?? false"
+          :loading="downloadedLoading"
+          :error="downloadedError"
+          @open-forum="openExternalUrl(FLARUM_BASE_URL)"
+          @edit-profile="openExternalUrl(FLARUM_SETTINGS_URL)"
+          @toggle-sync="setInstalledSyncEnabled"
+          @sync-now="syncInstalledAppsNow"
+          @refresh-downloads="loadDownloadedHistory"
+        />
+        <FavoriteFolderManager
+          v-else-if="currentView === 'favorites'"
+          :folders="favoriteFolders"
+          :active-folder-id="activeFavoriteFolderId"
+          :items="resolvedFavoriteItems"
+          :loading="favoriteLoading"
+          :error="favoriteError"
+          @select-folder="selectFavoriteFolder"
+          @create-folder="createFavoriteFolderFromPrompt"
+          @remove-selected="removeSelectedFavorites"
+          @install-selected="installResolvedFavorites"
+        />
+        <template v-else-if="activeTab === 'home'">
           <HomeView
             :links="homeLinks"
             :lists="homeLists"
@@ -76,21 +130,6 @@
         </template>
       </div>
     </main>
-
-    <AppDetailModal
-      data-app-modal="detail"
-      :show="showModal"
-      :app="currentApp"
-      :screenshots="screenshots"
-      :spark-installed="currentAppSparkInstalled"
-      :apm-installed="currentAppApmInstalled"
-      @close="closeDetail"
-      @install="onDetailInstall"
-      @remove="onDetailRemove"
-      @open-preview="openScreenPreview"
-      @open-app="openDownloadedApp"
-      @check-install="checkAppInstalled"
-    />
 
     <ScreenPreview
       :show="showPreview"
@@ -131,12 +170,27 @@
       :store-filter="storeFilter"
       :spark-available="sparkAvailable"
       :apm-available="apmAvailable"
+      :logged-in="isLoggedIn"
+      :syncing="syncLoading"
       @close="closeInstalledModal"
       @refresh="refreshInstalledApps"
       @open-app="openDownloadedApp($event.pkgname, $event.origin)"
       @open-detail="openDetail"
       @uninstall="uninstallInstalledApp"
       @switch-origin="handleSwitchOrigin"
+      @sync-to-account="syncInstalledAppsToAccount"
+      @restore-from-account="openRestoreFromAccount"
+      @request-login="requireLogin('云端同步需要登录星火账号。')"
+    />
+
+    <AppListRestoreModal
+      :show="showRestoreModal"
+      :loading="restoreLoading"
+      :error="restoreError"
+      :items="restoreItems"
+      :installed-keys="installedCloudKeys"
+      @close="showRestoreModal = false"
+      @install-selected="installCloudItems"
     />
 
     <UpdateCenterModal
@@ -169,6 +223,30 @@
     <AboutModal :show="showAboutModal" @close="closeAboutModal" />
 
     <SettingsModal :show="showSettingsModal" @close="closeSettingsModal" />
+
+    <LoginModal
+      :show="showLoginModal"
+      :loading="loginLoading"
+      :error="loginError"
+      @close="showLoginModal = false"
+      @login="handleFlarumLogin"
+      @register="openExternalUrl(FLARUM_REGISTER_URL)"
+    />
+
+    <LoginPromptModal
+      :show="showLoginPrompt"
+      :message="loginPromptMessage"
+      @close="showLoginPrompt = false"
+      @login="openLoginFromPrompt"
+      @register="openExternalUrl(FLARUM_REGISTER_URL)"
+    />
+
+    <FavoriteFolderSelector
+      :show="showFavoriteSelector"
+      :folders="favoriteFolders"
+      @close="showFavoriteSelector = false"
+      @select-folder="addCurrentFavoriteToFolder"
+    />
   </div>
 </template>
 
@@ -181,18 +259,27 @@ import AppHeader from "./components/AppHeader.vue";
 import AppGrid from "./components/AppGrid.vue";
 import HomeView from "./components/HomeView.vue";
 import CategoryBar from "./components/CategoryBar.vue";
-import AppDetailModal from "./components/AppDetailModal.vue";
+import AppDetailPage from "./components/AppDetailPage.vue";
 import ScreenPreview from "./components/ScreenPreview.vue";
 import DownloadQueue from "./components/DownloadQueue.vue";
 import DownloadDetail from "./components/DownloadDetail.vue";
 import InstalledAppsModal from "./components/InstalledAppsModal.vue";
+import AppListRestoreModal from "./components/AppListRestoreModal.vue";
 import UpdateCenterModal from "./components/UpdateCenterModal.vue";
 import UninstallConfirmModal from "./components/UninstallConfirmModal.vue";
 import ApmInstallConfirmModal from "./components/ApmInstallConfirmModal.vue";
 import AboutModal from "./components/AboutModal.vue";
 import SettingsModal from "./components/SettingsModal.vue";
+import LoginModal from "./components/LoginModal.vue";
+import LoginPromptModal from "./components/LoginPromptModal.vue";
+import FavoriteFolderSelector from "./components/FavoriteFolderSelector.vue";
+import FavoriteFolderManager from "./components/FavoriteFolderManager.vue";
+import UserManagementView from "./components/UserManagementView.vue";
 import {
   APM_STORE_BASE_URL,
+  FLARUM_BASE_URL,
+  FLARUM_REGISTER_URL,
+  FLARUM_SETTINGS_URL,
   currentApp,
   currentAppSparkInstalled,
   currentAppApmInstalled,
@@ -207,10 +294,34 @@ import {
   watchDownloadsChange,
 } from "./global/downloadStatus";
 import {
+  installedSyncEnabled,
+  loadInstalledSyncPreference,
+  setInstalledSyncEnabled,
+} from "./global/accountSyncState";
+import {
   countSearchMatchesByCategory,
   rankAppsBySearch,
 } from "./modules/appSearch";
 import { handleInstall, handleRetry } from "./modules/processInstall";
+import {
+  addFavoriteItem,
+  bulkDeleteFavoriteItems,
+  createFavoriteFolder,
+  exchangeFlarumToken,
+  fetchSyncedAppList,
+  listDownloadedApps,
+  listFavoriteFolders,
+  listFavoriteItems,
+  recordDownloadedApp,
+  uploadSyncedAppList,
+} from "./modules/backendApi";
+import { requestFlarumToken } from "./modules/flarumAuth";
+import {
+  currentUser,
+  isLoggedIn,
+  logout,
+  setAuthSession,
+} from "./global/authState";
 import {
   getAllowedInstalledOrigin,
   getEffectiveStoreFilter,
@@ -218,16 +329,39 @@ import {
   isOriginEnabled,
 } from "./modules/storeFilter";
 import { createUpdateCenterStore } from "./modules/updateCenter";
+import {
+  buildReviewAppKey,
+  buildFavoriteAppKey,
+  buildReviewTags,
+  getDisplayApp,
+  parsePackageArch,
+} from "./modules/appIdentity";
+import { resolveFavoriteItems } from "./modules/favoriteAvailability";
+import {
+  buildSyncItems,
+  cloudItemKey,
+  mergeInstalledApps,
+} from "./modules/appListSync";
 import type {
   App,
   AppJson,
   DownloadItem,
+  DownloadResult,
   ChannelPayload,
   CategoryInfo,
   HomeLink,
   HomeList,
+  FlarumLoginPayload,
   SidebarEntry,
   UpdateCenterItem,
+  ReviewTags,
+  FavoriteFolder,
+  FavoriteItem,
+  InstalledAppInfo,
+  ResolvedFavoriteItem,
+  SystemInfo,
+  DownloadedAppRecord,
+  SyncedAppListItem,
 } from "./global/typedefinition";
 import type { Ref } from "vue";
 import type { IpcRendererEvent } from "electron";
@@ -269,10 +403,12 @@ const isDarkTheme = computed(() => {
 const categories: Ref<Record<string, CategoryInfo>> = ref({});
 const apps: Ref<App[]> = ref([]);
 const activeTab = ref("home");
+type MainView = "default" | "account" | "favorites" | "detail";
+const currentView = ref<MainView>("default");
+const detailPreviousView = ref<MainView>("default");
 const selectedCategory = ref("all");
 const searchQuery = ref("");
 const isSidebarOpen = ref(false);
-const showModal = ref(false);
 const showPreview = ref(false);
 const currentScreenIndex = ref(0);
 const screenshots = ref<string[]>([]);
@@ -289,9 +425,43 @@ const showUninstallModal = ref(false);
 const uninstallTargetApp: Ref<App | null> = ref(null);
 const showAboutModal = ref(false);
 const showSettingsModal = ref(false);
+const showLoginModal = ref(false);
+const loginLoading = ref(false);
+const loginError = ref("");
+const showLoginPrompt = ref(false);
+const loginPromptMessage = ref("请登录星火账号后继续操作。");
 const sparkAvailable = ref(false);
 const apmAvailable = ref(false);
 const sidebarEntries: Ref<SidebarEntry[]> = ref([]);
+const favoriteFolders = ref<FavoriteFolder[]>([]);
+const activeFavoriteFolderId = ref<number | null>(null);
+const favoriteItems = ref<FavoriteItem[]>([]);
+const showFavoriteSelector = ref(false);
+const favoriteTargetApp = ref<App | null>(null);
+const favoriteLoading = ref(false);
+const favoriteError = ref("");
+const favoriteRequestGeneration = ref(0);
+const downloadedApps = ref<DownloadedAppRecord[]>([]);
+const downloadedLoading = ref(false);
+const downloadedError = ref("");
+const downloadedRequestGeneration = ref(0);
+const syncLoading = ref(false);
+const syncRequestGeneration = ref(0);
+const syncCandidateApps = ref<App[]>([]);
+const restoreLoading = ref(false);
+const restoreError = ref("");
+const showRestoreModal = ref(false);
+const restoreItems = ref<SyncedAppListItem[]>([]);
+const restoreRequestGeneration = ref(0);
+const installedSyncPromptShown = ref(false);
+const systemInfo = ref<SystemInfo>({ distro: "unknown" });
+type PendingDownloadRecord = Omit<
+  DownloadedAppRecord,
+  "id" | "downloadedAt"
+> & {
+  userId: number;
+};
+const pendingDownloadRecords = new Map<number, PendingDownloadRecord>();
 
 /** 启动参数 --no-apm => 仅 Spark；--no-spark => 仅 APM；由主进程 IPC 提供 */
 const storeFilter = ref<"spark" | "apm" | "both">("both");
@@ -376,6 +546,38 @@ const entryCounts = computed(() => {
   return counts;
 });
 
+const currentDisplayApp = computed(() => getDisplayApp(currentApp.value));
+
+const clientArch = computed(() => window.apm_store.arch || "amd64");
+
+const currentReviewAppKey = computed(() => {
+  if (!currentDisplayApp.value) return "";
+  return buildReviewAppKey(currentDisplayApp.value, clientArch.value);
+});
+
+const currentReviewTags = computed<ReviewTags | null>(() => {
+  if (!currentDisplayApp.value) return null;
+  return buildReviewTags(currentDisplayApp.value, {
+    clientArch: clientArch.value,
+    distro: systemInfo.value.distro,
+  });
+});
+
+const resolvedFavoriteItems = computed<ResolvedFavoriteItem[]>(() =>
+  resolveFavoriteItems(
+    favoriteItems.value,
+    apps.value,
+    installedApps.value,
+    availableSources.value,
+    storeFilter.value,
+    clientArch.value,
+  ),
+);
+
+const installedCloudKeys = computed(
+  () => new Set(installedApps.value.map((app) => cloudItemKey(app))),
+);
+
 // 方法
 const syncThemePreference = () => {
   document.documentElement.classList.toggle("dark", isDarkTheme.value);
@@ -413,6 +615,7 @@ const toggleTheme = () => {
 };
 
 const selectTab = (tab: string) => {
+  currentView.value = "default";
   activeTab.value = tab;
   selectedCategory.value = "all";
   isSidebarOpen.value = false;
@@ -427,6 +630,7 @@ const selectTab = (tab: string) => {
 };
 
 const selectSubCategory = (category: string) => {
+  currentView.value = "default";
   selectedCategory.value = category;
   window.scrollTo({ top: 0, behavior: "smooth" });
 };
@@ -489,6 +693,8 @@ const fetchAppFromStore = async (
 };
 
 const openDetail = async (app: App | Record<string, unknown>) => {
+  detailPreviousView.value =
+    currentView.value === "detail" ? "default" : currentView.value;
   // 提取 pkgname 和 category（必须存在）
   const pkgname = (app as Record<string, unknown>).pkgname as string;
   const category =
@@ -633,17 +839,14 @@ const openDetail = async (app: App | Record<string, unknown>) => {
   currentApp.value = finalApp;
   currentScreenIndex.value = 0;
   loadScreenshots(displayAppForScreenshots);
-  showModal.value = true;
+  currentView.value = "detail";
 
   currentAppSparkInstalled.value = false;
   currentAppApmInstalled.value = false;
   checkAppInstalled(finalApp);
 
   nextTick(() => {
-    const modal = document.querySelector(
-      '[data-app-modal="detail"] .modal-panel',
-    );
-    if (modal) modal.scrollTop = 0;
+    window.scrollTo({ top: 0, behavior: "smooth" });
   });
 };
 
@@ -693,7 +896,11 @@ const loadScreenshots = (app: App) => {
 };
 
 const closeDetail = () => {
-  showModal.value = false;
+  currentView.value =
+    detailPreviousView.value === "detail"
+      ? "default"
+      : detailPreviousView.value;
+  detailPreviousView.value = "default";
   currentApp.value = null;
 };
 
@@ -992,6 +1199,95 @@ const refreshInstalledApps = async () => {
   }
 };
 
+const mapInstalledAppToCatalogApp = (
+  app: InstalledAppInfo,
+  origin: "spark" | "apm",
+): App | null => {
+  let appInfo = apps.value.find(
+    (catalogApp) =>
+      catalogApp.pkgname === app.pkgname && catalogApp.origin === origin,
+  );
+
+  if (origin === "spark" && !appInfo) {
+    return null;
+  }
+
+  if (appInfo) {
+    appInfo.flags = app.flags;
+    appInfo.arch = app.arch;
+    appInfo.currentStatus = "installed";
+    appInfo.isDependency = app.isDependency;
+    return appInfo;
+  }
+
+  return {
+    name: app.name || app.pkgname,
+    pkgname: app.pkgname,
+    version: app.version,
+    category: "unknown",
+    tags: "",
+    more: "",
+    filename: "",
+    torrent_address: "",
+    author: "",
+    contributor: "",
+    website: "",
+    update: "",
+    size: "",
+    img_urls: [],
+    icons: app.icon || "",
+    origin: app.origin || (app.arch?.includes("apm") ? "apm" : "spark"),
+    currentStatus: "installed",
+    arch: app.arch,
+    flags: app.flags,
+    isDependency: app.isDependency,
+  };
+};
+
+const refreshFavoriteInstalledApps = async (): Promise<void> => {
+  const origins: Array<"spark" | "apm"> = [];
+  if (isOriginEnabled(storeFilter.value, "spark") && sparkAvailable.value) {
+    origins.push("spark");
+  }
+  if (isOriginEnabled(storeFilter.value, "apm") && apmAvailable.value) {
+    origins.push("apm");
+  }
+
+  const refreshedApps: App[] = [];
+  await Promise.all(
+    origins.map(async (origin) => {
+      const pkgnameList =
+        origin === "spark"
+          ? apps.value
+              .filter((app) => app.origin === "spark")
+              .map((app) => app.pkgname)
+          : undefined;
+      const result = await window.ipcRenderer.invoke("list-installed", {
+        origin,
+        pkgnameList,
+      });
+      if (!result?.success) return;
+
+      for (const app of result.apps as InstalledAppInfo[]) {
+        const appInfo = mapInstalledAppToCatalogApp(app, origin);
+        if (appInfo) refreshedApps.push(appInfo);
+      }
+    }),
+  );
+
+  const refreshedKeys = new Set(
+    refreshedApps.map((app) => `${app.origin}:${app.pkgname}`),
+  );
+  installedApps.value = [
+    ...installedApps.value.filter(
+      (app) =>
+        !origins.includes(app.origin) &&
+        !refreshedKeys.has(`${app.origin}:${app.pkgname}`),
+    ),
+    ...refreshedApps,
+  ];
+};
+
 const requestUninstall = (app: App) => {
   uninstallTargetApp.value = app;
   showUninstallModal.value = true;
@@ -1003,7 +1299,71 @@ const onDetailRemove = (app: App) => {
 };
 
 const onDetailInstall = async (app: App) => {
-  await handleInstall(app);
+  const initiatingUserId = currentUser.value?.id ?? null;
+  const download = await handleInstall(app);
+  if (
+    !download ||
+    initiatingUserId === null ||
+    !isLoggedIn.value ||
+    currentUser.value?.id !== initiatingUserId
+  ) {
+    return;
+  }
+
+  pendingDownloadRecords.set(download.id, {
+    userId: initiatingUserId,
+    appKey: buildFavoriteAppKey(app),
+    pkgname: app.pkgname,
+    name: app.name,
+    category: app.category,
+    selectedOrigin: app.origin,
+    version: app.version,
+    packageArch: app.arch || parsePackageArch(app.filename),
+  });
+};
+
+const handleInstallCompleteForDownloadRecord = async (
+  _event: IpcRendererEvent,
+  result: DownloadResult,
+) => {
+  const pendingRecord = pendingDownloadRecords.get(result.id);
+  if (!pendingRecord) return;
+
+  if (result.success) {
+    pendingDownloadRecords.delete(result.id);
+  }
+
+  if (
+    !result.success ||
+    !isLoggedIn.value ||
+    currentUser.value?.id !== pendingRecord.userId
+  ) {
+    return;
+  }
+
+  const downloadRecord: Omit<DownloadedAppRecord, "id" | "downloadedAt"> = {
+    appKey: pendingRecord.appKey,
+    pkgname: pendingRecord.pkgname,
+    name: pendingRecord.name,
+    category: pendingRecord.category,
+    selectedOrigin: pendingRecord.selectedOrigin,
+    version: pendingRecord.version,
+    packageArch: pendingRecord.packageArch,
+  };
+
+  try {
+    await recordDownloadedApp(downloadRecord);
+  } catch (error: unknown) {
+    logger.warn({ err: error }, "记录下载应用失败");
+  }
+};
+
+const onDetailFavorite = async (app: App) => {
+  await openFavoriteSelector(app);
+};
+
+const handleDetailRequestLogin = (message: string) => {
+  requireLogin(message);
 };
 
 const closeUninstallModal = () => {
@@ -1017,7 +1377,7 @@ const onUninstallSuccess = () => {
     refreshInstalledApps();
   }
   // 更新当前详情页状态（如果在显示）
-  if (showModal.value && currentApp.value) {
+  if (currentView.value === "detail" && currentApp.value) {
     checkAppInstalled(currentApp.value);
   }
 };
@@ -1060,6 +1420,459 @@ const closeAboutModal = () => {
 
 const closeSettingsModal = () => {
   showSettingsModal.value = false;
+};
+
+const openExternalUrl = (url: string) => {
+  window.open(url, "_blank", "noopener,noreferrer");
+};
+
+const requireLogin = (message: string): boolean => {
+  if (isLoggedIn.value) return true;
+  loginPromptMessage.value = message;
+  showLoginPrompt.value = true;
+  return false;
+};
+
+const openLoginFromPrompt = () => {
+  showLoginPrompt.value = false;
+  showLoginModal.value = true;
+};
+
+const clearFavoriteState = () => {
+  favoriteRequestGeneration.value += 1;
+  favoriteFolders.value = [];
+  activeFavoriteFolderId.value = null;
+  favoriteItems.value = [];
+  showFavoriteSelector.value = false;
+  favoriteTargetApp.value = null;
+  favoriteLoading.value = false;
+  favoriteError.value = "";
+};
+
+const clearDownloadedState = () => {
+  downloadedRequestGeneration.value += 1;
+  downloadedApps.value = [];
+  downloadedLoading.value = false;
+  downloadedError.value = "";
+};
+
+const clearRestoreState = () => {
+  restoreRequestGeneration.value += 1;
+  restoreItems.value = [];
+  restoreLoading.value = false;
+  restoreError.value = "";
+  showRestoreModal.value = false;
+};
+
+const nextFavoriteRequestGeneration = (): number => {
+  favoriteRequestGeneration.value += 1;
+  return favoriteRequestGeneration.value;
+};
+
+const nextDownloadedRequestGeneration = (): number => {
+  downloadedRequestGeneration.value += 1;
+  return downloadedRequestGeneration.value;
+};
+
+const isCurrentFavoriteRequest = (generation: number): boolean =>
+  favoriteRequestGeneration.value === generation && isLoggedIn.value;
+
+const isCurrentDownloadedRequest = (
+  generation: number,
+  userId: number,
+): boolean =>
+  downloadedRequestGeneration.value === generation &&
+  currentUser.value?.id === userId;
+
+const isCurrentRestoreRequest = (generation: number, userId: number): boolean =>
+  restoreRequestGeneration.value === generation &&
+  currentUser.value?.id === userId;
+
+const handleLogout = () => {
+  logout();
+  pendingDownloadRecords.clear();
+  clearFavoriteState();
+  clearDownloadedState();
+  clearRestoreState();
+  syncRequestGeneration.value += 1;
+  syncLoading.value = false;
+  syncCandidateApps.value = [];
+  loadInstalledSyncPreference(null);
+  showLoginModal.value = false;
+  showLoginPrompt.value = false;
+  isSidebarOpen.value = false;
+  if (currentView.value === "favorites" || currentView.value === "account") {
+    currentView.value = "default";
+    activeTab.value = "home";
+    selectedCategory.value = "all";
+  }
+};
+
+const handleFlarumLogin = async (payload: FlarumLoginPayload) => {
+  loginLoading.value = true;
+  loginError.value = "";
+
+  try {
+    const flarumToken = await requestFlarumToken(payload);
+    const session = await exchangeFlarumToken({
+      flarumUserId: flarumToken.userId,
+      flarumToken: flarumToken.token,
+    });
+    setAuthSession(session);
+    loadInstalledSyncPreference(session.user.id);
+    showLoginModal.value = false;
+  } catch (error: unknown) {
+    loginError.value = (error as Error)?.message || "登录失败，请稍后重试";
+  } finally {
+    loginLoading.value = false;
+  }
+};
+
+const loadDownloadedHistory = async (): Promise<void> => {
+  if (!requireLogin("请登录后查看和管理账号信息。")) return;
+  const userId = currentUser.value?.id;
+  if (userId === undefined) return;
+  const generation = nextDownloadedRequestGeneration();
+
+  downloadedLoading.value = true;
+  downloadedError.value = "";
+  try {
+    const result = await listDownloadedApps(1, 50);
+    if (!isCurrentDownloadedRequest(generation, userId)) return;
+    downloadedApps.value = result.items;
+  } catch (error: unknown) {
+    if (!isCurrentDownloadedRequest(generation, userId)) return;
+    downloadedApps.value = [];
+    downloadedError.value = (error as Error)?.message || "读取下载历史失败";
+  } finally {
+    if (isCurrentDownloadedRequest(generation, userId)) {
+      downloadedLoading.value = false;
+    }
+  }
+};
+
+const refreshInstalledSyncCandidates = async (
+  isCurrentRequest: () => boolean,
+): Promise<boolean> => {
+  const origins: Array<"spark" | "apm"> = [];
+  if (isOriginEnabled(storeFilter.value, "spark") && sparkAvailable.value) {
+    origins.push("spark");
+  }
+  if (isOriginEnabled(storeFilter.value, "apm") && apmAvailable.value) {
+    origins.push("apm");
+  }
+
+  const refreshedApps: App[] = [];
+  await Promise.all(
+    origins.map(async (origin) => {
+      const pkgnameList =
+        origin === "spark"
+          ? apps.value
+              .filter((app) => app.origin === "spark")
+              .map((app) => app.pkgname)
+          : undefined;
+      const result = await window.ipcRenderer.invoke("list-installed", {
+        origin,
+        pkgnameList,
+      });
+      if (!result?.success) return;
+
+      for (const app of result.apps as InstalledAppInfo[]) {
+        const appInfo = mapInstalledAppToCatalogApp(app, origin);
+        if (appInfo) refreshedApps.push(appInfo);
+      }
+    }),
+  );
+
+  if (!isCurrentRequest()) {
+    return false;
+  }
+
+  syncCandidateApps.value = mergeInstalledApps(
+    syncCandidateApps.value,
+    refreshedApps,
+    origins,
+  );
+  return true;
+};
+
+const syncInstalledAppsToAccount = async (): Promise<void> => {
+  if (!requireLogin("云端同步需要登录星火账号。")) return;
+  if (syncLoading.value) return;
+  const userId = currentUser.value?.id;
+  if (userId === undefined) return;
+  const generation = syncRequestGeneration.value + 1;
+  syncRequestGeneration.value = generation;
+  syncLoading.value = true;
+  try {
+    const refreshed = await refreshInstalledSyncCandidates(
+      () =>
+        syncRequestGeneration.value === generation &&
+        currentUser.value?.id === userId,
+    );
+    if (!refreshed) return;
+    const items = buildSyncItems(syncCandidateApps.value);
+    await uploadSyncedAppList({
+      clientArch: window.apm_store.arch || "amd64",
+      distro: systemInfo.value.distro,
+      items,
+    });
+    if (
+      syncRequestGeneration.value !== generation ||
+      currentUser.value?.id !== userId
+    ) {
+      return;
+    }
+    downloadedError.value = "";
+  } catch (error: unknown) {
+    if (
+      syncRequestGeneration.value !== generation ||
+      currentUser.value?.id !== userId
+    ) {
+      return;
+    }
+    downloadedError.value = (error as Error)?.message || "同步已安装应用失败";
+  } finally {
+    if (
+      syncRequestGeneration.value === generation &&
+      currentUser.value?.id === userId
+    ) {
+      syncLoading.value = false;
+    }
+  }
+};
+
+const syncInstalledAppsNow = (): void => {
+  void syncInstalledAppsToAccount();
+};
+
+const openRestoreFromAccount = async (): Promise<void> => {
+  if (!requireLogin("云端同步需要登录星火账号。")) return;
+  const userId = currentUser.value?.id;
+  if (userId === undefined) return;
+  const generation = restoreRequestGeneration.value + 1;
+  restoreRequestGeneration.value = generation;
+  showRestoreModal.value = true;
+  restoreLoading.value = true;
+  restoreError.value = "";
+  restoreItems.value = [];
+  try {
+    const refreshed = await refreshInstalledSyncCandidates(() =>
+      isCurrentRestoreRequest(generation, userId),
+    );
+    if (!refreshed) return;
+    const result = await fetchSyncedAppList();
+    if (!isCurrentRestoreRequest(generation, userId)) return;
+    restoreItems.value = result?.items || [];
+  } catch (error: unknown) {
+    if (!isCurrentRestoreRequest(generation, userId)) return;
+    restoreError.value = (error as Error)?.message || "读取云端应用列表失败";
+  } finally {
+    if (isCurrentRestoreRequest(generation, userId)) {
+      restoreLoading.value = false;
+    }
+  }
+};
+
+const installCloudItems = (items: SyncedAppListItem[]): void => {
+  for (const item of items) {
+    const candidates = apps.value.filter(
+      (candidate) =>
+        candidate.pkgname === item.pkgname && candidate.origin === item.origin,
+    );
+    const app =
+      candidates.find((candidate) => candidate.category === item.category) ??
+      candidates[0];
+    if (!app) continue;
+    void onDetailInstall(app);
+  }
+  showRestoreModal.value = false;
+};
+
+const maybePromptInstalledSync = async (): Promise<void> => {
+  if (
+    import.meta.env.MODE === "test" ||
+    !isLoggedIn.value ||
+    installedSyncPromptShown.value ||
+    installedSyncEnabled.value !== null
+  ) {
+    if (isLoggedIn.value && installedSyncEnabled.value === true) {
+      await syncInstalledAppsToAccount();
+    }
+    return;
+  }
+
+  installedSyncPromptShown.value = true;
+  const enabled = window.confirm(
+    "是否启用已安装应用列表自动同步到星火账号？仅同步商店识别的非依赖应用。",
+  );
+  setInstalledSyncEnabled(enabled);
+  if (enabled) await syncInstalledAppsToAccount();
+};
+
+const openUserManagement = async () => {
+  if (!requireLogin("请登录后查看和管理账号信息。")) return;
+  currentView.value = "account";
+  activeTab.value = "account";
+  isSidebarOpen.value = false;
+  showLoginPrompt.value = false;
+  await loadDownloadedHistory();
+};
+
+const loadFavoriteFolders = async (
+  generation = favoriteRequestGeneration.value,
+): Promise<boolean> => {
+  const folders = await listFavoriteFolders();
+  if (!isCurrentFavoriteRequest(generation)) return false;
+
+  favoriteFolders.value = folders;
+  const activeFolderExists = folders.some(
+    (folder) => folder.id === activeFavoriteFolderId.value,
+  );
+  if (!activeFolderExists) {
+    activeFavoriteFolderId.value = folders[0]?.id ?? null;
+  }
+  return true;
+};
+
+const loadActiveFavoriteItems = async (
+  generation = favoriteRequestGeneration.value,
+): Promise<boolean> => {
+  if (!activeFavoriteFolderId.value) {
+    if (!isCurrentFavoriteRequest(generation)) return false;
+    favoriteItems.value = [];
+    return true;
+  }
+  const items = await listFavoriteItems(activeFavoriteFolderId.value);
+  if (!isCurrentFavoriteRequest(generation)) return false;
+
+  favoriteItems.value = items;
+  return true;
+};
+
+const refreshFavorites = async (): Promise<void> => {
+  const generation = nextFavoriteRequestGeneration();
+  favoriteLoading.value = true;
+  favoriteError.value = "";
+  try {
+    await Promise.all([
+      refreshFavoriteInstalledApps(),
+      loadFavoriteFolders(generation),
+    ]);
+    if (!isCurrentFavoriteRequest(generation)) return;
+    await loadActiveFavoriteItems(generation);
+  } catch (error: unknown) {
+    if (!isCurrentFavoriteRequest(generation)) return;
+    favoriteError.value = (error as Error)?.message || "读取收藏夹失败";
+  } finally {
+    if (isCurrentFavoriteRequest(generation)) favoriteLoading.value = false;
+  }
+};
+
+const openFavoriteSelector = async (app: App) => {
+  if (!requireLogin("收藏应用需要登录星火账号。")) return;
+  const generation = favoriteRequestGeneration.value;
+  favoriteTargetApp.value = app;
+  favoriteError.value = "";
+  try {
+    const foldersLoaded = await loadFavoriteFolders(generation);
+    if (!foldersLoaded || !isCurrentFavoriteRequest(generation)) return;
+    showFavoriteSelector.value = true;
+  } catch (error: unknown) {
+    if (!isCurrentFavoriteRequest(generation)) return;
+    favoriteError.value = (error as Error)?.message || "读取收藏夹失败";
+  }
+};
+
+const addCurrentFavoriteToFolder = async (folderId: number | "default") => {
+  const generation = favoriteRequestGeneration.value;
+  const app = favoriteTargetApp.value;
+  if (!app) return;
+  try {
+    await addFavoriteItem(folderId, {
+      appKey: buildFavoriteAppKey(app),
+      pkgname: app.pkgname,
+      name: app.name,
+      category: app.category,
+      iconUrl: app.icons,
+    });
+    if (!isCurrentFavoriteRequest(generation)) return;
+    showFavoriteSelector.value = false;
+    favoriteTargetApp.value = null;
+    await refreshFavorites();
+  } catch (error: unknown) {
+    if (!isCurrentFavoriteRequest(generation)) return;
+    favoriteError.value = (error as Error)?.message || "添加收藏失败";
+  }
+};
+
+const openFavoriteManagement = async () => {
+  if (!requireLogin("请登录后查看我的收藏。")) return;
+  currentView.value = "favorites";
+  activeTab.value = "favorites";
+  isSidebarOpen.value = false;
+  showLoginPrompt.value = false;
+  await refreshFavorites();
+};
+
+const selectFavoriteFolder = async (folderId: number) => {
+  const generation = nextFavoriteRequestGeneration();
+  activeFavoriteFolderId.value = folderId;
+  favoriteLoading.value = true;
+  favoriteError.value = "";
+  try {
+    await loadActiveFavoriteItems(generation);
+  } catch (error: unknown) {
+    if (!isCurrentFavoriteRequest(generation)) return;
+    favoriteError.value = (error as Error)?.message || "读取收藏应用失败";
+  } finally {
+    if (isCurrentFavoriteRequest(generation)) favoriteLoading.value = false;
+  }
+};
+
+const createFavoriteFolderFromPrompt = async () => {
+  const name = window.prompt("请输入收藏夹名称");
+  const folderName = name?.trim();
+  if (!folderName) return;
+  const generation = favoriteRequestGeneration.value;
+  favoriteLoading.value = true;
+  favoriteError.value = "";
+  try {
+    const folder = await createFavoriteFolder(folderName);
+    if (!isCurrentFavoriteRequest(generation)) return;
+    activeFavoriteFolderId.value = folder.id;
+    await refreshFavorites();
+  } catch (error: unknown) {
+    if (!isCurrentFavoriteRequest(generation)) return;
+    favoriteError.value = (error as Error)?.message || "创建收藏夹失败";
+  } finally {
+    if (isCurrentFavoriteRequest(generation)) favoriteLoading.value = false;
+  }
+};
+
+const removeSelectedFavorites = async (ids: number[]) => {
+  if (!activeFavoriteFolderId.value || ids.length === 0) return;
+  const generation = favoriteRequestGeneration.value;
+  favoriteLoading.value = true;
+  favoriteError.value = "";
+  try {
+    await bulkDeleteFavoriteItems(activeFavoriteFolderId.value, ids);
+    if (!isCurrentFavoriteRequest(generation)) return;
+    await refreshFavorites();
+  } catch (error: unknown) {
+    if (!isCurrentFavoriteRequest(generation)) return;
+    favoriteError.value = (error as Error)?.message || "移除收藏失败";
+  } finally {
+    if (isCurrentFavoriteRequest(generation)) favoriteLoading.value = false;
+  }
+};
+
+const installResolvedFavorites = async (items: ResolvedFavoriteItem[]) => {
+  for (const item of items) {
+    if (item.selectedApp) {
+      await onDetailInstall(item.selectedApp);
+    }
+  }
 };
 
 // TODO: 目前 APM 商店不能暂停下载
@@ -1195,7 +2008,7 @@ const loadSidebarConfig = async () => {
       try {
         const response = await axiosInstance.get(path);
         const data = response.data;
-        const entries = Array.isArray(data) ? data : (data.entries || []);
+        const entries = Array.isArray(data) ? data : data.entries || [];
 
         for (const entry of entries) {
           if (entry.id && entry.name) {
@@ -1249,9 +2062,7 @@ const loadApps = async (onFirstBatch?: () => void) => {
               const path = `/${finalArch}/${category}/applist.json`;
 
               logger.info(`加载分类: ${category} (来源: ${mode})`);
-              const categoryApps = await fetchWithRetry<AppJson[]>(
-                path,
-              );
+              const categoryApps = await fetchWithRetry<AppJson[]>(path);
 
               const normalizedApps = (categoryApps || []).map((appJson) => ({
                 name: appJson.Name,
@@ -1304,10 +2115,12 @@ const loadApps = async (onFirstBatch?: () => void) => {
 };
 
 const handleSearchInput = (value: string) => {
+  currentView.value = "default";
   searchQuery.value = value;
 };
 
 const handleSearchFocus = () => {
+  currentView.value = "default";
   if (activeTab.value === "home") activeTab.value = "all";
 };
 
@@ -1315,6 +2128,13 @@ const handleSearchFocus = () => {
 onMounted(async () => {
   initTheme();
   updateCenterStore.bind();
+
+  try {
+    systemInfo.value = await window.ipcRenderer.invoke("get-system-info");
+  } catch (error: unknown) {
+    logger.warn({ err: error }, "读取系统信息失败");
+    systemInfo.value = { distro: "unknown" };
+  }
 
   // 从主进程获取启动参数（--no-apm / --no-spark），再加载数据
   storeFilter.value = await window.ipcRenderer.invoke("get-store-filter");
@@ -1355,6 +2175,7 @@ onMounted(async () => {
   ]).then(() => {
     // 所有数据加载完成后的回调（可选）
     logger.info("所有应用数据加载完成");
+    void maybePromptInstalledSync();
   });
 
   // 设置键盘导航
@@ -1364,7 +2185,7 @@ onMounted(async () => {
       if (e.key === "ArrowLeft") prevScreen();
       if (e.key === "ArrowRight") nextScreen();
     }
-    if (showModal.value && e.key === "Escape") {
+    if (currentView.value === "detail" && e.key === "Escape") {
       closeDetail();
     }
   });
@@ -1431,6 +2252,7 @@ onMounted(async () => {
       // 根据包名直接打开应用详情
       const tryOpen = () => {
         // 先切换到"全部应用"分类
+        currentView.value = "default";
         activeTab.value = "all";
         // 使用类似 HomeView 的方式打开应用，从两个仓库获取完整信息
         const target = apps.value.find((a) => a.pkgname === data.pkgname);
@@ -1459,6 +2281,11 @@ onMounted(async () => {
   );
 
   window.ipcRenderer.on(
+    "install-complete",
+    handleInstallCompleteForDownloadRecord,
+  );
+
+  window.ipcRenderer.on(
     "remove-complete",
     (_event: IpcRendererEvent, payload: ChannelPayload) => {
       const pkgname = currentApp.value?.pkgname;
@@ -1474,9 +2301,26 @@ onMounted(async () => {
 
 onUnmounted(() => {
   updateCenterStore.unbind();
+  window.ipcRenderer.off(
+    "install-complete",
+    handleInstallCompleteForDownloadRecord,
+  );
 });
 
 // 观察器
+watch(
+  () => currentUser.value?.id ?? null,
+  (userId, previousUserId) => {
+    loadInstalledSyncPreference(userId);
+    if (previousUserId !== undefined && userId !== previousUserId) {
+      syncRequestGeneration.value += 1;
+      syncLoading.value = false;
+      syncCandidateApps.value = [];
+    }
+  },
+  { immediate: true },
+);
+
 watch(themeMode, (newVal) => {
   localStorage.setItem("theme", newVal);
   window.ipcRenderer.send(

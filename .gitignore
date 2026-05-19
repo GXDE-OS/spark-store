@@ -14,6 +14,13 @@ dist-electron
 release
 *.local
 
+# Local secrets and databases
+.env
+.env.*.local
+*.sqlite
+*.sqlite3
+*.db
+
 # Test coverage
 coverage
 .nyc_output

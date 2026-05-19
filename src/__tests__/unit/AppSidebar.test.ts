@@ -16,6 +16,7 @@ const renderSidebar = (
       apmAvailable: true,
       sidebarEntries: [],
       entryCounts: {},
+      currentUser: null,
       ...overrides,
     },
   });
