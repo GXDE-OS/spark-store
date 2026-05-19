@@ -678,12 +678,64 @@ describe("App account placeholders", () => {
     await fireEvent.click(
       await screen.findByRole("button", { name: "立即同步" }),
     );
-    await fireEvent.click(screen.getByRole("button", { name: "立即同步" }));
+    expect(screen.getByRole("button", { name: "同步中..." })).toBeDisabled();
 
     await waitFor(() => {
       expect(uploadSyncedAppList).toHaveBeenCalledTimes(1);
     });
     syncUpload.resolve(syncedList([]));
+    expect(await screen.findByText("同步完成")).toBeTruthy();
+  });
+
+  it("clears manual sync feedback before another user opens account management", async () => {
+    const syncUpload = createDeferred<SyncedAppList>();
+    vi.mocked(uploadSyncedAppList).mockReturnValue(syncUpload.promise);
+    invoke.mockImplementation(async (channel: string) => {
+      if (channel === "get-store-filter") return "apm";
+      if (channel === "check-spark-available") return false;
+      if (channel === "check-apm-available") return true;
+      if (channel === "get-app-version") return "5.0.0";
+      if (channel === "get-system-info") return { distro: "deepin 25" };
+      if (channel === "list-installed") return { success: true, apps: [] };
+      return [];
+    });
+    render(App);
+
+    await fireEvent.click(await screen.findByRole("button", { name: /Momen/ }));
+    await fireEvent.click(screen.getByText("用户管理"));
+    await fireEvent.click(
+      await screen.findByRole("button", { name: "立即同步" }),
+    );
+
+    await waitFor(() => {
+      expect(uploadSyncedAppList).toHaveBeenCalledTimes(1);
+    });
+    syncUpload.resolve(syncedList([]));
+    expect(await screen.findByText("同步完成")).toBeTruthy();
+
+    await fireEvent.click(
+      await screen.findByRole("button", { name: /^Momen$/ }),
+    );
+    if (!screen.queryByText("退出登录")) {
+      await fireEvent.click(
+        await screen.findByRole("button", { name: /^Momen$/ }),
+      );
+    }
+    await fireEvent.click(screen.getByText("退出登录"));
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "登录 / 注册" })).toBeTruthy();
+    });
+
+    setSecondUserSession();
+    const secondUserButton = await screen.findByRole("button", {
+      name: /^Second User$/,
+    });
+    if (!screen.queryByText("用户管理")) {
+      await fireEvent.click(secondUserButton);
+    }
+    await fireEvent.click(await screen.findByText("用户管理"));
+
+    expect(screen.queryByText("同步完成")).toBeNull();
   });
 
   it("does not upload stale sync candidates after logout", async () => {

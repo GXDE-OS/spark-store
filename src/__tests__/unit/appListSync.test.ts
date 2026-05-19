@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildSyncItems,
   cloudItemKey,
+  cloudPackageKey,
   mergeInstalledApps,
 } from "@/modules/appListSync";
 import type { App } from "@/global/typedefinition";
@@ -74,6 +75,10 @@ describe("appListSync", () => {
     expect(cloudItemKey({ origin: "apm", pkgname: "amber-ce" })).toBe(
       "apm:amber-ce",
     );
+  });
+
+  it("builds origin-agnostic package keys for cross-source restore detection", () => {
+    expect(cloudPackageKey({ pkgname: "amber-ce" })).toBe("amber-ce");
   });
 
   it("merges refreshed apps without mutating active modal origin lists", () => {

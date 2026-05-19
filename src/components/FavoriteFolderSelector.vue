@@ -18,6 +18,7 @@
       </p>
       <div class="mt-5 space-y-2">
         <button
+          v-if="!hasDefaultFolder"
           type="button"
           class="w-full rounded-xl border border-slate-200 px-4 py-3 text-left text-sm font-medium text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
           @click="emit('select-folder', 'default')"
@@ -36,6 +37,13 @@
       </div>
       <button
         type="button"
+        class="mt-4 w-full rounded-xl border border-dashed border-slate-300 px-4 py-2 text-sm font-medium text-slate-600 transition hover:border-blue-400 hover:text-blue-600 dark:border-slate-700 dark:text-slate-300 dark:hover:border-blue-500 dark:hover:text-blue-300"
+        @click="emit('create-folder')"
+      >
+        新建收藏夹
+      </button>
+      <button
+        type="button"
         class="mt-5 w-full rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-700 dark:bg-slate-100 dark:text-slate-900"
         @click="emit('close')"
       >
@@ -46,15 +54,21 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from "vue";
 import type { FavoriteFolder } from "@/global/typedefinition";
 
-defineProps<{
+const props = defineProps<{
   show: boolean;
   folders: FavoriteFolder[];
 }>();
 
+const hasDefaultFolder = computed(() =>
+  props.folders.some((folder) => folder.name === "默认收藏夹"),
+);
+
 const emit = defineEmits<{
   close: [];
   "select-folder": [folderId: number | "default"];
+  "create-folder": [];
 }>();
 </script>

@@ -29,6 +29,10 @@ export const cloudItemKey = (
   item: Pick<SyncedAppListItem, "origin" | "pkgname">,
 ): string => `${item.origin}:${item.pkgname}`;
 
+export const cloudPackageKey = (
+  item: Pick<SyncedAppListItem, "pkgname">,
+): string => item.pkgname;
+
 export const mergeInstalledApps = (
   currentApps: App[],
   refreshedApps: App[],

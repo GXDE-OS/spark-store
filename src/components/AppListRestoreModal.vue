@@ -129,7 +129,7 @@
 import { computed, ref, watch } from "vue";
 
 import type { SyncedAppListItem } from "@/global/typedefinition";
-import { cloudItemKey } from "@/modules/appListSync";
+import { cloudItemKey, cloudPackageKey } from "@/modules/appListSync";
 
 const props = defineProps<{
   show: boolean;
@@ -137,6 +137,7 @@ const props = defineProps<{
   error: string;
   items: SyncedAppListItem[];
   installedKeys: Set<string>;
+  installedPackageKeys?: Set<string>;
 }>();
 
 const emit = defineEmits<{
@@ -147,7 +148,8 @@ const emit = defineEmits<{
 const selectedKeys = ref<Set<string>>(new Set());
 
 const isInstalled = (item: SyncedAppListItem): boolean =>
-  props.installedKeys.has(cloudItemKey(item));
+  props.installedKeys.has(cloudItemKey(item)) ||
+  Boolean(props.installedPackageKeys?.has(cloudPackageKey(item)));
 
 const selectedItems = computed(() =>
   props.items.filter(
@@ -157,7 +159,12 @@ const selectedItems = computed(() =>
 
 const pruneSelectedKeys = (): void => {
   selectedKeys.value = new Set(
-    [...selectedKeys.value].filter((key) => !props.installedKeys.has(key)),
+    [...selectedKeys.value].filter((key) => {
+      const item = props.items.find(
+        (candidate) => cloudItemKey(candidate) === key,
+      );
+      return item ? !isInstalled(item) : !props.installedKeys.has(key);
+    }),
   );
 };
 
@@ -179,7 +186,7 @@ watch(
 );
 
 watch(
-  () => props.installedKeys,
+  () => [props.installedKeys, props.installedPackageKeys] as const,
   () => {
     pruneSelectedKeys();
   },

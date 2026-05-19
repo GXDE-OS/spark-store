@@ -45,4 +45,39 @@ describe("AppSidebar account entry", () => {
     expect(screen.getByText("我的收藏")).toBeTruthy();
     expect(screen.getByText("退出登录")).toBeTruthy();
   });
+
+  it("keeps long account names inside the sidebar account entry", () => {
+    const longUser: SparkUser = {
+      ...user,
+      displayName: "SuperEndermanSMSuperEndermanSMSuperEndermanSM",
+    };
+
+    const { container } = render(AppSidebar, {
+      props: { ...baseProps, currentUser: longUser },
+    });
+
+    const accountButton = screen.getByRole("button", {
+      name: /SuperEndermanSM/,
+    });
+    const textWrapper = accountButton.querySelector(
+      "[data-testid='account-text']",
+    );
+    const accountName = screen.getByText(longUser.displayName);
+
+    expect(textWrapper?.className).toContain("min-w-0");
+    expect(accountName.className).toContain("truncate");
+    expect(container.textContent).toContain(longUser.displayName);
+  });
+
+  it("closes the quick menu after selecting an account action", async () => {
+    const rendered = render(AppSidebar, {
+      props: { ...baseProps, currentUser: user },
+    });
+
+    await fireEvent.click(screen.getByRole("button", { name: /Momen/ }));
+    await fireEvent.click(screen.getByRole("button", { name: "用户管理" }));
+
+    expect(rendered.emitted("open-user-management")).toHaveLength(1);
+    expect(screen.queryByRole("button", { name: "用户管理" })).toBeNull();
+  });
 });

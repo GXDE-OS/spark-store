@@ -4,6 +4,14 @@ import { describe, expect, it } from "vitest";
 import LoginModal from "@/components/LoginModal.vue";
 
 describe("LoginModal", () => {
+  it("does not show the old password forwarding note", () => {
+    render(LoginModal, {
+      props: { show: true, loading: false, error: "" },
+    });
+
+    expect(screen.queryByText(/密码仅直接/)).toBeNull();
+  });
+
   it("emits login credentials and register request", async () => {
     const rendered = render(LoginModal, {
       props: { show: true, loading: false, error: "" },

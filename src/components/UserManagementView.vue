@@ -5,7 +5,7 @@
     <div
       class="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between"
     >
-      <div class="flex items-center gap-4">
+      <div class="flex min-w-0 items-center gap-4">
         <img
           v-if="user.avatarUrl"
           :src="user.avatarUrl"
@@ -18,16 +18,16 @@
         >
           {{ userInitial }}
         </div>
-        <div>
+        <div class="min-w-0">
           <h1 class="text-2xl font-semibold text-slate-900 dark:text-white">
             用户管理
           </h1>
           <p
-            class="mt-1 text-lg font-medium text-slate-800 dark:text-slate-100"
+            class="mt-1 truncate text-lg font-medium text-slate-800 dark:text-slate-100"
           >
             {{ user.displayName }}
           </p>
-          <p class="text-sm text-slate-500 dark:text-slate-400">
+          <p class="truncate text-sm text-slate-500 dark:text-slate-400">
             @{{ user.username }}
           </p>
           <p class="text-sm text-slate-500 dark:text-slate-400">
@@ -84,12 +84,17 @@
       </label>
       <button
         type="button"
-        class="rounded-full border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-sky-300 hover:text-sky-600 dark:border-slate-700 dark:text-slate-200 dark:hover:border-sky-500 dark:hover:text-sky-300"
+        class="rounded-full border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-sky-300 hover:text-sky-600 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:text-slate-200 dark:hover:border-sky-500 dark:hover:text-sky-300"
+        :disabled="syncing"
         @click="emit('sync-now')"
       >
-        立即同步
+        {{ syncing ? "同步中..." : "立即同步" }}
       </button>
     </div>
+
+    <p v-if="syncMessage" class="text-sm text-sky-600 dark:text-sky-300">
+      {{ syncMessage }}
+    </p>
 
     <section class="space-y-4">
       <div class="flex items-center justify-between gap-4">
@@ -158,6 +163,8 @@ const props = defineProps<{
   syncEnabled: boolean;
   loading: boolean;
   error: string;
+  syncing?: boolean;
+  syncMessage?: string;
 }>();
 
 const emit = defineEmits<{

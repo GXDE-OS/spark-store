@@ -55,6 +55,22 @@ describe("AppListRestoreModal", () => {
     expect(screen.getByText("已安装")).toBeTruthy();
   });
 
+  it("treats the same package installed from another source as installed", () => {
+    render(AppListRestoreModal, {
+      props: {
+        show: true,
+        loading: false,
+        error: "",
+        items: [createItem({ origin: "spark" })],
+        installedKeys: new Set(["apm:spark-notes"]),
+        installedPackageKeys: new Set(["spark-notes"]),
+      },
+    });
+
+    expect(screen.getByLabelText("Spark Notes")).toBeDisabled();
+    expect(screen.getByText("已安装")).toBeTruthy();
+  });
+
   it("removes selected items when they become installed", async () => {
     const rendered = render(AppListRestoreModal, {
       props: {
@@ -70,6 +86,28 @@ describe("AppListRestoreModal", () => {
     await rendered.rerender({ installedKeys: new Set(["spark:spark-notes"]) });
 
     expect(screen.getByLabelText("Spark Notes")).toBeDisabled();
+    expect(screen.getByRole("button", { name: "加入安装队列" })).toBeDisabled();
+  });
+
+  it("removes selected items when the same package becomes installed from another source", async () => {
+    const rendered = render(AppListRestoreModal, {
+      props: {
+        show: true,
+        loading: false,
+        error: "",
+        items: [createItem({ origin: "spark" })],
+        installedKeys: new Set<string>(),
+        installedPackageKeys: new Set<string>(),
+      },
+    });
+
+    await fireEvent.click(screen.getByLabelText("Spark Notes"));
+    await rendered.rerender({
+      installedPackageKeys: new Set(["spark-notes"]),
+    });
+
+    expect(screen.getByLabelText("Spark Notes")).toBeDisabled();
+    expect(screen.getByLabelText("Spark Notes")).not.toBeChecked();
     expect(screen.getByRole("button", { name: "加入安装队列" })).toBeDisabled();
   });
 });

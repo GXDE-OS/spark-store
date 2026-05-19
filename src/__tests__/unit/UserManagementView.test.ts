@@ -35,6 +35,8 @@ describe("UserManagementView", () => {
         syncEnabled: true,
         loading: false,
         error: "",
+        syncing: false,
+        syncMessage: "",
       },
     });
 
@@ -44,5 +46,25 @@ describe("UserManagementView", () => {
     expect(screen.getByText("修改论坛资料")).toBeTruthy();
     expect(screen.getByText("WPS")).toBeTruthy();
     expect(screen.getByLabelText("自动同步已安装应用")).toBeChecked();
+  });
+
+  it("shows manual sync progress and result feedback", async () => {
+    const { rerender } = render(UserManagementView, {
+      props: {
+        user,
+        downloadedApps: [],
+        syncEnabled: false,
+        loading: false,
+        error: "",
+        syncing: true,
+        syncMessage: "",
+      },
+    });
+
+    expect(screen.getByRole("button", { name: "同步中..." })).toBeDisabled();
+
+    await rerender({ syncing: false, syncMessage: "同步完成" });
+
+    expect(screen.getByText("同步完成")).toBeTruthy();
   });
 });

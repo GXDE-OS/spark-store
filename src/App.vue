@@ -69,6 +69,8 @@
           :sync-enabled="installedSyncEnabled ?? false"
           :loading="downloadedLoading"
           :error="downloadedError"
+          :syncing="syncLoading"
+          :sync-message="syncStatusMessage"
           @open-forum="openExternalUrl(FLARUM_BASE_URL)"
           @edit-profile="openExternalUrl(FLARUM_SETTINGS_URL)"
           @toggle-sync="setInstalledSyncEnabled"
@@ -86,6 +88,7 @@
           @create-folder="createFavoriteFolderFromPrompt"
           @remove-selected="removeSelectedFavorites"
           @install-selected="installResolvedFavorites"
+          @open-detail="openDetail"
         />
         <template v-else-if="activeTab === 'home'">
           <HomeView
@@ -187,6 +190,7 @@
       :error="restoreError"
       :items="restoreItems"
       :installed-keys="installedCloudKeys"
+      :installed-package-keys="installedCloudPackageKeys"
       @close="showRestoreModal = false"
       @install-selected="installCloudItems"
     />
@@ -244,6 +248,7 @@
       :folders="favoriteFolders"
       @close="showFavoriteSelector = false"
       @select-folder="addCurrentFavoriteToFolder"
+      @create-folder="createFavoriteFolderFromSelector"
     />
   </div>
 </template>
@@ -338,6 +343,7 @@ import { resolveFavoriteItems } from "./modules/favoriteAvailability";
 import {
   buildSyncItems,
   cloudItemKey,
+  cloudPackageKey,
   mergeInstalledApps,
 } from "./modules/appListSync";
 import type {
@@ -444,6 +450,7 @@ const downloadedLoading = ref(false);
 const downloadedError = ref("");
 const downloadedRequestGeneration = ref(0);
 const syncLoading = ref(false);
+const syncStatusMessage = ref("");
 const syncRequestGeneration = ref(0);
 const syncCandidateApps = ref<App[]>([]);
 const restoreLoading = ref(false);
@@ -574,6 +581,10 @@ const resolvedFavoriteItems = computed<ResolvedFavoriteItem[]>(() =>
 
 const installedCloudKeys = computed(
   () => new Set(installedApps.value.map((app) => cloudItemKey(app))),
+);
+
+const installedCloudPackageKeys = computed(
+  () => new Set(syncCandidateApps.value.map((app) => cloudPackageKey(app))),
 );
 
 // 方法
@@ -1459,6 +1470,13 @@ const clearRestoreState = () => {
   showRestoreModal.value = false;
 };
 
+const clearInstalledSyncState = () => {
+  syncRequestGeneration.value += 1;
+  syncLoading.value = false;
+  syncStatusMessage.value = "";
+  syncCandidateApps.value = [];
+};
+
 const nextFavoriteRequestGeneration = (): number => {
   favoriteRequestGeneration.value += 1;
   return favoriteRequestGeneration.value;
@@ -1489,9 +1507,7 @@ const handleLogout = () => {
   clearFavoriteState();
   clearDownloadedState();
   clearRestoreState();
-  syncRequestGeneration.value += 1;
-  syncLoading.value = false;
-  syncCandidateApps.value = [];
+  clearInstalledSyncState();
   loadInstalledSyncPreference(null);
   showLoginModal.value = false;
   showLoginPrompt.value = false;
@@ -1514,6 +1530,7 @@ const handleFlarumLogin = async (payload: FlarumLoginPayload) => {
       flarumToken: flarumToken.token,
     });
     setAuthSession(session);
+    clearInstalledSyncState();
     loadInstalledSyncPreference(session.user.id);
     showLoginModal.value = false;
   } catch (error: unknown) {
@@ -1599,6 +1616,7 @@ const syncInstalledAppsToAccount = async (): Promise<void> => {
   const generation = syncRequestGeneration.value + 1;
   syncRequestGeneration.value = generation;
   syncLoading.value = true;
+  syncStatusMessage.value = "";
   try {
     const refreshed = await refreshInstalledSyncCandidates(
       () =>
@@ -1619,6 +1637,7 @@ const syncInstalledAppsToAccount = async (): Promise<void> => {
       return;
     }
     downloadedError.value = "";
+    syncStatusMessage.value = "同步完成";
   } catch (error: unknown) {
     if (
       syncRequestGeneration.value !== generation ||
@@ -1627,6 +1646,7 @@ const syncInstalledAppsToAccount = async (): Promise<void> => {
       return;
     }
     downloadedError.value = (error as Error)?.message || "同步已安装应用失败";
+    syncStatusMessage.value = downloadedError.value;
   } finally {
     if (
       syncRequestGeneration.value === generation &&
@@ -1799,6 +1819,13 @@ const addCurrentFavoriteToFolder = async (folderId: number | "default") => {
     if (!isCurrentFavoriteRequest(generation)) return;
     favoriteError.value = (error as Error)?.message || "添加收藏失败";
   }
+};
+
+const createFavoriteFolderFromSelector = async () => {
+  await createFavoriteFolderFromPrompt();
+  const app = favoriteTargetApp.value;
+  if (!app) return;
+  showFavoriteSelector.value = true;
 };
 
 const openFavoriteManagement = async () => {

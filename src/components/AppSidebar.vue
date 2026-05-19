@@ -20,24 +20,24 @@
             :alt="accountLabel"
             class="h-11 w-11 rounded-2xl object-cover shadow-sm ring-1 ring-slate-900/5"
           />
-          <div class="flex flex-col">
+          <div data-testid="account-text" class="flex min-w-0 flex-col">
             <span
-              class="text-xs uppercase tracking-[0.3em] text-slate-500 dark:text-slate-400"
+              class="truncate text-xs uppercase tracking-[0.3em] text-slate-500 dark:text-slate-400"
               >{{ currentUser ? currentUser.forumLevel : "Spark Store" }}</span
             >
             <span
-              class="text-lg font-semibold text-slate-900 dark:text-white"
+              class="truncate text-lg font-semibold text-slate-900 dark:text-white"
               >{{ accountLabel }}</span
             >
           </div>
         </button>
         <AccountQuickMenu
           v-if="currentUser && showAccountMenu"
-          @open-user-management="emit('open-user-management')"
-          @open-favorites="emit('open-favorites')"
-          @open-forum="emit('open-forum')"
-          @edit-profile="emit('edit-profile')"
-          @logout="emit('logout')"
+          @open-user-management="emitAccountAction('open-user-management')"
+          @open-favorites="emitAccountAction('open-favorites')"
+          @open-forum="emitAccountAction('open-forum')"
+          @edit-profile="emitAccountAction('edit-profile')"
+          @logout="emitAccountAction('logout')"
         />
       </div>
       <div class="flex items-center gap-1">
@@ -175,6 +175,22 @@ const handleAccountClick = () => {
   }
 
   showAccountMenu.value = !showAccountMenu.value;
+};
+
+const emitAccountAction = (
+  action:
+    | "open-user-management"
+    | "open-favorites"
+    | "open-forum"
+    | "edit-profile"
+    | "logout",
+) => {
+  showAccountMenu.value = false;
+  if (action === "open-user-management") emit("open-user-management");
+  else if (action === "open-favorites") emit("open-favorites");
+  else if (action === "open-forum") emit("open-forum");
+  else if (action === "edit-profile") emit("edit-profile");
+  else emit("logout");
 };
 
 const toggleTheme = () => {

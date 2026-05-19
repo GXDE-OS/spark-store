@@ -8,7 +8,9 @@
         @click="selectCategory('all')"
       >
         <span>全部</span>
-        <span v-if="totalCount > 0" class="category-pill-count">{{ totalCount }}</span>
+        <span v-if="totalCount > 0" class="category-pill-count">{{
+          totalCount
+        }}</span>
       </button>
       <button
         v-for="(category, key) in categories"
@@ -19,7 +21,9 @@
         @click="selectCategory(key)"
       >
         <span>{{ category.zh }}</span>
-        <span v-if="categoryCounts[key]" class="category-pill-count">{{ categoryCounts[key] }}</span>
+        <span v-if="categoryCounts[key]" class="category-pill-count">{{
+          categoryCounts[key]
+        }}</span>
       </button>
     </div>
   </div>
@@ -101,22 +105,22 @@ const selectCategory = (category: string) => {
 }
 
 .category-pill-active {
-  background: #0071e3;
+  background: #2b7fff;
   color: #fff;
 }
 
 .category-pill-active:hover {
-  background: #0066cc;
+  background: #2b7fff;
   color: #fff;
 }
 
 .dark .category-pill-active {
-  background: #409cff;
+  background: #2b7fff;
   color: #fff;
 }
 
 .dark .category-pill-active:hover {
-  background: #0071e3;
+  background: #2b7fff;
   color: #fff;
 }
 

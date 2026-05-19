@@ -48,7 +48,7 @@
       >
         当前收藏夹暂无应用。
       </div>
-      <label
+      <div
         v-for="resolved in items"
         :key="resolved.item.id"
         class="flex items-center gap-3 rounded-2xl border border-slate-200 p-4 transition hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-800/60"
@@ -60,33 +60,45 @@
           :value="resolved.item.id"
           :aria-label="`选择 ${resolved.item.name || resolved.item.pkgname}`"
         />
-        <img
-          v-if="resolved.item.iconUrl"
-          :src="resolved.item.iconUrl"
-          alt=""
-          class="h-10 w-10 rounded-xl object-cover"
-        />
-        <div
-          v-else
-          class="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-sm font-semibold text-slate-500 dark:bg-slate-800"
+        <button
+          type="button"
+          class="flex min-w-0 flex-1 items-center gap-3 text-left"
+          :aria-label="`打开 ${resolved.item.name || resolved.item.pkgname} 详情`"
+          :disabled="!resolved.selectedApp"
+          @click="openFavoriteDetail(resolved)"
         >
-          {{ (resolved.item.name || resolved.item.pkgname).slice(0, 1) }}
-        </div>
-        <div class="min-w-0 flex-1">
-          <p class="truncate font-medium text-slate-900 dark:text-white">
-            {{ resolved.item.name || resolved.item.pkgname }}
-          </p>
-          <p class="truncate text-xs text-slate-500 dark:text-slate-400">
-            {{ resolved.item.pkgname }} · {{ resolved.item.category }}
-          </p>
-        </div>
+          <img
+            v-if="resolved.item.iconUrl"
+            :src="resolved.item.iconUrl"
+            alt=""
+            class="h-10 w-10 rounded-xl object-cover"
+          />
+          <span
+            v-else
+            class="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-sm font-semibold text-slate-500 dark:bg-slate-800"
+          >
+            {{ (resolved.item.name || resolved.item.pkgname).slice(0, 1) }}
+          </span>
+          <span class="min-w-0 flex-1">
+            <span
+              class="block truncate font-medium text-slate-900 dark:text-white"
+            >
+              {{ resolved.item.name || resolved.item.pkgname }}
+            </span>
+            <span
+              class="block truncate text-xs text-slate-500 dark:text-slate-400"
+            >
+              {{ resolved.item.pkgname }} · {{ resolved.item.category }}
+            </span>
+          </span>
+        </button>
         <span
           class="rounded-full px-3 py-1 text-xs font-medium"
           :class="statusClass(resolved.status)"
         >
           {{ resolved.reason }}
         </span>
-      </label>
+      </div>
     </div>
 
     <div class="mt-6 flex flex-wrap gap-3">
@@ -121,6 +133,7 @@
 import { computed, ref, watch } from "vue";
 import type {
   FavoriteAvailabilityStatus,
+  App,
   FavoriteFolder,
   ResolvedFavoriteItem,
 } from "@/global/typedefinition";
@@ -138,6 +151,7 @@ const emit = defineEmits<{
   "create-folder": [];
   "remove-selected": [itemIds: number[]];
   "install-selected": [items: ResolvedFavoriteItem[]];
+  "open-detail": [app: App];
 }>();
 
 const selectedIds = ref<number[]>([]);
@@ -161,6 +175,11 @@ const selectInstallable = () => {
   selectedIds.value = props.items
     .filter((item) => item.status === "installable")
     .map((item) => item.item.id);
+};
+
+const openFavoriteDetail = (resolved: ResolvedFavoriteItem) => {
+  if (!resolved.selectedApp) return;
+  emit("open-detail", resolved.selectedApp);
 };
 
 const statusClass = (status: FavoriteAvailabilityStatus): string => {

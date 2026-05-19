@@ -21,11 +21,6 @@
             <h2 class="text-2xl font-bold text-slate-900 dark:text-white">
               登录星火账号
             </h2>
-            <p
-              class="mt-2 text-sm leading-6 text-slate-500 dark:text-slate-400"
-            >
-              使用论坛账号登录。密码仅直接提交到星火论坛用于换取论坛令牌，不会发送给商店后端。
-            </p>
           </div>
 
           <label class="mb-4 block">
