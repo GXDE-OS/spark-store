@@ -170,4 +170,39 @@ describe("ReviewsPanel", () => {
       await screen.findByText("无法连接星火账号服务，请稍后重试。"),
     ).toBeTruthy();
   });
+
+  it("shows reviewer avatars when available", async () => {
+    vi.mocked(fetchRatingSummary).mockResolvedValue({
+      averageRating: 5,
+      reviewCount: 1,
+      starCounts: { 5: 1 },
+    });
+    vi.mocked(fetchReviews).mockResolvedValue([
+      {
+        id: 3,
+        rating: 5,
+        content: "头像正常显示",
+        version: tags.version,
+        packageArch: tags.packageArch,
+        clientArch: tags.clientArch,
+        distro: tags.distro,
+        origin: tags.origin,
+        category: tags.category,
+        createdAt: "2026-05-19T00:00:00Z",
+        updatedAt: "2026-05-19T00:00:00Z",
+        userDisplayName: "Avatar User",
+        userAvatarUrl: "https://bbs.spark-app.store/avatar.png",
+      },
+    ]);
+
+    render(ReviewsPanel, {
+      props: { appKey: "apm:amd64-apm:office:wps", tags, loggedIn: true },
+    });
+
+    const avatar = await screen.findByAltText("Avatar User 的头像");
+    expect(avatar).toHaveAttribute(
+      "src",
+      "https://bbs.spark-app.store/avatar.png",
+    );
+  });
 });

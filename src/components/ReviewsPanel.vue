@@ -105,15 +105,39 @@
         :key="review.id"
         class="rounded-xl bg-white p-3 text-sm dark:bg-slate-900/60"
       >
-        <div class="flex items-center justify-between gap-3">
-          <strong class="text-slate-700 dark:text-slate-200">
-            {{ review.userDisplayName || "星火用户" }}
-          </strong>
-          <span class="text-xs text-slate-400">{{ review.rating }} 星</span>
+        <div class="flex gap-3">
+          <img
+            v-if="review.userAvatarUrl"
+            :src="review.userAvatarUrl"
+            :alt="`${review.userDisplayName || '星火用户'} 的头像`"
+            class="h-9 w-9 flex-shrink-0 rounded-full bg-slate-100 object-cover dark:bg-slate-800"
+            loading="lazy"
+            referrerpolicy="no-referrer"
+            @error="hideAvatar"
+          />
+          <div
+            v-else
+            class="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-slate-200 text-xs font-semibold text-slate-500 dark:bg-slate-800 dark:text-slate-300"
+            aria-hidden="true"
+          >
+            {{ review.userDisplayName?.slice(0, 1) || "星" }}
+          </div>
+          <div class="min-w-0 flex-1">
+            <div class="flex items-center justify-between gap-3">
+              <strong class="truncate text-slate-700 dark:text-slate-200">
+                {{ review.userDisplayName || "星火用户" }}
+              </strong>
+              <span class="flex-shrink-0 text-xs text-slate-400"
+                >{{ review.rating }} 星</span
+              >
+            </div>
+            <p
+              class="mt-2 whitespace-pre-wrap text-slate-600 dark:text-slate-300"
+            >
+              {{ review.content || "暂无评论内容" }}
+            </p>
+          </div>
         </div>
-        <p class="mt-2 whitespace-pre-wrap text-slate-600 dark:text-slate-300">
-          {{ review.content || "暂无评论内容" }}
-        </p>
       </article>
     </div>
     <p v-else class="text-sm text-slate-400">暂无评价</p>
@@ -171,6 +195,10 @@ const toReviewErrorMessage = (caught: unknown): string => {
     return "无法连接星火账号服务，请稍后重试。";
   }
   return message || "发表评论失败";
+};
+
+const hideAvatar = (event: Event) => {
+  (event.target as HTMLElement).style.display = "none";
 };
 
 const clearReviewState = () => {
