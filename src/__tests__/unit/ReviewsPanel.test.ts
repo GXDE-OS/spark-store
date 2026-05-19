@@ -52,6 +52,8 @@ describe("ReviewsPanel", () => {
     expect(screen.getByText("登录后发表评论")).toBeTruthy();
     expect(screen.getByText("1.0.0")).toBeTruthy();
     expect(screen.getByText("deepin 25")).toBeTruthy();
+    expect(fetchRatingSummary).not.toHaveBeenCalled();
+    expect(fetchReviews).not.toHaveBeenCalled();
   });
 
   it("ignores stale review responses after app key changes", async () => {
@@ -84,10 +86,10 @@ describe("ReviewsPanel", () => {
       );
 
     const rendered = render(ReviewsPanel, {
-      props: { appKey: "first", tags, loggedIn: false },
+      props: { appKey: "first", tags, loggedIn: true },
     });
 
-    await rendered.rerender({ appKey: "second", tags, loggedIn: false });
+    await rendered.rerender({ appKey: "second", tags, loggedIn: true });
 
     resolveSecondSummary({ averageRating: 5, reviewCount: 1, starCounts: {} });
     resolveSecondReviews([

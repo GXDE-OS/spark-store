@@ -462,6 +462,108 @@ describe("App account placeholders", () => {
     expect(screen.getByText("暂无下载记录。")).toBeTruthy();
   });
 
+  it("ignores older downloaded history refreshes for the same user", async () => {
+    const firstHistory = createDeferred<DownloadedAppList>();
+    const secondHistory = createDeferred<DownloadedAppList>();
+    vi.mocked(listDownloadedApps)
+      .mockReturnValueOnce(firstHistory.promise)
+      .mockReturnValueOnce(secondHistory.promise);
+    render(App);
+
+    await fireEvent.click(await screen.findByRole("button", { name: /Momen/ }));
+    await fireEvent.click(screen.getByText("用户管理"));
+    await fireEvent.click(screen.getByRole("button", { name: "刷新" }));
+
+    secondHistory.resolve(
+      downloadedList([
+        {
+          id: 88,
+          appKey: "app:office:new-app",
+          pkgname: "new-app",
+          name: "新下载应用",
+          category: "office",
+          selectedOrigin: "apm",
+          version: "2.0.0",
+          packageArch: "amd64",
+          downloadedAt: "2026-05-18T00:00:00Z",
+        },
+      ]),
+    );
+    expect(await screen.findByText("新下载应用")).toBeTruthy();
+
+    firstHistory.resolve(
+      downloadedList([
+        {
+          id: 77,
+          appKey: "app:office:old-app",
+          pkgname: "old-app",
+          name: "旧下载应用",
+          category: "office",
+          selectedOrigin: "apm",
+          version: "1.0.0",
+          packageArch: "amd64",
+          downloadedAt: "2026-05-18T00:00:00Z",
+        },
+      ]),
+    );
+    await firstHistory.promise;
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(screen.queryByText("旧下载应用")).toBeNull();
+    expect(screen.getByText("新下载应用")).toBeTruthy();
+  });
+
+  it("ignores older favorite folder refreshes for the same user", async () => {
+    const firstFolders = createDeferred<FavoriteFolder[]>();
+    const secondFolders = createDeferred<FavoriteFolder[]>();
+    vi.mocked(listFavoriteFolders)
+      .mockReturnValueOnce(firstFolders.promise)
+      .mockReturnValueOnce(secondFolders.promise);
+    render(App);
+
+    await fireEvent.click(
+      await screen.findByRole("button", { name: /^Momen$/ }),
+    );
+    await fireEvent.click(screen.getByRole("button", { name: "我的收藏" }));
+    await fireEvent.click(
+      await screen.findByRole("button", { name: /^Momen$/ }),
+    );
+    if (!screen.queryByRole("button", { name: "我的收藏" })) {
+      await fireEvent.click(
+        await screen.findByRole("button", { name: /^Momen$/ }),
+      );
+    }
+    await fireEvent.click(screen.getByRole("button", { name: "我的收藏" }));
+
+    secondFolders.resolve([
+      {
+        id: 42,
+        name: "新收藏夹",
+        itemCount: 0,
+        createdAt: "2026-05-18T00:00:00Z",
+        updatedAt: "2026-05-18T00:00:00Z",
+      },
+    ]);
+    expect(await screen.findByText("新收藏夹 (0)")).toBeTruthy();
+
+    firstFolders.resolve([
+      {
+        id: 41,
+        name: "旧收藏夹",
+        itemCount: 0,
+        createdAt: "2026-05-18T00:00:00Z",
+        updatedAt: "2026-05-18T00:00:00Z",
+      },
+    ]);
+    await firstFolders.promise;
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(screen.queryByText("旧收藏夹 (0)")).toBeNull();
+    expect(screen.getByText("新收藏夹 (0)")).toBeTruthy();
+  });
+
   it("restores cloud apps by origin and package when category changed", async () => {
     vi.mocked(fetchSyncedAppList).mockResolvedValueOnce({
       snapshotName: "默认列表",

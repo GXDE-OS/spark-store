@@ -196,12 +196,31 @@
         </div>
 
         <ReviewsPanel
-          v-if="reviewAppKey && reviewTags"
+          v-if="loggedIn && reviewAppKey && reviewTags"
           :app-key="reviewAppKey"
           :tags="reviewTags"
           :logged-in="loggedIn"
           @request-login="$emit('request-login', $event)"
         />
+        <section
+          v-else-if="reviewAppKey && reviewTags"
+          class="rounded-2xl border border-slate-200/60 bg-slate-50/50 p-5 dark:border-slate-800/60 dark:bg-slate-800/30"
+        >
+          <h2 class="mb-2 flex items-center gap-2 text-base font-semibold">
+            <i class="fas fa-comments text-slate-400"></i>
+            应用评价
+          </h2>
+          <p class="text-sm text-slate-500 dark:text-slate-400">
+            登录星火账号后可查看评价并发表评论。
+          </p>
+          <button
+            type="button"
+            class="mt-4 inline-flex items-center rounded-xl bg-slate-800 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-700 dark:bg-slate-700 dark:hover:bg-slate-600"
+            @click="emit('request-login', '登录后查看和发表评论。')"
+          >
+            登录后查看评价
+          </button>
+        </section>
       </div>
     </div>
   </section>

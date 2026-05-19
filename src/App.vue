@@ -1464,6 +1464,16 @@ const clearRestoreState = () => {
   showRestoreModal.value = false;
 };
 
+const nextFavoriteRequestGeneration = (): number => {
+  favoriteRequestGeneration.value += 1;
+  return favoriteRequestGeneration.value;
+};
+
+const nextDownloadedRequestGeneration = (): number => {
+  downloadedRequestGeneration.value += 1;
+  return downloadedRequestGeneration.value;
+};
+
 const isCurrentFavoriteRequest = (generation: number): boolean =>
   favoriteRequestGeneration.value === generation && isLoggedIn.value;
 
@@ -1522,7 +1532,7 @@ const loadDownloadedHistory = async (): Promise<void> => {
   if (!requireLogin("请登录后查看和管理账号信息。")) return;
   const userId = currentUser.value?.id;
   if (userId === undefined) return;
-  const generation = downloadedRequestGeneration.value;
+  const generation = nextDownloadedRequestGeneration();
 
   downloadedLoading.value = true;
   downloadedError.value = "";
@@ -1741,7 +1751,7 @@ const loadActiveFavoriteItems = async (
 };
 
 const refreshFavorites = async (): Promise<void> => {
-  const generation = favoriteRequestGeneration.value;
+  const generation = nextFavoriteRequestGeneration();
   favoriteLoading.value = true;
   favoriteError.value = "";
   try {
@@ -1806,7 +1816,7 @@ const openFavoriteManagement = async () => {
 };
 
 const selectFavoriteFolder = async (folderId: number) => {
-  const generation = favoriteRequestGeneration.value;
+  const generation = nextFavoriteRequestGeneration();
   activeFavoriteFolderId.value = folderId;
   favoriteLoading.value = true;
   favoriteError.value = "";

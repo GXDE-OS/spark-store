@@ -152,8 +152,19 @@ const ratingText = computed(() => {
   return `${summary.value.averageRating.toFixed(1)} / 5 (${summary.value.reviewCount})`;
 });
 
+const clearReviewState = () => {
+  loadGeneration.value += 1;
+  reviews.value = [];
+  summary.value = null;
+  loading.value = false;
+  error.value = "";
+};
+
 const loadReviews = async () => {
-  if (!props.appKey) return;
+  if (!props.loggedIn || !props.appKey) {
+    clearReviewState();
+    return;
+  }
   const generation = loadGeneration.value + 1;
   loadGeneration.value = generation;
   const appKey = props.appKey;
@@ -202,5 +213,5 @@ const submit = async () => {
 };
 
 onMounted(loadReviews);
-watch(() => props.appKey, loadReviews);
+watch(() => [props.appKey, props.loggedIn], loadReviews);
 </script>

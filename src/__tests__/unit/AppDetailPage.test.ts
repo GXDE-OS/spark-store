@@ -91,6 +91,28 @@ describe("AppDetailPage", () => {
     );
   });
 
+  it("gates reviews for anonymous users", async () => {
+    const rendered = render(AppDetailPage, {
+      props: {
+        app,
+        screenshots: [],
+        sparkInstalled: false,
+        apmInstalled: false,
+        loggedIn: false,
+        reviewAppKey: "apm:amd64-apm:office:wps",
+        reviewTags: sparkTags,
+      },
+    });
+
+    expect(screen.queryByTestId("reviews-panel")).toBeNull();
+    await fireEvent.click(
+      screen.getByRole("button", { name: "登录后查看评价" }),
+    );
+    expect(rendered.emitted("request-login")?.[0]?.[0]).toBe(
+      "登录后查看和发表评论。",
+    );
+  });
+
   it("updates review identity when switching a merged app origin", async () => {
     render(AppDetailPage, {
       props: {
@@ -98,7 +120,7 @@ describe("AppDetailPage", () => {
         screenshots: [],
         sparkInstalled: false,
         apmInstalled: false,
-        loggedIn: false,
+        loggedIn: true,
         reviewAppKey: "spark:amd64-store:office:wps",
         reviewTags: sparkTags,
       },
