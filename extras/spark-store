@@ -23,6 +23,12 @@ if ! command -v apt >/dev/null 2>&1; then
     ARGS="$ARGS --no-spark"
 fi
 
+# 检查是否是AOSC OS
+if grep -q "ID=aosc" /etc/os-release; then
+    echo "检测到 AOSC OS"
+    ARGS="$ARGS --no-spark"
+fi
+
 # 注意：已移除原先针对 arm64 + wayland 添加 --disable-gpu 的逻辑，
 # 现在 arm64 设备无论是否使用 wayland 均不再添加此参数。
 
