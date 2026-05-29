@@ -14,8 +14,9 @@ vi.mock("@/components/ReviewsPanel.vue", () => ({
   default: {
     name: "ReviewsPanel",
     props: ["appKey", "tags", "loggedIn", "canSubmit"],
+    emits: ["request-login", "show-user"],
     template:
-      '<div data-testid="reviews-panel" :data-app-key="appKey" :data-origin="tags.origin" :data-version="tags.version" :data-can-submit="String(canSubmit)"></div>',
+      '<button type="button" data-testid="reviews-panel" :data-app-key="appKey" :data-origin="tags.origin" :data-version="tags.version" :data-can-submit="String(canSubmit)" @click="$emit(\'show-user\', { id: 31, userDisplayName: \'Detail User\', userAvatarUrl: \'\', rating: 5, content: \'\', version: tags.version, packageArch: tags.packageArch, clientArch: tags.clientArch, distro: tags.distro, origin: tags.origin, category: tags.category, createdAt: \'\', updatedAt: \'\' })"></button>',
   },
 }));
 
@@ -110,7 +111,7 @@ describe("AppDetailModal", () => {
   });
 
   it("updates review identity when switching a merged app origin", async () => {
-    render(AppDetailModal, {
+    const rendered = render(AppDetailModal, {
       props: {
         show: true,
         app: mergedApp,
@@ -142,6 +143,7 @@ describe("AppDetailModal", () => {
       "data-version",
       "1.0.0",
     );
+    expect(rendered.emitted("select-origin")?.[0]?.[0]).toBe("apm");
   });
 
   it("marks reviews read-only when the selected origin is not installed", () => {
@@ -162,5 +164,49 @@ describe("AppDetailModal", () => {
       "data-can-submit",
       "false",
     );
+  });
+
+  it("forwards review user profile events", async () => {
+    const rendered = render(AppDetailModal, {
+      props: {
+        show: true,
+        app,
+        screenshots: [],
+        sparkInstalled: true,
+        apmInstalled: true,
+        loggedIn: true,
+        reviewAppKey: "apm:amd64-apm:office:wps",
+        reviewTags: sparkTags,
+      },
+    });
+
+    await fireEvent.click(screen.getByTestId("reviews-panel"));
+
+    expect(rendered.emitted("show-user")?.[0]?.[0]).toEqual(
+      expect.objectContaining({ userDisplayName: "Detail User" }),
+    );
+  });
+
+  it("renders favorited state with folder name and still emits favorite", async () => {
+    const rendered = render(AppDetailModal, {
+      props: {
+        show: true,
+        app,
+        screenshots: [],
+        sparkInstalled: false,
+        apmInstalled: false,
+        loggedIn: true,
+        reviewAppKey: "apm:amd64-apm:office:wps",
+        reviewTags: sparkTags,
+        favorited: true,
+        favoriteFolderName: "办公收藏",
+      },
+    });
+
+    await fireEvent.click(
+      screen.getByRole("button", { name: "已收藏 · 办公收藏" }),
+    );
+
+    expect(rendered.emitted("favorite")?.[0]?.[0]).toEqual(app);
   });
 });

@@ -13,6 +13,10 @@ export const SPARK_BACKEND_BASE_URL: string =
   import.meta.env.VITE_SPARK_BACKEND_BASE_URL ||
   DEFAULT_SPARK_BACKEND_BASE_URL;
 
+export const SPARK_ACCOUNT_CENTER_URL: string =
+  import.meta.env.VITE_SPARK_ACCOUNT_CENTER_URL ||
+  "https://account.spark-app.store/account";
+
 export const FLARUM_BASE_URL = "https://bbs.spark-app.store";
 export const FLARUM_REGISTER_URL = `${FLARUM_BASE_URL}/register`;
 export const FLARUM_PROFILE_URL = `${FLARUM_BASE_URL}/u`;

@@ -249,6 +249,7 @@ async function createWindow() {
     title: "星火应用商店",
     width: 1366,
     height: 768,
+    frame: false,
     autoHideMenuBar: true,
     icon: path.join(process.env.VITE_PUBLIC, "favicon.ico"),
     webPreferences: {
@@ -305,6 +306,27 @@ ipcMain.on("renderer-ready", (event, args) => {
 
 ipcMain.on("set-theme-source", (event, theme: "system" | "light" | "dark") => {
   nativeTheme.themeSource = theme;
+});
+
+ipcMain.on("window-control-minimize", () => {
+  win?.minimize();
+});
+
+ipcMain.on("window-control-toggle-maximize", () => {
+  if (!win) {
+    return;
+  }
+
+  if (win.isMaximized()) {
+    win.unmaximize();
+    return;
+  }
+
+  win.maximize();
+});
+
+ipcMain.on("window-control-close", () => {
+  win?.close();
 });
 
 // 配置文件路径

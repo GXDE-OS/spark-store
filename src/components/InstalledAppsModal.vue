@@ -101,6 +101,12 @@
           class="flex-1 overflow-y-auto overscroll-contain scrollbar-nowidth scrollbar-thumb-slate-200 dark:scrollbar-thumb-slate-700 p-6 space-y-4"
         >
           <div
+            v-if="syncMessage"
+            class="rounded-2xl border border-brand/20 bg-brand/5 px-4 py-3 text-sm font-medium text-brand dark:bg-brand/10"
+          >
+            {{ syncMessage }}
+          </div>
+          <div
             v-if="loading"
             class="rounded-2xl border border-dashed border-slate-200/80 px-4 py-10 text-center text-slate-500 dark:border-slate-800/80 dark:text-slate-400"
           >
@@ -239,6 +245,7 @@ const props = defineProps<{
   apmAvailable: boolean;
   loggedIn: boolean;
   syncing: boolean;
+  syncMessage: string;
 }>();
 
 const emit = defineEmits<{

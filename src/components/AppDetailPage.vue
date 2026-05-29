@@ -123,7 +123,7 @@
             @click="handleFavorite"
           >
             <i class="fas fa-star text-xs"></i>
-            <span>收藏</span>
+            <span>{{ favoriteButtonText }}</span>
           </button>
         </div>
 
@@ -202,6 +202,7 @@
           :logged-in="loggedIn"
           :can-submit="isInstalled"
           @request-login="$emit('request-login', $event)"
+          @show-user="emit('show-user', $event)"
         />
         <section
           v-else-if="!loggedIn && reviewAppKey && reviewTags"
@@ -251,7 +252,7 @@ import {
   buildReviewTags,
   getDisplayApp,
 } from "@/modules/appIdentity";
-import type { App, ReviewTags } from "@/global/typedefinition";
+import type { App, AppReview, ReviewTags } from "@/global/typedefinition";
 
 const props = defineProps<{
   app: App;
@@ -261,6 +262,8 @@ const props = defineProps<{
   loggedIn: boolean;
   reviewAppKey: string;
   reviewTags: ReviewTags | null;
+  favorited?: boolean;
+  favoriteFolderName?: string;
 }>();
 
 const emit = defineEmits<{
@@ -272,6 +275,8 @@ const emit = defineEmits<{
   "open-preview": [index: number];
   "open-app": [pkgname: string, origin?: "spark" | "apm"];
   "check-install": [app: App];
+  "select-origin": [origin: "spark" | "apm"];
+  "show-user": [review: AppReview];
 }>();
 
 const viewingOrigin = ref<"spark" | "apm">(
@@ -351,8 +356,16 @@ const reviewTags = computed<ReviewTags | null>(() => {
   });
 });
 
+const favoriteButtonText = computed(() => {
+  if (!props.favorited) return "收藏";
+  return props.favoriteFolderName
+    ? `已收藏 · ${props.favoriteFolderName}`
+    : "已收藏";
+});
+
 const selectOrigin = (origin: "spark" | "apm") => {
   viewingOrigin.value = origin;
+  emit("select-origin", origin);
   if (displayApp.value) emit("check-install", displayApp.value);
 };
 

@@ -67,4 +67,27 @@ describe("UserManagementView", () => {
 
     expect(screen.getByText("同步完成")).toBeTruthy();
   });
+
+  it("renders the forum profile cover when available", () => {
+    render(UserManagementView, {
+      props: {
+        user: {
+          ...user,
+          coverUrl:
+            "https://bbs.spark-app.store/assets/covers/JizZCVjiSFASrEfp.jpg",
+        },
+        downloadedApps: [],
+        syncEnabled: false,
+        loading: false,
+        error: "",
+        syncing: false,
+        syncMessage: "",
+      },
+    });
+
+    expect(screen.getByTestId("profile-cover")).toHaveStyle({
+      backgroundImage:
+        'url("https://bbs.spark-app.store/assets/covers/JizZCVjiSFASrEfp.jpg")',
+    });
+  });
 });

@@ -103,7 +103,7 @@
                       ? 'bg-orange-500 text-white'
                       : 'bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600'
                   "
-                  @click="viewingOrigin = 'spark'"
+                  @click="selectOrigin('spark')"
                 >
                   Spark
                 </button>
@@ -116,7 +116,7 @@
                       ? 'bg-blue-500 text-white'
                       : 'bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600'
                   "
-                  @click="viewingOrigin = 'apm'"
+                  @click="selectOrigin('apm')"
                 >
                   APM
                 </button>
@@ -186,7 +186,7 @@
                 @click="handleFavorite"
               >
                 <i class="fas fa-star text-xs"></i>
-                <span>收藏</span>
+                <span>{{ favoriteButtonText }}</span>
               </button>
             </div>
 
@@ -332,6 +332,7 @@
               :logged-in="loggedIn"
               :can-submit="isinstalled"
               @request-login="$emit('request-login', $event)"
+              @show-user="emit('show-user', $event)"
             />
             <section
               v-else-if="!loggedIn && reviewAppKey && reviewTags"
@@ -502,7 +503,7 @@ import {
   getHybridDefaultOrigin,
 } from "../global/storeConfig";
 import { buildReviewAppKey, buildReviewTags } from "../modules/appIdentity";
-import type { App, ReviewTags } from "../global/typedefinition";
+import type { App, AppReview, ReviewTags } from "../global/typedefinition";
 
 const attrs = useAttrs();
 
@@ -515,6 +516,8 @@ const props = defineProps<{
   loggedIn: boolean;
   reviewAppKey: string;
   reviewTags: ReviewTags | null;
+  favorited?: boolean;
+  favoriteFolderName?: string;
 }>();
 
 const emit = defineEmits<{
@@ -526,6 +529,8 @@ const emit = defineEmits<{
   (e: "open-preview", index: number): void;
   (e: "open-app", pkgname: string, origin?: "spark" | "apm"): void;
   (e: "check-install", app: App): void;
+  (e: "select-origin", origin: "spark" | "apm"): void;
+  (e: "show-user", review: AppReview): void;
 }>();
 
 const appPkgname = computed(() => props.app?.pkgname);
@@ -655,6 +660,13 @@ const activeReviewTags = computed<ReviewTags | null>(() => {
   });
 });
 
+const favoriteButtonText = computed(() => {
+  if (!props.favorited) return "收藏";
+  return props.favoriteFolderName
+    ? `已收藏 · ${props.favoriteFolderName}`
+    : "已收藏";
+});
+
 const downloadCount = ref<string>("");
 
 // 监听 app 变化，获取新app的下载量
@@ -706,6 +718,11 @@ const handleFavorite = () => {
     return;
   }
   emit("favorite", displayApp.value);
+};
+
+const selectOrigin = (origin: "spark" | "apm") => {
+  viewingOrigin.value = origin;
+  emit("select-origin", origin);
 };
 
 const openPreview = (index: number) => {

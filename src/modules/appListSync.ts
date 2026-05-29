@@ -51,3 +51,26 @@ export const mergeInstalledApps = (
     ...refreshedApps,
   ];
 };
+
+export const resolveCloudInstallCandidate = (
+  item: SyncedAppListItem,
+  apps: App[],
+): App | null => {
+  const exactMatch = apps.find(
+    (app) =>
+      app.pkgname === item.pkgname &&
+      app.origin === item.origin &&
+      app.category === item.category,
+  );
+
+  const sameOriginPackageMatch = apps.find(
+    (app) => app.pkgname === item.pkgname && app.origin === item.origin,
+  );
+
+  return (
+    exactMatch ??
+    sameOriginPackageMatch ??
+    apps.find((app) => app.pkgname === item.pkgname) ??
+    null
+  );
+};

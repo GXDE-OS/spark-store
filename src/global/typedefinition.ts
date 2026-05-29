@@ -256,8 +256,17 @@ export interface SparkUser {
   username: string;
   displayName: string;
   avatarUrl: string;
+  coverUrl?: string;
   forumLevel: string;
   forumGroups: string[];
+}
+
+export interface ReviewUserProfile {
+  displayName: string;
+  username?: string;
+  avatarUrl?: string;
+  coverUrl?: string;
+  forumGroups?: string[];
 }
 
 export interface AuthSession {
@@ -287,8 +296,26 @@ export interface RatingSummary {
   starCounts: Record<number, number>;
 }
 
+export interface AppReviewReply {
+  id: number;
+  reviewId: number;
+  parentId: number | null;
+  content: string;
+  createdAt: string;
+  updatedAt: string;
+  userDisplayName: string;
+  userAvatarUrl: string;
+  likeCount: number;
+  likedByCurrentUser: boolean;
+  canDelete: boolean;
+  isAuthor: boolean;
+  isDeleted: boolean;
+  replies: AppReviewReply[];
+}
+
 export interface AppReview {
   id: number;
+  userId?: number;
   rating: number;
   content: string;
   version: string;
@@ -301,6 +328,12 @@ export interface AppReview {
   updatedAt: string;
   userDisplayName: string;
   userAvatarUrl: string;
+  likeCount?: number;
+  likedByCurrentUser?: boolean;
+  canDelete?: boolean;
+  isAuthor?: boolean;
+  isDeleted?: boolean;
+  replies?: AppReviewReply[];
 }
 
 export interface FavoriteFolder {

@@ -109,6 +109,9 @@
       >
         选择可安装
       </button>
+      <span class="self-center text-sm text-slate-500 dark:text-slate-400">
+        {{ installableSelectionMessage }}
+      </span>
       <button
         type="button"
         class="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-700 disabled:opacity-40 dark:bg-slate-100 dark:text-slate-900"
@@ -162,6 +165,18 @@ const selectedInstallableItems = computed(() =>
       selectedIds.value.includes(item.item.id) && item.status === "installable",
   ),
 );
+
+const installableItemCount = computed(
+  () => props.items.filter((item) => item.status === "installable").length,
+);
+
+const installableSelectionMessage = computed(() => {
+  if (selectedInstallableItems.value.length > 0) {
+    return `已选择 ${selectedInstallableItems.value.length} 个可安装应用`;
+  }
+  if (installableItemCount.value === 0) return "当前收藏夹没有可安装应用";
+  return `${installableItemCount.value} 个应用可安装`;
+});
 
 watch(
   () => props.items,

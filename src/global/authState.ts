@@ -14,6 +14,7 @@ const isSparkUser = (value: unknown): value is SparkUser => {
     typeof user.username === "string" &&
     typeof user.displayName === "string" &&
     typeof user.avatarUrl === "string" &&
+    (user.coverUrl === undefined || typeof user.coverUrl === "string") &&
     typeof user.forumLevel === "string" &&
     Array.isArray(user.forumGroups) &&
     user.forumGroups.every((group) => typeof group === "string")

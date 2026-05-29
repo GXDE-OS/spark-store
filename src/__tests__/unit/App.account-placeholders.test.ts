@@ -9,9 +9,15 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import App from "@/App.vue";
 import {
+  addFavoriteItem,
+  deleteFavoriteItem,
+  fetchRatingSummary,
+  fetchReviews,
   fetchSyncedAppList,
+  createFavoriteFolder,
   listDownloadedApps,
   listFavoriteFolders,
+  listFavoriteItems,
   uploadSyncedAppList,
 } from "@/modules/backendApi";
 import { setAuthSession } from "@/global/authState";
@@ -158,8 +164,39 @@ vi.mock("@/modules/backendApi", () => ({
   addFavoriteItem: vi.fn(),
   bulkDeleteFavoriteItems: vi.fn(),
   createFavoriteFolder: vi.fn(),
+  deleteFavoriteItem: vi.fn(),
   exchangeFlarumToken: vi.fn(),
+  fetchRatingSummary: vi.fn(async () => ({
+    averageRating: 5,
+    reviewCount: 1,
+    starCounts: { 5: 1 },
+  })),
+  fetchReviews: vi.fn(async () => [
+    {
+      id: 31,
+      rating: 5,
+      content: "profile entry",
+      version: "1.0.0",
+      packageArch: "amd64",
+      clientArch: "amd64",
+      distro: "deepin 25",
+      origin: "apm",
+      category: "office",
+      createdAt: "2026-05-20T00:00:00Z",
+      updatedAt: "2026-05-20T00:00:00Z",
+      userDisplayName: "Detail User",
+      userAvatarUrl: "https://bbs.spark-app.store/avatar-detail.png",
+      canDelete: false,
+      replies: [],
+    },
+  ]),
   fetchSyncedAppList: vi.fn(async () => null),
+  submitReview: vi.fn(),
+  likeReview: vi.fn(),
+  createReviewReply: vi.fn(),
+  deleteReview: vi.fn(),
+  likeReviewReply: vi.fn(),
+  deleteReviewReply: vi.fn(),
   listDownloadedApps: vi.fn(async () => downloadedList([])),
   listFavoriteFolders: vi.fn(async () => favoriteFolders),
   listFavoriteItems: vi.fn(async () => favoriteItems),
@@ -197,10 +234,36 @@ describe("App account placeholders", () => {
         username: "momen",
         displayName: "Momen",
         avatarUrl: "https://bbs.spark-app.store/avatar.png",
+        coverUrl:
+          "https://bbs.spark-app.store/assets/covers/JizZCVjiSFASrEfp.jpg",
         forumLevel: "管理员",
         forumGroups: ["管理员"],
       },
     });
+    vi.mocked(fetchRatingSummary).mockResolvedValue({
+      averageRating: 5,
+      reviewCount: 1,
+      starCounts: { 5: 1 },
+    });
+    vi.mocked(fetchReviews).mockResolvedValue([
+      {
+        id: 31,
+        rating: 5,
+        content: "profile entry",
+        version: "1.0.0",
+        packageArch: "amd64",
+        clientArch: "amd64",
+        distro: "deepin 25",
+        origin: "apm",
+        category: "office",
+        createdAt: "2026-05-20T00:00:00Z",
+        updatedAt: "2026-05-20T00:00:00Z",
+        userDisplayName: "Detail User",
+        userAvatarUrl: "https://bbs.spark-app.store/avatar-detail.png",
+        canDelete: false,
+        replies: [],
+      },
+    ]);
 
     vi.stubGlobal(
       "matchMedia",
@@ -219,16 +282,89 @@ describe("App account placeholders", () => {
     vi.stubGlobal("IntersectionObserver", MockIntersectionObserver);
   });
 
-  it("shows the user management placeholder from the logged-in quick menu", async () => {
+  it("shows user management as a global modal from the logged-in quick menu", async () => {
     render(App);
+
+    await fireEvent.click(await screen.findByText("全部应用"));
+    expect(await screen.findByText("wps · 1.0.0")).toBeTruthy();
 
     await fireEvent.click(await screen.findByRole("button", { name: /Momen/ }));
     await fireEvent.click(screen.getByText("用户管理"));
 
     expect(
-      await screen.findByRole("heading", { name: "用户管理" }),
+      await screen.findByRole("dialog", { name: "用户管理" }),
     ).toBeTruthy();
+    const frame = await screen.findByTitle("星火账号用户管理");
+    expect(frame).toBeTruthy();
+    expect((frame as HTMLIFrameElement).src).toContain(
+      "account.spark-app.store",
+    );
+    expect(screen.getByText("wps · 1.0.0")).toBeTruthy();
     expect(screen.queryByText("请登录后查看和管理账号信息。")).toBeNull();
+  });
+
+  it("opens an in-app profile modal from review author clicks", async () => {
+    render(App);
+
+    await fireEvent.click(await screen.findByText("全部应用"));
+    await fireEvent.click(await screen.findByText("WPS"));
+    await fireEvent.click(
+      await screen.findByRole("button", { name: "Detail User" }),
+    );
+
+    const dialog = await screen.findByRole("dialog", { name: "用户资料" });
+    expect(dialog).toBeTruthy();
+    expect(within(dialog).getByText("Detail User")).toBeTruthy();
+  });
+
+  it("enriches the current user's own review profile without a review user id", async () => {
+    const openSpy = vi.spyOn(window, "open").mockImplementation(() => null);
+    vi.mocked(fetchReviews).mockResolvedValueOnce([
+      {
+        id: 32,
+        rating: 5,
+        content: "own profile entry",
+        version: "1.0.0",
+        packageArch: "amd64",
+        clientArch: "amd64",
+        distro: "deepin 25",
+        origin: "apm",
+        category: "office",
+        createdAt: "2026-05-20T00:00:00Z",
+        updatedAt: "2026-05-20T00:00:00Z",
+        userDisplayName: "Momen",
+        userAvatarUrl: "",
+        isAuthor: true,
+        canDelete: false,
+        replies: [],
+      },
+    ]);
+
+    render(App);
+
+    await fireEvent.click(await screen.findByText("全部应用"));
+    await fireEvent.click(await screen.findByText("WPS"));
+    await fireEvent.click(
+      await screen.findByRole("button", { name: "查看Momen的资料" }),
+    );
+
+    const dialog = await screen.findByRole("dialog", { name: "用户资料" });
+    expect(within(dialog).getByText("@momen")).toBeTruthy();
+    expect(within(dialog).getByText("管理员")).toBeTruthy();
+    expect(
+      within(dialog).getByRole("button", { name: "查看论坛资料" }),
+    ).toBeTruthy();
+    expect(openSpy).not.toHaveBeenCalled();
+
+    await fireEvent.click(
+      within(dialog).getByRole("button", { name: "查看论坛资料" }),
+    );
+
+    expect(openSpy).toHaveBeenCalledWith(
+      expect.stringContaining("/u/momen"),
+      "_blank",
+      "noopener,noreferrer",
+    );
   });
 
   it("shows the favorites placeholder from the logged-in quick menu", async () => {
@@ -243,6 +379,301 @@ describe("App account placeholders", () => {
       await screen.findByRole("heading", { name: "我的收藏" }),
     ).toBeTruthy();
     expect(screen.queryByText("请登录后查看我的收藏。")).toBeNull();
+  });
+
+  it("shows favorite management as a standalone page without category pills", async () => {
+    render(App);
+
+    await fireEvent.click(
+      await screen.findByRole("button", { name: /^Momen$/ }),
+    );
+    await fireEvent.click(screen.getByText("我的收藏"));
+
+    expect(
+      await screen.findByRole("heading", { name: "我的收藏" }),
+    ).toBeTruthy();
+    expect(await screen.findByText("默认收藏夹 (1)")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /办公/ })).toBeNull();
+  });
+
+  it("loads favorite state when opening app detail directly", async () => {
+    render(App);
+
+    await fireEvent.click(await screen.findByText("全部应用"));
+    await fireEvent.click(await screen.findByText("wps · 1.0.0"));
+
+    expect(
+      await screen.findByRole("button", { name: "已收藏 · 默认收藏夹" }),
+    ).toBeTruthy();
+    expect(listFavoriteFolders).toHaveBeenCalled();
+    expect(listFavoriteItems).toHaveBeenCalledWith(7);
+  });
+
+  it("shows a newly created favorite folder immediately on the management page", async () => {
+    const createdFolder: FavoriteFolder = {
+      id: 8,
+      name: "办公收藏",
+      itemCount: 0,
+      createdAt: "2026-05-18T00:00:00Z",
+      updatedAt: "2026-05-18T00:00:00Z",
+    };
+    vi.spyOn(window, "prompt").mockReturnValue("办公收藏");
+    vi.mocked(createFavoriteFolder).mockResolvedValueOnce(createdFolder);
+    vi.mocked(listFavoriteFolders).mockResolvedValue(favoriteFolders);
+
+    render(App);
+
+    await fireEvent.click(
+      await screen.findByRole("button", { name: /^Momen$/ }),
+    );
+    await fireEvent.click(screen.getByText("我的收藏"));
+    expect(
+      await screen.findByRole("heading", { name: "我的收藏" }),
+    ).toBeTruthy();
+
+    await fireEvent.click(screen.getByRole("button", { name: "新建收藏夹" }));
+
+    expect(createFavoriteFolder).toHaveBeenCalledWith("办公收藏");
+    expect(await screen.findByText("办公收藏 (0)")).toBeTruthy();
+    expect(await screen.findByText("当前收藏夹暂无应用。")).toBeTruthy();
+  });
+
+  it("shows detail favorite state for an app added to a non-active folder", async () => {
+    const folders = [
+      favoriteFolders[0],
+      {
+        id: 8,
+        name: "办公收藏",
+        itemCount: 0,
+        createdAt: "2026-05-18T00:00:00Z",
+        updatedAt: "2026-05-18T00:00:00Z",
+      },
+    ];
+    vi.mocked(listFavoriteFolders)
+      .mockResolvedValueOnce(folders)
+      .mockResolvedValueOnce(folders);
+    vi.mocked(listFavoriteItems).mockResolvedValue([]);
+    vi.mocked(addFavoriteItem).mockResolvedValueOnce({
+      ...favoriteItems[0],
+      id: 12,
+    });
+
+    render(App);
+
+    await fireEvent.click(await screen.findByText("全部应用"));
+    await fireEvent.click(await screen.findByText("wps · 1.0.0"));
+    expect(await screen.findByRole("heading", { name: "WPS" })).toBeTruthy();
+
+    await fireEvent.click(screen.getByRole("button", { name: "收藏" }));
+    await fireEvent.click(await screen.findByLabelText("收藏到 办公收藏"));
+    await fireEvent.click(screen.getByRole("button", { name: "保存收藏夹" }));
+
+    expect(
+      await screen.findByRole("button", { name: "已收藏 · 办公收藏" }),
+    ).toBeTruthy();
+  });
+
+  it("adds a favorite through the fallback default folder", async () => {
+    vi.mocked(listFavoriteFolders)
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce(favoriteFolders);
+    vi.mocked(listFavoriteItems).mockResolvedValueOnce([]);
+    vi.mocked(addFavoriteItem).mockResolvedValueOnce(favoriteItems[0]);
+
+    render(App);
+
+    await fireEvent.click(await screen.findByText("全部应用"));
+    await fireEvent.click(await screen.findByText("wps · 1.0.0"));
+    expect(await screen.findByRole("heading", { name: "WPS" })).toBeTruthy();
+
+    await fireEvent.click(screen.getByRole("button", { name: "收藏" }));
+    await fireEvent.click(await screen.findByLabelText("收藏到 默认收藏夹"));
+    await fireEvent.click(screen.getByRole("button", { name: "保存收藏夹" }));
+
+    expect(addFavoriteItem).toHaveBeenCalledWith(
+      "default",
+      expect.objectContaining({ pkgname: "wps" }),
+    );
+  });
+
+  it("ignores stale favorite refreshes while opening the detail selector", async () => {
+    const refreshFolders = createDeferred<FavoriteFolder[]>();
+    const selectorFolders = createDeferred<FavoriteFolder[]>();
+    const staleFolder = {
+      id: 9,
+      name: "旧收藏夹",
+      itemCount: 0,
+      createdAt: "2026-05-18T00:00:00Z",
+      updatedAt: "2026-05-18T00:00:00Z",
+    };
+    const currentFolder = {
+      id: 8,
+      name: "办公收藏",
+      itemCount: 0,
+      createdAt: "2026-05-18T00:00:00Z",
+      updatedAt: "2026-05-18T00:00:00Z",
+    };
+    vi.mocked(listFavoriteFolders)
+      .mockReturnValueOnce(refreshFolders.promise)
+      .mockReturnValueOnce(selectorFolders.promise);
+    vi.mocked(listFavoriteItems).mockResolvedValue([]);
+
+    render(App);
+
+    await fireEvent.click(
+      await screen.findByRole("button", { name: /^Momen$/ }),
+    );
+    await fireEvent.click(screen.getByText("我的收藏"));
+    await fireEvent.click(await screen.findByText("全部应用"));
+    await fireEvent.click(await screen.findByText("wps · 1.0.0"));
+    expect(await screen.findByRole("heading", { name: "WPS" })).toBeTruthy();
+
+    await fireEvent.click(screen.getByRole("button", { name: "收藏" }));
+    selectorFolders.resolve([currentFolder]);
+    expect(await screen.findByLabelText("收藏到 办公收藏")).toBeTruthy();
+
+    refreshFolders.resolve([staleFolder]);
+    await refreshFolders.promise;
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(screen.getByLabelText("收藏到 办公收藏")).toBeTruthy();
+    expect(screen.queryByLabelText("收藏到 旧收藏夹")).toBeNull();
+  });
+
+  it("shows detail favorite state from a non-active backend folder", async () => {
+    const folders = [
+      favoriteFolders[0],
+      {
+        id: 8,
+        name: "办公收藏",
+        itemCount: 1,
+        createdAt: "2026-05-18T00:00:00Z",
+        updatedAt: "2026-05-18T00:00:00Z",
+      },
+    ];
+    vi.mocked(listFavoriteFolders).mockResolvedValueOnce(folders);
+    vi.mocked(listFavoriteItems)
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce(favoriteItems);
+
+    render(App);
+
+    await fireEvent.click(
+      await screen.findByRole("button", { name: /^Momen$/ }),
+    );
+    await fireEvent.click(screen.getByText("我的收藏"));
+    expect(
+      await screen.findByRole("heading", { name: "我的收藏" }),
+    ).toBeTruthy();
+
+    await fireEvent.click(await screen.findByText("全部应用"));
+    await fireEvent.click(await screen.findByText("wps · 1.0.0"));
+
+    expect(
+      await screen.findByRole("button", { name: "已收藏 · 办公收藏" }),
+    ).toBeTruthy();
+  });
+
+  it("saves favorite folder checkbox changes from the detail selector", async () => {
+    const folders = [
+      favoriteFolders[0],
+      {
+        id: 8,
+        name: "办公收藏",
+        itemCount: 0,
+        createdAt: "2026-05-18T00:00:00Z",
+        updatedAt: "2026-05-18T00:00:00Z",
+      },
+    ];
+    vi.mocked(listFavoriteFolders).mockResolvedValue(folders);
+    vi.mocked(listFavoriteItems).mockImplementation(async (folderId: number) =>
+      folderId === 7 ? favoriteItems : [],
+    );
+    vi.mocked(addFavoriteItem).mockResolvedValueOnce({
+      ...favoriteItems[0],
+      id: 12,
+    });
+    vi.mocked(deleteFavoriteItem).mockResolvedValueOnce(undefined);
+
+    render(App);
+
+    await fireEvent.click(await screen.findByRole("button", { name: /Momen/ }));
+    await fireEvent.click(screen.getByText("我的收藏"));
+    expect(
+      await screen.findByRole("heading", { name: "我的收藏" }),
+    ).toBeTruthy();
+
+    await fireEvent.click(await screen.findByText("全部应用"));
+    await fireEvent.click(await screen.findByText("wps · 1.0.0"));
+    expect(await screen.findByRole("heading", { name: "WPS" })).toBeTruthy();
+    expect(
+      await screen.findByRole("button", { name: "已收藏 · 默认收藏夹" }),
+    ).toBeTruthy();
+
+    await fireEvent.click(
+      screen.getByRole("button", { name: "已收藏 · 默认收藏夹" }),
+    );
+    await fireEvent.click(await screen.findByLabelText("收藏到 默认收藏夹"));
+    await fireEvent.click(await screen.findByLabelText("收藏到 办公收藏"));
+    await fireEvent.click(screen.getByRole("button", { name: "保存收藏夹" }));
+
+    expect(deleteFavoriteItem).toHaveBeenCalledWith(7, 11);
+    expect(addFavoriteItem).toHaveBeenCalledWith(
+      8,
+      expect.objectContaining({
+        pkgname: "wps",
+      }),
+    );
+  });
+
+  it("creates a folder from the favorite selector without closing it", async () => {
+    const createdFolder = {
+      id: 8,
+      name: "办公收藏",
+      itemCount: 0,
+      createdAt: "2026-05-18T00:00:00Z",
+      updatedAt: "2026-05-18T00:00:00Z",
+    };
+    vi.spyOn(window, "prompt").mockReturnValue("办公收藏");
+    vi.mocked(createFavoriteFolder).mockResolvedValueOnce(createdFolder);
+    vi.mocked(listFavoriteFolders)
+      .mockResolvedValueOnce(favoriteFolders)
+      .mockResolvedValueOnce([favoriteFolders[0], createdFolder]);
+    vi.mocked(listFavoriteItems)
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
+    vi.mocked(addFavoriteItem).mockResolvedValueOnce(favoriteItems[0]);
+
+    render(App);
+
+    await fireEvent.click(await screen.findByRole("button", { name: /Momen/ }));
+    await fireEvent.click(screen.getByText("我的收藏"));
+    expect(
+      await screen.findByRole("heading", { name: "我的收藏" }),
+    ).toBeTruthy();
+
+    await fireEvent.click(await screen.findByText("全部应用"));
+    await fireEvent.click(await screen.findByText("wps · 1.0.0"));
+    expect(await screen.findByRole("heading", { name: "WPS" })).toBeTruthy();
+    await fireEvent.click(screen.getByRole("button", { name: "收藏" }));
+    await fireEvent.click(
+      await screen.findByRole("button", { name: "新建收藏夹" }),
+    );
+
+    expect(createFavoriteFolder).toHaveBeenCalledWith("办公收藏");
+    expect(
+      await screen.findByRole("dialog", { name: "选择收藏夹" }),
+    ).toBeTruthy();
+    expect(await screen.findByLabelText("收藏到 办公收藏")).toBeTruthy();
+    await fireEvent.click(screen.getByRole("button", { name: "保存收藏夹" }));
+
+    expect(addFavoriteItem).toHaveBeenCalledWith(
+      8,
+      expect.objectContaining({ pkgname: "wps" }),
+    );
   });
 
   it("refreshes installed apps before resolving favorite management state", async () => {
@@ -416,7 +847,7 @@ describe("App account placeholders", () => {
 
     await fireEvent.click(await screen.findByRole("button", { name: /Momen/ }));
     await fireEvent.click(screen.getByText("用户管理"));
-    expect(await screen.findByText("正在加载下载历史...")).toBeTruthy();
+    expect(await screen.findByTitle("星火账号用户管理")).toBeTruthy();
 
     await fireEvent.click(
       await screen.findByRole("button", { name: /^Momen$/ }),
@@ -437,7 +868,8 @@ describe("App account placeholders", () => {
     }
     await fireEvent.click(await screen.findByText("用户管理"));
     secondHistory.resolve(downloadedList([]));
-    expect(await screen.findByText("暂无下载记录。")).toBeTruthy();
+    const secondUserFrame = await screen.findByTitle("星火账号用户管理");
+    expect((secondUserFrame as HTMLIFrameElement).src).toContain("user=second");
 
     firstHistory.resolve(
       downloadedList([
@@ -459,7 +891,7 @@ describe("App account placeholders", () => {
     await Promise.resolve();
 
     expect(screen.queryByText("旧账号应用")).toBeNull();
-    expect(screen.getByText("暂无下载记录。")).toBeTruthy();
+    expect(screen.getByTitle("星火账号用户管理")).toBeTruthy();
   });
 
   it("ignores older downloaded history refreshes for the same user", async () => {
@@ -489,7 +921,7 @@ describe("App account placeholders", () => {
         },
       ]),
     );
-    expect(await screen.findByText("新下载应用")).toBeTruthy();
+    expect(await screen.findByTitle("星火账号用户管理")).toBeTruthy();
 
     firstHistory.resolve(
       downloadedList([
@@ -511,7 +943,7 @@ describe("App account placeholders", () => {
     await Promise.resolve();
 
     expect(screen.queryByText("旧下载应用")).toBeNull();
-    expect(screen.getByText("新下载应用")).toBeTruthy();
+    expect(screen.queryByText("新下载应用")).toBeNull();
   });
 
   it("ignores older favorite folder refreshes for the same user", async () => {
@@ -675,16 +1107,9 @@ describe("App account placeholders", () => {
 
     await fireEvent.click(await screen.findByRole("button", { name: /Momen/ }));
     await fireEvent.click(screen.getByText("用户管理"));
-    await fireEvent.click(
-      await screen.findByRole("button", { name: "立即同步" }),
-    );
-    expect(screen.getByRole("button", { name: "同步中..." })).toBeDisabled();
-
-    await waitFor(() => {
-      expect(uploadSyncedAppList).toHaveBeenCalledTimes(1);
-    });
+    expect(await screen.findByTitle("星火账号用户管理")).toBeTruthy();
     syncUpload.resolve(syncedList([]));
-    expect(await screen.findByText("同步完成")).toBeTruthy();
+    expect(uploadSyncedAppList).not.toHaveBeenCalled();
   });
 
   it("clears manual sync feedback before another user opens account management", async () => {
@@ -703,15 +1128,9 @@ describe("App account placeholders", () => {
 
     await fireEvent.click(await screen.findByRole("button", { name: /Momen/ }));
     await fireEvent.click(screen.getByText("用户管理"));
-    await fireEvent.click(
-      await screen.findByRole("button", { name: "立即同步" }),
-    );
-
-    await waitFor(() => {
-      expect(uploadSyncedAppList).toHaveBeenCalledTimes(1);
-    });
+    expect(await screen.findByTitle("星火账号用户管理")).toBeTruthy();
     syncUpload.resolve(syncedList([]));
-    expect(await screen.findByText("同步完成")).toBeTruthy();
+    expect(screen.queryByText("同步完成")).toBeNull();
 
     await fireEvent.click(
       await screen.findByRole("button", { name: /^Momen$/ }),
@@ -735,6 +1154,7 @@ describe("App account placeholders", () => {
     }
     await fireEvent.click(await screen.findByText("用户管理"));
 
+    expect(await screen.findByTitle("星火账号用户管理")).toBeTruthy();
     expect(screen.queryByText("同步完成")).toBeNull();
   });
 
@@ -769,9 +1189,7 @@ describe("App account placeholders", () => {
 
     await fireEvent.click(await screen.findByRole("button", { name: /Momen/ }));
     await fireEvent.click(screen.getByText("用户管理"));
-    await fireEvent.click(
-      await screen.findByRole("button", { name: "立即同步" }),
-    );
+    expect(await screen.findByTitle("星火账号用户管理")).toBeTruthy();
     await fireEvent.click(
       await screen.findByRole("button", { name: /^Momen$/ }),
     );
@@ -806,15 +1224,7 @@ describe("App account placeholders", () => {
       await fireEvent.click(secondUserButton);
     }
     await fireEvent.click(await screen.findByText("用户管理"));
-    await fireEvent.click(
-      await screen.findByRole("button", { name: "立即同步" }),
-    );
-
-    await waitFor(() => {
-      expect(uploadSyncedAppList).toHaveBeenCalledWith(
-        expect.objectContaining({ items: [] }),
-      );
-    });
+    expect(await screen.findByTitle("星火账号用户管理")).toBeTruthy();
     const uploadedItemNames = vi
       .mocked(uploadSyncedAppList)
       .mock.calls.flatMap(([payload]) =>

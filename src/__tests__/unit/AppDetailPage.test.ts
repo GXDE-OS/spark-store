@@ -8,8 +8,9 @@ vi.mock("@/components/ReviewsPanel.vue", () => ({
   default: {
     name: "ReviewsPanel",
     props: ["appKey", "tags", "loggedIn", "canSubmit"],
+    emits: ["request-login", "show-user"],
     template:
-      '<div data-testid="reviews-panel" :data-app-key="appKey" :data-origin="tags.origin" :data-version="tags.version" :data-can-submit="String(canSubmit)"></div>',
+      '<button type="button" data-testid="reviews-panel" :data-app-key="appKey" :data-origin="tags.origin" :data-version="tags.version" :data-can-submit="String(canSubmit)" @click="$emit(\'show-user\', { id: 31, userDisplayName: \'Detail User\', userAvatarUrl: \'\', rating: 5, content: \'\', version: tags.version, packageArch: tags.packageArch, clientArch: tags.clientArch, distro: tags.distro, origin: tags.origin, category: tags.category, createdAt: \'\', updatedAt: \'\' })"></button>',
   },
 }));
 
@@ -167,6 +168,26 @@ describe("AppDetailPage", () => {
     expect(screen.getByTestId("reviews-panel")).toHaveAttribute(
       "data-can-submit",
       "false",
+    );
+  });
+
+  it("forwards review user profile events", async () => {
+    const rendered = render(AppDetailPage, {
+      props: {
+        app,
+        screenshots: [],
+        sparkInstalled: true,
+        apmInstalled: true,
+        loggedIn: true,
+        reviewAppKey: "apm:amd64-apm:office:wps",
+        reviewTags: sparkTags,
+      },
+    });
+
+    await fireEvent.click(screen.getByTestId("reviews-panel"));
+
+    expect(rendered.emitted("show-user")?.[0]?.[0]).toEqual(
+      expect.objectContaining({ userDisplayName: "Detail User" }),
     );
   });
 });

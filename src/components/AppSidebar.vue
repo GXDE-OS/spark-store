@@ -1,7 +1,7 @@
 <template>
   <div class="flex h-full flex-col gap-6">
     <div class="flex items-start justify-between gap-3">
-      <div class="relative min-w-0 flex-1">
+      <div ref="accountMenuRoot" class="relative min-w-0 flex-1">
         <button
           type="button"
           class="flex w-full min-w-0 items-center gap-3 rounded-2xl p-1 text-left transition hover:bg-slate-100 dark:hover:bg-slate-800"
@@ -109,7 +109,7 @@
         v-if="canManageApps"
         type="button"
         class="sidebar-tab"
-        @click="$emit('list')"
+        @click="emitSidebarAction('list')"
       >
         <span class="sidebar-tab-icon"><i class="fas fa-download"></i></span>
         <span class="sidebar-tab-label">应用管理</span>
@@ -118,7 +118,7 @@
         v-if="canOpenUpdateCenter"
         type="button"
         class="sidebar-tab"
-        @click="$emit('update')"
+        @click="emitSidebarAction('update')"
       >
         <span class="sidebar-tab-icon"><i class="fas fa-sync-alt"></i></span>
         <span class="sidebar-tab-label">软件更新</span>
@@ -128,7 +128,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, onMounted, onUnmounted, ref } from "vue";
 import AccountQuickMenu from "./AccountQuickMenu.vue";
 import ThemeToggle from "./ThemeToggle.vue";
 import amberLogo from "../assets/imgs/spark-store.svg";
@@ -161,6 +161,7 @@ const emit = defineEmits<{
 }>();
 
 const showAccountMenu = ref(false);
+const accountMenuRoot = ref<HTMLElement | null>(null);
 
 const accountLabel = computed(() => {
   return props.currentUser
@@ -176,6 +177,21 @@ const handleAccountClick = () => {
 
   showAccountMenu.value = !showAccountMenu.value;
 };
+
+const handleDocumentPointerDown = (event: MouseEvent) => {
+  if (!showAccountMenu.value) return;
+  const target = event.target;
+  if (target instanceof Node && accountMenuRoot.value?.contains(target)) return;
+  showAccountMenu.value = false;
+};
+
+onMounted(() => {
+  document.addEventListener("mousedown", handleDocumentPointerDown);
+});
+
+onUnmounted(() => {
+  document.removeEventListener("mousedown", handleDocumentPointerDown);
+});
 
 const emitAccountAction = (
   action:
@@ -207,7 +223,14 @@ const canManageApps = computed(() => {
 const canOpenUpdateCenter = canManageApps;
 
 const selectTab = (tab: string) => {
+  showAccountMenu.value = false;
   emit("select-tab", tab);
+};
+
+const emitSidebarAction = (action: "list" | "update") => {
+  showAccountMenu.value = false;
+  if (action === "list") emit("list");
+  else emit("update");
 };
 </script>
 
@@ -263,5 +286,9 @@ const selectTab = (tab: string) => {
 
 .sidebar-tab-label {
   flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 </style>

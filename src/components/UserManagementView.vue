@@ -3,6 +3,12 @@
     class="space-y-6 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900"
   >
     <div
+      v-if="user.coverUrl"
+      data-testid="profile-cover"
+      class="h-32 rounded-2xl bg-cover bg-center sm:h-40"
+      :style="coverStyle"
+    ></div>
+    <div
       class="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between"
     >
       <div class="flex min-w-0 items-center gap-4">
@@ -178,6 +184,10 @@ const emit = defineEmits<{
 const userInitial = computed(() =>
   (props.user.displayName || props.user.username || "?").slice(0, 1),
 );
+
+const coverStyle = computed(() => ({
+  backgroundImage: props.user.coverUrl ? `url("${props.user.coverUrl}")` : "",
+}));
 
 const visibleForumGroups = computed(() =>
   props.user.forumGroups.filter((group) => group !== props.user.forumLevel),

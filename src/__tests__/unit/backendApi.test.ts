@@ -128,4 +128,31 @@ describe("backend API auth exchange", () => {
       }),
     ).rejects.toThrow("星火账号服务异常，请稍后重试。");
   });
+
+  it("maps review submission 401 responses to a re-login prompt", async () => {
+    const error = Object.assign(
+      new Error("Request failed with status code 401"),
+      {
+        isAxiosError: true,
+        response: { status: 401 },
+      },
+    );
+    axiosMocks.post.mockRejectedValue(error);
+
+    await expect(
+      submitReview("apm:amd64-apm:office:wps", {
+        rating: 5,
+        content: "好用",
+        tags: {
+          origin: "apm",
+          category: "office",
+          pkgname: "wps",
+          version: "1.0.0",
+          packageArch: "amd64",
+          clientArch: "amd64",
+          distro: "deepin 25",
+        },
+      }),
+    ).rejects.toThrow("登录状态已失效，请重新登录星火账号。");
+  });
 });

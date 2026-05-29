@@ -19,6 +19,7 @@ describe("authState", () => {
         username: "momen",
         displayName: "Momen",
         avatarUrl: "https://bbs.spark-app.store/avatar.png",
+        coverUrl: "https://bbs.spark-app.store/assets/covers/user.jpg",
         forumLevel: "管理员",
         forumGroups: ["管理员"],
       },
@@ -26,6 +27,7 @@ describe("authState", () => {
 
     expect(authSession.value?.accessToken).toBe("jwt");
     expect(currentUser.value?.displayName).toBe("Momen");
+    expect(currentUser.value?.coverUrl).toContain("/assets/covers/");
     expect(isLoggedIn.value).toBe(true);
     expect(
       JSON.parse(localStorage.getItem("spark-store-auth") || "{}").accessToken,

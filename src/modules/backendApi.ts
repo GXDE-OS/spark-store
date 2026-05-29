@@ -4,6 +4,7 @@ import pino from "pino";
 import { SPARK_BACKEND_BASE_URL } from "@/global/storeConfig";
 import type {
   AppReview,
+  AppReviewReply,
   AuthSession,
   DownloadedAppList,
   DownloadedAppRecord,
@@ -75,7 +76,10 @@ const normalizeBackendMutationError = (error: unknown): Error => {
   }
 
   const status = error.response.status;
-  if (status === 401 || status === 403) {
+  if (status === 401) {
+    return new Error("登录状态已失效，请重新登录星火账号。");
+  }
+  if (status === 403) {
     return new Error("请登录星火账号后重试。");
   }
   if (status === 422) {
@@ -122,12 +126,14 @@ const toUser = (raw: ApiRecord): SparkUser => ({
   username: String(raw.username || ""),
   displayName: String(raw.display_name || raw.username || ""),
   avatarUrl: String(raw.avatar_url || ""),
+  coverUrl: String(raw.cover_url || raw.coverUrl || "") || undefined,
   forumLevel: String(raw.forum_level || "论坛用户"),
   forumGroups: parseForumGroups(raw.forum_groups),
 });
 
 const toReview = (raw: ApiRecord): AppReview => ({
   id: Number(raw.id),
+  userId: raw.user_id === undefined ? undefined : Number(raw.user_id),
   rating: Number(raw.rating),
   content: String(raw.content || ""),
   version: String(raw.version || "unknown"),
@@ -140,6 +146,47 @@ const toReview = (raw: ApiRecord): AppReview => ({
   updatedAt: String(raw.updated_at || ""),
   userDisplayName: String(raw.user_display_name || ""),
   userAvatarUrl: String(raw.user_avatar_url || ""),
+  likeCount: Number(raw.like_count || 0),
+  likedByCurrentUser: Boolean(raw.liked_by_current_user),
+  canDelete: raw.can_delete === undefined ? undefined : Boolean(raw.can_delete),
+  isAuthor: raw.is_author === undefined ? undefined : Boolean(raw.is_author),
+  isDeleted: Boolean(raw.is_deleted),
+  replies: asApiRecordArray(raw.replies).map(toReviewReply),
+});
+
+const toReviewReply = (raw: ApiRecord): AppReviewReply => ({
+  id: Number(raw.id),
+  reviewId: Number(raw.review_id),
+  parentId:
+    raw.parent_id === null || raw.parent_id === undefined
+      ? null
+      : Number(raw.parent_id),
+  content: String(raw.content || ""),
+  createdAt: String(raw.created_at || ""),
+  updatedAt: String(raw.updated_at || ""),
+  userDisplayName: String(raw.user_display_name || ""),
+  userAvatarUrl: String(raw.user_avatar_url || ""),
+  likeCount: Number(raw.like_count || 0),
+  likedByCurrentUser: Boolean(raw.liked_by_current_user),
+  canDelete: Boolean(raw.can_delete),
+  isAuthor: Boolean(raw.is_author),
+  isDeleted: Boolean(raw.is_deleted),
+  replies: asApiRecordArray(raw.replies).map(toReviewReply),
+});
+
+export interface ReviewActionState {
+  likedByCurrentUser: boolean;
+  likeCount: number;
+}
+
+export interface CreateReviewReplyPayload {
+  content: string;
+  parentId?: number;
+}
+
+const toReviewActionState = (raw: ApiRecord): ReviewActionState => ({
+  likedByCurrentUser: Boolean(raw.liked_by_current_user),
+  likeCount: Number(raw.like_count || 0),
 });
 
 const toFavoriteFolder = (raw: ApiRecord): FavoriteFolder => ({
@@ -287,6 +334,86 @@ export const submitReview = async (
     throw normalizeBackendMutationError(error);
   }
   return toReview(asApiRecord(response.data));
+};
+
+export const likeReview = async (
+  appKey: string,
+  reviewId: number,
+): Promise<ReviewActionState> => {
+  let response: AxiosResponse;
+  try {
+    response = await backend.post(
+      `/apps/${encodeURIComponent(appKey)}/reviews/${reviewId}/like`,
+    );
+  } catch (error) {
+    throw normalizeBackendMutationError(error);
+  }
+  return toReviewActionState(asApiRecord(response.data));
+};
+
+export const createReviewReply = async (
+  appKey: string,
+  reviewId: number,
+  payload: CreateReviewReplyPayload,
+): Promise<AppReviewReply> => {
+  let response: AxiosResponse;
+  try {
+    response = await backend.post(
+      `/apps/${encodeURIComponent(appKey)}/reviews/${reviewId}/replies`,
+      {
+        content: payload.content,
+        ...(payload.parentId === undefined
+          ? {}
+          : { parent_id: payload.parentId }),
+      },
+    );
+  } catch (error) {
+    throw normalizeBackendMutationError(error);
+  }
+  return toReviewReply(asApiRecord(response.data));
+};
+
+export const deleteReview = async (
+  appKey: string,
+  reviewId: number,
+): Promise<void> => {
+  try {
+    await backend.delete(
+      `/apps/${encodeURIComponent(appKey)}/reviews/${reviewId}`,
+    );
+  } catch (error) {
+    throw normalizeBackendMutationError(error);
+  }
+};
+
+export const likeReviewReply = async (
+  appKey: string,
+  reviewId: number,
+  replyId: number,
+): Promise<ReviewActionState> => {
+  let response: AxiosResponse;
+  try {
+    response = await backend.post(
+      `/apps/${encodeURIComponent(appKey)}/reviews/${reviewId}/replies/${replyId}/like`,
+    );
+  } catch (error) {
+    throw normalizeBackendMutationError(error);
+  }
+  return toReviewActionState(asApiRecord(response.data));
+};
+
+export const deleteReviewReply = async (
+  appKey: string,
+  reviewId: number,
+  replyId: number,
+): Promise<void> => {
+  try {
+    await backend.delete(
+      `/apps/${encodeURIComponent(appKey)}/reviews/${reviewId}/replies/${replyId}`,
+    );
+  } catch (error) {
+    throw normalizeBackendMutationError(error);
+  }
 };
 
 export const listFavoriteFolders = async (): Promise<FavoriteFolder[]> => {

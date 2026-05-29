@@ -8,7 +8,7 @@
       @click="emit('open-user-management')"
     >
       <i class="fas fa-user-cog"></i>
-      <span>用户管理</span>
+      <span class="min-w-0 truncate">用户管理</span>
     </button>
     <button
       type="button"
@@ -16,15 +16,15 @@
       @click="emit('open-favorites')"
     >
       <i class="fas fa-heart"></i>
-      <span>我的收藏</span>
+      <span class="min-w-0 truncate">我的收藏</span>
     </button>
     <button type="button" class="quick-menu-item" @click="emit('open-forum')">
       <i class="fas fa-comments"></i>
-      <span>论坛首页</span>
+      <span class="min-w-0 truncate">论坛首页</span>
     </button>
     <button type="button" class="quick-menu-item" @click="emit('edit-profile')">
       <i class="fas fa-id-card"></i>
-      <span>修改论坛资料</span>
+      <span class="min-w-0 truncate">修改论坛资料</span>
     </button>
     <button
       type="button"
@@ -32,7 +32,7 @@
       @click="emit('logout')"
     >
       <i class="fas fa-sign-out-alt"></i>
-      <span>退出登录</span>
+      <span class="min-w-0 truncate">退出登录</span>
     </button>
   </div>
 </template>
@@ -53,6 +53,7 @@ const emit = defineEmits<{
   width: 100%;
   align-items: center;
   gap: 0.75rem;
+  min-width: 0;
   border-radius: 0.75rem;
   padding: 0.625rem 0.75rem;
   text-align: left;
@@ -60,6 +61,10 @@ const emit = defineEmits<{
   font-weight: 500;
   color: #475569;
   transition: all 0.15s ease;
+}
+
+.quick-menu-item i {
+  flex-shrink: 0;
 }
 
 .quick-menu-item:hover {

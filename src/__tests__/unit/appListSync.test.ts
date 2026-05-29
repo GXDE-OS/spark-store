@@ -5,6 +5,7 @@ import {
   cloudItemKey,
   cloudPackageKey,
   mergeInstalledApps,
+  resolveCloudInstallCandidate,
 } from "@/modules/appListSync";
 import type { App } from "@/global/typedefinition";
 
@@ -94,5 +95,67 @@ describe("appListSync", () => {
     expect(current).toEqual([
       expect.objectContaining({ origin: "apm", pkgname: "apm-installed" }),
     ]);
+  });
+
+  it("resolves cloud restore items by exact source before package fallback", () => {
+    const sparkCloudItem = {
+      pkgname: "shared-app",
+      origin: "spark" as const,
+      category: "office",
+      version: "1.0.0",
+      packageArch: "amd64",
+      appName: "Shared App",
+      iconUrl: "",
+    };
+    const apmCandidate = createApp({
+      origin: "apm",
+      pkgname: "shared-app",
+      category: "office",
+    });
+    const sparkCandidate = createApp({
+      origin: "spark",
+      pkgname: "shared-app",
+      category: "office",
+    });
+
+    expect(
+      resolveCloudInstallCandidate(sparkCloudItem, [
+        apmCandidate,
+        sparkCandidate,
+      ]),
+    ).toBe(sparkCandidate);
+    expect(resolveCloudInstallCandidate(sparkCloudItem, [apmCandidate])).toBe(
+      apmCandidate,
+    );
+    expect(resolveCloudInstallCandidate(sparkCloudItem, [])).toBeNull();
+  });
+
+  it("prefers same-source package fallback when the category changed", () => {
+    const sparkCloudItem = {
+      pkgname: "shared-app",
+      origin: "spark" as const,
+      category: "legacy-office",
+      version: "1.0.0",
+      packageArch: "amd64",
+      appName: "Shared App",
+      iconUrl: "",
+    };
+    const apmCandidate = createApp({
+      origin: "apm",
+      pkgname: "shared-app",
+      category: "office",
+    });
+    const sparkCandidate = createApp({
+      origin: "spark",
+      pkgname: "shared-app",
+      category: "productivity",
+    });
+
+    expect(
+      resolveCloudInstallCandidate(sparkCloudItem, [
+        apmCandidate,
+        sparkCandidate,
+      ]),
+    ).toBe(sparkCandidate);
   });
 });

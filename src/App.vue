@@ -1,116 +1,109 @@
 <template>
   <div
-    class="flex min-h-screen flex-col bg-slate-50 text-slate-900 transition-colors duration-300 dark:bg-slate-950 dark:text-slate-100 lg:flex-row"
+    class="flex min-h-screen flex-col bg-slate-50 text-slate-900 transition-colors duration-300 dark:bg-slate-950 dark:text-slate-100"
   >
-    <!-- 移动端侧边栏遮罩 -->
-    <div
-      v-if="isSidebarOpen"
-      class="fixed inset-0 z-40 bg-black/20 backdrop-blur-sm lg:hidden"
-      @click="isSidebarOpen = false"
-    ></div>
+    <WindowTitleBar />
 
-    <aside
-      class="fixed inset-y-0 left-0 z-50 w-64 shrink-0 transform border-r border-slate-200/70 bg-white/95 px-4 py-6 backdrop-blur transition-transform duration-300 ease-in-out dark:border-slate-800/70 dark:bg-slate-900 lg:sticky lg:top-0 lg:flex lg:h-screen lg:translate-x-0 lg:flex-col lg:border-b-0"
-      :class="
-        isSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
-      "
-    >
-      <AppSidebar
-        :active-tab="activeTab"
-        :category-counts="categoryCounts"
-        :theme-mode="themeMode"
-        :spark-available="sparkAvailable"
-        :apm-available="apmAvailable"
-        :store-filter="storeFilter"
-        :sidebar-entries="sidebarEntries"
-        :entry-counts="entryCounts"
-        :current-user="currentUser"
-        @toggle-theme="toggleTheme"
-        @select-tab="selectTab"
-        @close="isSidebarOpen = false"
-        @list="handleList"
-        @update="handleUpdate"
-        @request-login="showLoginModal = true"
-        @open-user-management="openUserManagement"
-        @open-favorites="openFavoriteManagement"
-        @open-forum="openExternalUrl(FLARUM_BASE_URL)"
-        @edit-profile="openExternalUrl(FLARUM_SETTINGS_URL)"
-        @logout="handleLogout"
-      />
-    </aside>
-
-    <main class="flex-1">
+    <div class="flex flex-1 flex-col lg:flex-row">
+      <!-- 移动端侧边栏遮罩 -->
       <div
-        class="sticky top-0 z-30 border-b border-slate-200/70 bg-slate-50/95 px-4 py-4 backdrop-blur lg:px-10 dark:border-slate-800/70 dark:bg-slate-950/95"
+        v-if="isSidebarOpen"
+        class="fixed inset-0 z-40 bg-black/20 backdrop-blur-sm lg:hidden"
+        @click="isSidebarOpen = false"
+      ></div>
+
+      <aside
+        class="fixed top-10 bottom-0 left-0 z-50 w-64 shrink-0 transform border-r border-slate-200/70 bg-white/95 px-4 py-6 backdrop-blur transition-transform duration-300 ease-in-out dark:border-slate-800/70 dark:bg-slate-900 lg:sticky lg:top-10 lg:flex lg:h-[calc(100vh-2.5rem)] lg:translate-x-0 lg:flex-col lg:border-b-0"
+        :class="
+          isSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
+        "
       >
-        <AppHeader
-          :search-query="searchQuery"
+        <AppSidebar
           :active-tab="activeTab"
-          :apps-count="filteredApps.length"
-          @update-search="handleSearchInput"
-          @search-focus="handleSearchFocus"
-          @open-install-settings="handleOpenInstallSettings"
-          @open-about="openAboutModal"
-          @toggle-sidebar="isSidebarOpen = !isSidebarOpen"
-        />
-      </div>
-      <CategoryBar
-        v-if="activeTab !== 'home' && Object.keys(categories).length > 0"
-        :categories="categories"
-        :selected-category="selectedCategory"
-        :category-counts="categoryCounts"
-        @select-category="selectSubCategory"
-      />
-      <div class="px-4 py-6 lg:px-10">
-        <UserManagementView
-          v-if="currentView === 'account' && currentUser"
-          :user="currentUser"
-          :downloaded-apps="downloadedApps"
-          :sync-enabled="installedSyncEnabled ?? false"
-          :loading="downloadedLoading"
-          :error="downloadedError"
-          :syncing="syncLoading"
-          :sync-message="syncStatusMessage"
+          :category-counts="categoryCounts"
+          :theme-mode="themeMode"
+          :spark-available="sparkAvailable"
+          :apm-available="apmAvailable"
+          :store-filter="storeFilter"
+          :sidebar-entries="sidebarEntries"
+          :entry-counts="entryCounts"
+          :current-user="currentUser"
+          @toggle-theme="toggleTheme"
+          @select-tab="selectTab"
+          @close="isSidebarOpen = false"
+          @list="handleList"
+          @update="handleUpdate"
+          @request-login="showLoginModal = true"
+          @open-user-management="openUserManagement"
+          @open-favorites="openFavoriteManagement"
           @open-forum="openExternalUrl(FLARUM_BASE_URL)"
           @edit-profile="openExternalUrl(FLARUM_SETTINGS_URL)"
-          @toggle-sync="setInstalledSyncEnabled"
-          @sync-now="syncInstalledAppsNow"
-          @refresh-downloads="loadDownloadedHistory"
+          @logout="handleLogout"
         />
-        <FavoriteFolderManager
-          v-else-if="currentView === 'favorites'"
-          :folders="favoriteFolders"
-          :active-folder-id="activeFavoriteFolderId"
-          :items="resolvedFavoriteItems"
-          :loading="favoriteLoading"
-          :error="favoriteError"
-          @select-folder="selectFavoriteFolder"
-          @create-folder="createFavoriteFolderFromPrompt"
-          @remove-selected="removeSelectedFavorites"
-          @install-selected="installResolvedFavorites"
-          @open-detail="openDetail"
+      </aside>
+
+      <main class="flex-1">
+        <div
+          class="sticky top-10 z-30 border-b border-slate-200/70 bg-slate-50/95 px-4 py-4 backdrop-blur lg:px-10 dark:border-slate-800/70 dark:bg-slate-950/95"
+        >
+          <AppHeader
+            :search-query="searchQuery"
+            :active-tab="activeTab"
+            :apps-count="filteredApps.length"
+            @update-search="handleSearchInput"
+            @search-focus="handleSearchFocus"
+            @open-install-settings="handleOpenInstallSettings"
+            @open-about="openAboutModal"
+            @toggle-sidebar="isSidebarOpen = !isSidebarOpen"
+          />
+        </div>
+        <CategoryBar
+          v-if="
+            currentView === 'default' &&
+            activeTab !== 'home' &&
+            Object.keys(categories).length > 0
+          "
+          :categories="categories"
+          :selected-category="selectedCategory"
+          :category-counts="categoryCounts"
+          @select-category="selectSubCategory"
         />
-        <template v-else-if="activeTab === 'home'">
-          <HomeView
-            :links="homeLinks"
-            :lists="homeLists"
-            :loading="homeLoading"
-            :error="homeError"
-            :store-filter="storeFilter"
+        <div class="px-4 py-6 lg:px-10">
+          <FavoriteFolderManager
+            v-if="currentView === 'favorites'"
+            :folders="favoriteFolders"
+            :active-folder-id="activeFavoriteFolderId"
+            :items="resolvedFavoriteItems"
+            :loading="favoriteLoading"
+            :error="favoriteError"
+            @select-folder="selectFavoriteFolder"
+            @create-folder="createFavoriteFolderFromPrompt"
+            @remove-selected="removeSelectedFavorites"
+            @install-selected="installResolvedFavorites"
             @open-detail="openDetail"
           />
-        </template>
-        <template v-else>
-          <AppGrid
-            :apps="filteredApps"
-            :loading="loading"
-            :scroll-key="activeTab + '-' + selectedCategory"
-            :store-filter="storeFilter"
-            @open-detail="openDetail"
-          />
-        </template>
-      </div>
-    </main>
+          <template v-else-if="activeTab === 'home'">
+            <HomeView
+              :links="homeLinks"
+              :lists="homeLists"
+              :loading="homeLoading"
+              :error="homeError"
+              :store-filter="storeFilter"
+              @open-detail="openDetail"
+            />
+          </template>
+          <template v-else>
+            <AppGrid
+              :apps="filteredApps"
+              :loading="loading"
+              :scroll-key="activeTab + '-' + selectedCategory"
+              :store-filter="storeFilter"
+              @open-detail="openDetail"
+            />
+          </template>
+        </div>
+      </main>
+    </div>
 
     <AppDetailModal
       data-app-modal="detail"
@@ -122,6 +115,9 @@
       :logged-in="isLoggedIn"
       :review-app-key="currentReviewAppKey"
       :review-tags="currentReviewTags"
+      :favorited="currentFavoriteMetadata.favorited"
+      :favorite-folder-name="currentFavoriteMetadata.folderName"
+      @select-origin="selectDetailOrigin"
       @close="closeDetail"
       @install="onDetailInstall"
       @remove="onDetailRemove"
@@ -130,6 +126,7 @@
       @open-preview="openScreenPreview"
       @open-app="openDownloadedApp"
       @check-install="checkAppInstalled"
+      @show-user="openReviewUserProfile"
     />
 
     <ScreenPreview
@@ -173,6 +170,7 @@
       :apm-available="apmAvailable"
       :logged-in="isLoggedIn"
       :syncing="syncLoading"
+      :sync-message="syncStatusMessage"
       @close="closeInstalledModal"
       @refresh="refreshInstalledApps"
       @open-app="openDownloadedApp($event.pkgname, $event.origin)"
@@ -243,11 +241,37 @@
       @register="openExternalUrl(FLARUM_REGISTER_URL)"
     />
 
+    <UserManagementModal
+      v-if="currentUser"
+      :show="showUserManagementModal"
+      :user="currentUser"
+      :downloaded-apps="downloadedApps"
+      :sync-enabled="installedSyncEnabled ?? false"
+      :loading="downloadedLoading"
+      :error="downloadedError"
+      :syncing="syncLoading"
+      :sync-message="syncStatusMessage"
+      @close="showUserManagementModal = false"
+      @open-forum="openExternalUrl(FLARUM_BASE_URL)"
+      @edit-profile="openExternalUrl(FLARUM_SETTINGS_URL)"
+      @toggle-sync="setInstalledSyncEnabled"
+      @sync-now="syncInstalledAppsNow"
+      @refresh-downloads="loadDownloadedHistory"
+    />
+
+    <ReviewUserProfileModal
+      :show="showReviewUserProfileModal"
+      :profile="selectedReviewUserProfile"
+      @close="showReviewUserProfileModal = false"
+      @open-forum-profile="openExternalUrl"
+    />
+
     <FavoriteFolderSelector
       :show="showFavoriteSelector"
       :folders="favoriteFolders"
+      :selected-folder-ids="currentFavoriteFolderIds"
       @close="showFavoriteSelector = false"
-      @select-folder="addCurrentFavoriteToFolder"
+      @save-selection="saveCurrentFavoriteFolders"
       @create-folder="createFavoriteFolderFromSelector"
     />
   </div>
@@ -277,7 +301,9 @@ import LoginModal from "./components/LoginModal.vue";
 import LoginPromptModal from "./components/LoginPromptModal.vue";
 import FavoriteFolderSelector from "./components/FavoriteFolderSelector.vue";
 import FavoriteFolderManager from "./components/FavoriteFolderManager.vue";
-import UserManagementView from "./components/UserManagementView.vue";
+import UserManagementModal from "./components/UserManagementModal.vue";
+import ReviewUserProfileModal from "./components/ReviewUserProfileModal.vue";
+import WindowTitleBar from "./components/WindowTitleBar.vue";
 import {
   APM_STORE_BASE_URL,
   FLARUM_BASE_URL,
@@ -310,6 +336,7 @@ import {
   addFavoriteItem,
   bulkDeleteFavoriteItems,
   createFavoriteFolder,
+  deleteFavoriteItem,
   exchangeFlarumToken,
   fetchSyncedAppList,
   listDownloadedApps,
@@ -345,6 +372,7 @@ import {
   cloudItemKey,
   cloudPackageKey,
   mergeInstalledApps,
+  resolveCloudInstallCandidate,
 } from "./modules/appListSync";
 import type {
   App,
@@ -366,6 +394,8 @@ import type {
   SystemInfo,
   DownloadedAppRecord,
   SyncedAppListItem,
+  AppReview,
+  ReviewUserProfile,
 } from "./global/typedefinition";
 import type { Ref } from "vue";
 import type { IpcRendererEvent } from "electron";
@@ -407,7 +437,7 @@ const isDarkTheme = computed(() => {
 const categories: Ref<Record<string, CategoryInfo>> = ref({});
 const apps: Ref<App[]> = ref([]);
 const activeTab = ref("home");
-type MainView = "default" | "account" | "favorites";
+type MainView = "default" | "favorites";
 const currentView = ref<MainView>("default");
 const selectedCategory = ref("all");
 const searchQuery = ref("");
@@ -434,14 +464,21 @@ const loginLoading = ref(false);
 const loginError = ref("");
 const showLoginPrompt = ref(false);
 const loginPromptMessage = ref("请登录星火账号后继续操作。");
+const showUserManagementModal = ref(false);
+const selectedReviewUserProfile = ref<ReviewUserProfile | null>(null);
+const showReviewUserProfileModal = ref(false);
 const sparkAvailable = ref(false);
 const apmAvailable = ref(false);
 const sidebarEntries: Ref<SidebarEntry[]> = ref([]);
 const favoriteFolders = ref<FavoriteFolder[]>([]);
 const activeFavoriteFolderId = ref<number | null>(null);
 const favoriteItems = ref<FavoriteItem[]>([]);
+const favoriteItemsByFolder = ref<Record<number, FavoriteItem[]>>({});
 const showFavoriteSelector = ref(false);
 const favoriteTargetApp = ref<App | null>(null);
+const favoriteSelectorDraftFolderIds = ref<Array<number | "default"> | null>(
+  null,
+);
 const favoriteLoading = ref(false);
 const favoriteError = ref("");
 const favoriteRequestGeneration = ref(0);
@@ -566,6 +603,47 @@ const currentReviewTags = computed<ReviewTags | null>(() => {
     clientArch: clientArch.value,
     distro: systemInfo.value.distro,
   });
+});
+
+const currentFavoriteMetadata = computed(
+  (): {
+    favorited: boolean;
+    folderName: string;
+  } => {
+    const app = currentDisplayApp.value;
+    if (!app) return { favorited: false, folderName: "" };
+
+    const folder = favoriteFolders.value.find((favoriteFolder) => {
+      const items = favoriteItemsByFolder.value[favoriteFolder.id] ?? [];
+      return items.some(
+        (favorite) =>
+          favorite.pkgname === app.pkgname &&
+          favorite.category === app.category,
+      );
+    });
+    if (!folder) return { favorited: false, folderName: "" };
+
+    return { favorited: true, folderName: folder.name.trim() };
+  },
+);
+
+const currentFavoriteFolderIds = computed((): Array<number | "default"> => {
+  if (favoriteSelectorDraftFolderIds.value) {
+    return favoriteSelectorDraftFolderIds.value;
+  }
+
+  const app = favoriteTargetApp.value ?? currentDisplayApp.value;
+  if (!app) return [];
+
+  return favoriteFolders.value
+    .filter((folder) =>
+      (favoriteItemsByFolder.value[folder.id] ?? []).some(
+        (favorite) =>
+          favorite.pkgname === app.pkgname &&
+          favorite.category === app.category,
+      ),
+    )
+    .map((folder) => folder.id);
 });
 
 const resolvedFavoriteItems = computed<ResolvedFavoriteItem[]>(() =>
@@ -851,6 +929,13 @@ const openDetail = async (app: App | Record<string, unknown>) => {
   currentAppSparkInstalled.value = false;
   currentAppApmInstalled.value = false;
   checkAppInstalled(finalApp);
+  if (
+    isLoggedIn.value &&
+    favoriteFolders.value.length === 0 &&
+    !favoriteLoading.value
+  ) {
+    void loadFavoriteMetadataForDetail();
+  }
 
   nextTick(() => {
     const modal = document.querySelector(
@@ -1368,6 +1453,12 @@ const onDetailFavorite = async (app: App) => {
   await openFavoriteSelector(app);
 };
 
+const selectDetailOrigin = (origin: "spark" | "apm") => {
+  if (currentApp.value?.isMerged) {
+    currentApp.value = { ...currentApp.value, viewingOrigin: origin };
+  }
+};
+
 const handleDetailRequestLogin = (message: string) => {
   requireLogin(message);
 };
@@ -1432,6 +1523,25 @@ const openExternalUrl = (url: string) => {
   window.open(url, "_blank", "noopener,noreferrer");
 };
 
+const openReviewUserProfile = (review: AppReview): void => {
+  const current = currentUser.value;
+  const isCurrentUser =
+    review.isAuthor === true ||
+    (review.userId !== undefined &&
+      current?.id !== undefined &&
+      review.userId === current.id);
+
+  selectedReviewUserProfile.value = {
+    displayName: review.userDisplayName || "星火用户",
+    username: isCurrentUser ? current?.username : undefined,
+    avatarUrl:
+      review.userAvatarUrl || (isCurrentUser ? current?.avatarUrl : undefined),
+    coverUrl: isCurrentUser ? current?.coverUrl : undefined,
+    forumGroups: isCurrentUser ? current?.forumGroups : undefined,
+  };
+  showReviewUserProfileModal.value = true;
+};
+
 const requireLogin = (message: string): boolean => {
   if (isLoggedIn.value) return true;
   loginPromptMessage.value = message;
@@ -1449,8 +1559,10 @@ const clearFavoriteState = () => {
   favoriteFolders.value = [];
   activeFavoriteFolderId.value = null;
   favoriteItems.value = [];
+  favoriteItemsByFolder.value = {};
   showFavoriteSelector.value = false;
   favoriteTargetApp.value = null;
+  favoriteSelectorDraftFolderIds.value = null;
   favoriteLoading.value = false;
   favoriteError.value = "";
 };
@@ -1512,7 +1624,8 @@ const handleLogout = () => {
   showLoginModal.value = false;
   showLoginPrompt.value = false;
   isSidebarOpen.value = false;
-  if (currentView.value === "favorites" || currentView.value === "account") {
+  showUserManagementModal.value = false;
+  if (currentView.value === "favorites") {
     currentView.value = "default";
     activeTab.value = "home";
     selectedCategory.value = "all";
@@ -1691,13 +1804,7 @@ const openRestoreFromAccount = async (): Promise<void> => {
 
 const installCloudItems = (items: SyncedAppListItem[]): void => {
   for (const item of items) {
-    const candidates = apps.value.filter(
-      (candidate) =>
-        candidate.pkgname === item.pkgname && candidate.origin === item.origin,
-    );
-    const app =
-      candidates.find((candidate) => candidate.category === item.category) ??
-      candidates[0];
+    const app = resolveCloudInstallCandidate(item, apps.value);
     if (!app) continue;
     void onDetailInstall(app);
   }
@@ -1727,8 +1834,7 @@ const maybePromptInstalledSync = async (): Promise<void> => {
 
 const openUserManagement = async () => {
   if (!requireLogin("请登录后查看和管理账号信息。")) return;
-  currentView.value = "account";
-  activeTab.value = "account";
+  showUserManagementModal.value = true;
   isSidebarOpen.value = false;
   showLoginPrompt.value = false;
   await loadDownloadedHistory();
@@ -1762,7 +1868,55 @@ const loadActiveFavoriteItems = async (
   if (!isCurrentFavoriteRequest(generation)) return false;
 
   favoriteItems.value = items;
+  favoriteItemsByFolder.value = {
+    ...favoriteItemsByFolder.value,
+    [activeFavoriteFolderId.value]: items,
+  };
   return true;
+};
+
+const loadAllFavoriteItems = async (
+  generation = favoriteRequestGeneration.value,
+): Promise<boolean> => {
+  const folderIds = favoriteFolders.value.map((folder) => folder.id);
+  const entries = await Promise.all(
+    folderIds.map(async (folderId) => ({
+      folderId,
+      items: await listFavoriteItems(folderId),
+    })),
+  );
+  if (!isCurrentFavoriteRequest(generation)) return false;
+
+  favoriteItemsByFolder.value = Object.fromEntries(
+    entries.map(({ folderId, items }) => [folderId, items]),
+  );
+  favoriteItems.value = activeFavoriteFolderId.value
+    ? (favoriteItemsByFolder.value[activeFavoriteFolderId.value] ?? [])
+    : [];
+  return true;
+};
+
+const loadFavoriteMetadataForDetail = async (): Promise<void> => {
+  const generation = favoriteRequestGeneration.value;
+  try {
+    const folders = await listFavoriteFolders();
+    if (!isCurrentFavoriteRequest(generation)) return;
+    const entries = await Promise.all(
+      folders.map(async (folder) => ({
+        folderId: folder.id,
+        items: await listFavoriteItems(folder.id),
+      })),
+    );
+    if (!isCurrentFavoriteRequest(generation)) return;
+
+    favoriteFolders.value = folders;
+    favoriteItemsByFolder.value = Object.fromEntries(
+      entries.map(({ folderId, items }) => [folderId, items]),
+    );
+  } catch (error: unknown) {
+    if (!isCurrentFavoriteRequest(generation)) return;
+    favoriteError.value = (error as Error)?.message || "读取收藏夹失败";
+  }
 };
 
 const refreshFavorites = async (): Promise<void> => {
@@ -1775,7 +1929,7 @@ const refreshFavorites = async (): Promise<void> => {
       loadFavoriteFolders(generation),
     ]);
     if (!isCurrentFavoriteRequest(generation)) return;
-    await loadActiveFavoriteItems(generation);
+    await loadAllFavoriteItems(generation);
   } catch (error: unknown) {
     if (!isCurrentFavoriteRequest(generation)) return;
     favoriteError.value = (error as Error)?.message || "读取收藏夹失败";
@@ -1786,12 +1940,15 @@ const refreshFavorites = async (): Promise<void> => {
 
 const openFavoriteSelector = async (app: App) => {
   if (!requireLogin("收藏应用需要登录星火账号。")) return;
-  const generation = favoriteRequestGeneration.value;
+  const generation = nextFavoriteRequestGeneration();
   favoriteTargetApp.value = app;
+  favoriteSelectorDraftFolderIds.value = null;
   favoriteError.value = "";
   try {
     const foldersLoaded = await loadFavoriteFolders(generation);
     if (!foldersLoaded || !isCurrentFavoriteRequest(generation)) return;
+    const itemsLoaded = await loadAllFavoriteItems(generation);
+    if (!itemsLoaded || !isCurrentFavoriteRequest(generation)) return;
     showFavoriteSelector.value = true;
   } catch (error: unknown) {
     if (!isCurrentFavoriteRequest(generation)) return;
@@ -1799,33 +1956,126 @@ const openFavoriteSelector = async (app: App) => {
   }
 };
 
-const addCurrentFavoriteToFolder = async (folderId: number | "default") => {
+const toFavoritePayload = (
+  app: App,
+): Omit<FavoriteItem, "id" | "createdAt"> => ({
+  appKey: buildFavoriteAppKey(app),
+  pkgname: app.pkgname,
+  name: app.name,
+  category: app.category,
+  iconUrl: app.icons,
+});
+
+const saveCurrentFavoriteFolders = async (
+  folderIds: Array<number | "default">,
+) => {
   const generation = favoriteRequestGeneration.value;
   const app = favoriteTargetApp.value;
   if (!app) return;
   try {
-    await addFavoriteItem(folderId, {
-      appKey: buildFavoriteAppKey(app),
-      pkgname: app.pkgname,
-      name: app.name,
-      category: app.category,
-      iconUrl: app.icons,
-    });
+    const numericFolderIds = folderIds.filter(
+      (folderId): folderId is number => typeof folderId === "number",
+    );
+    const includesFallbackDefault = folderIds.includes("default");
+    const nextFolderIds = new Set(numericFolderIds);
+    const existingByFolder = favoriteFolders.value
+      .map((folder) => ({
+        folderId: folder.id,
+        item: (favoriteItemsByFolder.value[folder.id] ?? []).find(
+          (favorite) =>
+            favorite.pkgname === app.pkgname &&
+            favorite.category === app.category,
+        ),
+      }))
+      .filter(
+        (entry): entry is { folderId: number; item: FavoriteItem } =>
+          entry.item !== undefined,
+      );
+    const existingFolderIds = new Set(
+      existingByFolder.map((entry) => entry.folderId),
+    );
+    const payload = toFavoritePayload(app);
+    const addedItemPromises = numericFolderIds
+      .filter((folderId) => !existingFolderIds.has(folderId))
+      .map(async (folderId) => ({
+        folderId,
+        item: await addFavoriteItem(folderId, payload),
+      }));
+    const deletedEntries = existingByFolder.filter(
+      ({ folderId }) => !nextFolderIds.has(folderId),
+    );
+
+    const [addedEntries] = await Promise.all([
+      Promise.all(addedItemPromises),
+      ...(includesFallbackDefault ? [addFavoriteItem("default", payload)] : []),
+      ...deletedEntries.map(({ folderId, item }) =>
+        deleteFavoriteItem(folderId, item.id),
+      ),
+    ]);
     if (!isCurrentFavoriteRequest(generation)) return;
+    const nextItemsByFolder = { ...favoriteItemsByFolder.value };
+    deletedEntries.forEach(({ folderId, item }) => {
+      nextItemsByFolder[folderId] = (nextItemsByFolder[folderId] ?? []).filter(
+        (favorite) => favorite.id !== item.id,
+      );
+    });
+    addedEntries.forEach(({ folderId, item }) => {
+      nextItemsByFolder[folderId] = [
+        ...(nextItemsByFolder[folderId] ?? []).filter(
+          (favorite) =>
+            favorite.pkgname !== app.pkgname ||
+            favorite.category !== app.category,
+        ),
+        item,
+      ];
+    });
+    favoriteItemsByFolder.value = nextItemsByFolder;
+    if (activeFavoriteFolderId.value) {
+      favoriteItems.value =
+        nextItemsByFolder[activeFavoriteFolderId.value] ?? [];
+    }
     showFavoriteSelector.value = false;
     favoriteTargetApp.value = null;
-    await refreshFavorites();
+    favoriteSelectorDraftFolderIds.value = null;
+    if (includesFallbackDefault) await refreshFavorites();
   } catch (error: unknown) {
     if (!isCurrentFavoriteRequest(generation)) return;
-    favoriteError.value = (error as Error)?.message || "添加收藏失败";
+    favoriteError.value = (error as Error)?.message || "更新收藏失败";
   }
 };
 
-const createFavoriteFolderFromSelector = async () => {
-  await createFavoriteFolderFromPrompt();
+const createFavoriteFolderFromSelector = async (
+  draftFolderIds: Array<number | "default"> = currentFavoriteFolderIds.value,
+): Promise<void> => {
+  const generation = favoriteRequestGeneration.value;
+  const name = window.prompt("请输入收藏夹名称");
+  const folderName = name?.trim();
+  if (!folderName) return;
   const app = favoriteTargetApp.value;
   if (!app) return;
-  showFavoriteSelector.value = true;
+  favoriteLoading.value = true;
+  favoriteError.value = "";
+  try {
+    const folder = await createFavoriteFolder(folderName);
+    if (!isCurrentFavoriteRequest(generation)) return;
+    favoriteFolders.value = [
+      ...favoriteFolders.value.filter((item) => item.id !== folder.id),
+      folder,
+    ];
+    favoriteItemsByFolder.value = {
+      ...favoriteItemsByFolder.value,
+      [folder.id]: favoriteItemsByFolder.value[folder.id] ?? [],
+    };
+    favoriteSelectorDraftFolderIds.value = [
+      ...new Set([...draftFolderIds, folder.id]),
+    ];
+    showFavoriteSelector.value = true;
+  } catch (error: unknown) {
+    if (!isCurrentFavoriteRequest(generation)) return;
+    favoriteError.value = (error as Error)?.message || "创建收藏夹失败";
+  } finally {
+    if (isCurrentFavoriteRequest(generation)) favoriteLoading.value = false;
+  }
 };
 
 const openFavoriteManagement = async () => {
@@ -1862,8 +2112,16 @@ const createFavoriteFolderFromPrompt = async () => {
   try {
     const folder = await createFavoriteFolder(folderName);
     if (!isCurrentFavoriteRequest(generation)) return;
+    favoriteFolders.value = [
+      ...favoriteFolders.value.filter((item) => item.id !== folder.id),
+      folder,
+    ];
+    favoriteItemsByFolder.value = {
+      ...favoriteItemsByFolder.value,
+      [folder.id]: favoriteItemsByFolder.value[folder.id] ?? [],
+    };
+    favoriteItems.value = [];
     activeFavoriteFolderId.value = folder.id;
-    await refreshFavorites();
   } catch (error: unknown) {
     if (!isCurrentFavoriteRequest(generation)) return;
     favoriteError.value = (error as Error)?.message || "创建收藏夹失败";
@@ -1880,6 +2138,12 @@ const removeSelectedFavorites = async (ids: number[]) => {
   try {
     await bulkDeleteFavoriteItems(activeFavoriteFolderId.value, ids);
     if (!isCurrentFavoriteRequest(generation)) return;
+    favoriteItemsByFolder.value = {
+      ...favoriteItemsByFolder.value,
+      [activeFavoriteFolderId.value]: (
+        favoriteItemsByFolder.value[activeFavoriteFolderId.value] ?? []
+      ).filter((favorite) => !ids.includes(favorite.id)),
+    };
     await refreshFavorites();
   } catch (error: unknown) {
     if (!isCurrentFavoriteRequest(generation)) return;

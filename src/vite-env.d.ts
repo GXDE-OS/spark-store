@@ -20,6 +20,7 @@ declare global {
     apm_store: {
       arch: string;
     };
+    windowControls: WindowControlBridge;
     updateCenter: UpdateCenterBridge;
   }
 }
@@ -29,6 +30,12 @@ interface IpcRendererFacade {
   off: import("electron").IpcRenderer["off"];
   send: import("electron").IpcRenderer["send"];
   invoke: import("electron").IpcRenderer["invoke"];
+}
+
+interface WindowControlBridge {
+  minimize: () => void;
+  toggleMaximize: () => void;
+  close: () => void;
 }
 
 // IPC channel type definitions

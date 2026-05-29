@@ -39,6 +39,7 @@ describe("InstalledAppsModal", () => {
         apmAvailable: true,
         loggedIn: false,
         syncing: false,
+        syncMessage: "",
       },
     });
 
@@ -61,6 +62,7 @@ describe("InstalledAppsModal", () => {
         apmAvailable: true,
         loggedIn: false,
         syncing: false,
+        syncMessage: "",
       },
     });
 
@@ -81,6 +83,7 @@ describe("InstalledAppsModal", () => {
         apmAvailable: true,
         loggedIn: false,
         syncing: false,
+        syncMessage: "",
       },
     });
 
@@ -105,6 +108,7 @@ describe("InstalledAppsModal", () => {
         apmAvailable: true,
         loggedIn: false,
         syncing: false,
+        syncMessage: "",
       },
     });
 
@@ -129,6 +133,7 @@ describe("InstalledAppsModal", () => {
         apmAvailable: true,
         loggedIn: false,
         syncing: false,
+        syncMessage: "",
       },
     });
 
@@ -148,6 +153,7 @@ describe("InstalledAppsModal", () => {
         apmAvailable: true,
         loggedIn: false,
         syncing: false,
+        syncMessage: "",
       },
     });
 
@@ -167,6 +173,7 @@ describe("InstalledAppsModal", () => {
         apmAvailable: true,
         loggedIn: false,
         syncing: false,
+        syncMessage: "",
       },
     });
 
@@ -189,6 +196,7 @@ describe("InstalledAppsModal", () => {
         apmAvailable: true,
         loggedIn: true,
         syncing: false,
+        syncMessage: "",
       },
     });
 
@@ -212,9 +220,30 @@ describe("InstalledAppsModal", () => {
         apmAvailable: true,
         loggedIn: true,
         syncing: true,
+        syncMessage: "",
       },
     });
 
     expect(screen.getByRole("button", { name: "同步中" })).toBeDisabled();
+  });
+
+  it("shows account sync feedback in the installed apps modal", () => {
+    render(InstalledAppsModal, {
+      props: {
+        show: true,
+        apps: [],
+        loading: false,
+        error: "",
+        activeOrigin: "spark",
+        storeFilter: "both",
+        sparkAvailable: true,
+        apmAvailable: true,
+        loggedIn: true,
+        syncing: false,
+        syncMessage: "同步完成",
+      },
+    });
+
+    expect(screen.getByText("同步完成")).toBeTruthy();
   });
 });

@@ -37,6 +37,7 @@ describe("account shared types", () => {
       username: "momen",
       displayName: "Momen",
       avatarUrl: "https://bbs.spark-app.store/avatar.png",
+      coverUrl: "https://bbs.spark-app.store/assets/covers/user.jpg",
       forumLevel: "管理员",
       forumGroups: ["管理员"],
     };
@@ -91,6 +92,7 @@ describe("account shared types", () => {
     expect(FLARUM_BASE_URL).toContain("bbs.spark-app.store");
     expect(FLARUM_REGISTER_URL).toContain("register");
     expect(user.forumGroups).toEqual(["管理员"]);
+    expect(user.coverUrl).toContain("/assets/covers/");
     expect(folder.itemCount).toBe(1);
     expect(favorite.appKey).toBe("app:office:wps");
     expect(download.selectedOrigin).toBe("apm");
