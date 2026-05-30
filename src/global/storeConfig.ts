@@ -10,8 +10,7 @@ export const APM_STORE_STATS_BASE_URL: string =
 export const DEFAULT_SPARK_BACKEND_BASE_URL = "http://127.0.0.1:8000";
 
 export const SPARK_BACKEND_BASE_URL: string =
-  import.meta.env.VITE_SPARK_BACKEND_BASE_URL ||
-  DEFAULT_SPARK_BACKEND_BASE_URL;
+  import.meta.env.VITE_SPARK_BACKEND_BASE_URL || DEFAULT_SPARK_BACKEND_BASE_URL;
 
 export const SPARK_ACCOUNT_CENTER_URL: string =
   import.meta.env.VITE_SPARK_ACCOUNT_CENTER_URL ||

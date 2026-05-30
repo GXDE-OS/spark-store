@@ -61,9 +61,9 @@
           v-if="
             currentView === 'default' &&
             activeTab !== 'home' &&
-            Object.keys(categories).length > 0
+            Object.keys(displayCategories).length > 0
           "
-          :categories="categories"
+          :categories="displayCategories"
           :selected-category="selectedCategory"
           :category-counts="categoryCounts"
           @select-category="selectSubCategory"
@@ -436,6 +436,10 @@ const isDarkTheme = computed(() => {
 
 const categories: Ref<Record<string, CategoryInfo>> = ref({});
 const apps: Ref<App[]> = ref([]);
+const tabCategories: Ref<Record<string, Record<string, CategoryInfo>>> = ref(
+  {},
+);
+const tabApps: Ref<Record<string, App[]>> = ref({});
 const activeTab = ref("home");
 type MainView = "default" | "favorites";
 const currentView = ref<MainView>("default");
@@ -543,8 +547,18 @@ const baseApps = computed(() => {
   return result;
 });
 
+const displayCategories = computed(() => {
+  if (activeTab.value === "all") return categories.value;
+  return tabCategories.value[activeTab.value] || {};
+});
+
+const displayApps = computed(() => {
+  if (activeTab.value === "all") return baseApps.value;
+  return tabApps.value[activeTab.value] || [];
+});
+
 const filteredApps = computed(() => {
-  let result = [...baseApps.value];
+  let result = [...displayApps.value];
 
   const effectiveCategory = getEffectiveCategory();
   if (effectiveCategory && effectiveCategory !== "all") {
@@ -559,12 +573,14 @@ const filteredApps = computed(() => {
 });
 
 const categoryCounts = computed(() => {
+  const sourceApps = displayApps.value;
+
   if (searchQuery.value.trim()) {
-    return countSearchMatchesByCategory(baseApps.value, searchQuery.value);
+    return countSearchMatchesByCategory(sourceApps, searchQuery.value);
   }
 
   const counts: Record<string, number> = { all: apps.value.length };
-  apps.value.forEach((app) => {
+  sourceApps.forEach((app) => {
     if (!counts[app.category]) counts[app.category] = 0;
     counts[app.category]++;
   });
@@ -714,6 +730,12 @@ const selectTab = (tab: string) => {
   ) {
     loadHome();
   }
+  if (tab !== "home" && tab !== "all") {
+    const entry = sidebarEntries.value.find((e) => e.id === tab);
+    if (entry && entry.type === "category") {
+      loadTabApps(tab);
+    }
+  }
 };
 
 const selectSubCategory = (category: string) => {
@@ -728,7 +750,7 @@ const getEffectiveCategory = (): string => {
 
   const entry = sidebarEntries.value.find((e) => e.id === activeTab.value);
   if (entry) {
-    if (entry.type === "category" && entry.value) return entry.value;
+    if (entry.type === "category") return selectedCategory.value;
     if (entry.type === "search") {
       searchQuery.value = entry.value || "";
       return selectedCategory.value;
@@ -2323,6 +2345,139 @@ const loadSidebarConfig = async () => {
   }
 };
 
+const normalizeAppJson = (
+  appJson: AppJson,
+  category: string,
+  origin: "spark" | "apm",
+): App => ({
+  name: appJson.Name,
+  pkgname: appJson.Pkgname,
+  version: appJson.Version,
+  filename: appJson.Filename,
+  torrent_address: appJson.Torrent_address,
+  author: appJson.Author,
+  contributor: appJson.Contributor,
+  website: appJson.Website,
+  update: appJson.Update,
+  size: appJson.Size,
+  more: appJson.More,
+  tags: appJson.Tags,
+  img_urls:
+    typeof appJson.img_urls === "string"
+      ? (JSON.parse(appJson.img_urls) as string[])
+      : appJson.img_urls,
+  icons: appJson.icons,
+  category: category,
+  origin: origin,
+  currentStatus: "not-installed" as const,
+});
+
+const loadTabCategories = async () => {
+  const arch = window.apm_store.arch || "amd64";
+  const modes: Array<"spark" | "apm"> =
+    storeFilter.value === "both" ? ["spark", "apm"] : [storeFilter.value];
+  const newTabCategories: Record<string, Record<string, CategoryInfo>> = {};
+
+  for (const entry of sidebarEntries.value) {
+    if (entry.type !== "category") continue;
+    const folderName = entry.value || entry.id;
+    const catData: Record<string, { zh: string; origins: string[] }> = {};
+
+    for (const mode of modes) {
+      const finalArch = mode === "spark" ? `${arch}-store` : `${arch}-apm`;
+      const path = `/${finalArch}/${folderName}/categories.json`;
+
+      try {
+        const response = await axiosInstance.get(path);
+        const data = response.data;
+        Object.keys(data).forEach((key) => {
+          if (catData[key]) {
+            if (!catData[key].origins.includes(mode)) {
+              catData[key].origins.push(mode);
+            }
+          } else {
+            catData[key] = {
+              zh: data[key].zh || data[key],
+              origins: [mode],
+            };
+          }
+        });
+      } catch {
+        // 该入口没有子分类，静默忽略
+      }
+    }
+
+    if (Object.keys(catData).length > 0) {
+      newTabCategories[entry.id] = catData;
+      logger.info(
+        `入口 "${entry.id}" 加载到 ${Object.keys(catData).length} 个子分类`,
+      );
+    }
+  }
+
+  tabCategories.value = newTabCategories;
+};
+
+const loadTabApps = async (entryId: string) => {
+  if (tabApps.value[entryId]) return;
+
+  const entry = sidebarEntries.value.find((e) => e.id === entryId);
+  if (!entry || entry.type !== "category") return;
+
+  const arch = window.apm_store.arch || "amd64";
+  const modes: Array<"spark" | "apm"> =
+    storeFilter.value === "both" ? ["spark", "apm"] : [storeFilter.value];
+  const folderName = entry.value || entry.id;
+  const loadedApps: App[] = [];
+  const subCats = tabCategories.value[entryId];
+
+  for (const mode of modes) {
+    const finalArch = mode === "spark" ? `${arch}-store` : `${arch}-apm`;
+
+    if (subCats && Object.keys(subCats).length > 0) {
+      for (const [subCat, catInfo] of Object.entries(subCats)) {
+        if (
+          catInfo.origins &&
+          catInfo.origins.length > 0 &&
+          !catInfo.origins.includes(mode)
+        )
+          continue;
+
+        try {
+          const path = `/${finalArch}/${folderName}/${subCat}/applist.json`;
+          logger.info(`加载入口子分类: ${entryId}/${subCat} (来源: ${mode})`);
+          const categoryApps = await fetchWithRetry<AppJson[]>(path);
+          loadedApps.push(
+            ...(categoryApps || []).map((aj) =>
+              normalizeAppJson(aj, subCat, mode),
+            ),
+          );
+        } catch (e) {
+          logger.warn(
+            `加载入口子分类 ${entryId}/${subCat} (${mode}) 失败: ${e}`,
+          );
+        }
+      }
+    } else {
+      try {
+        const path = `/${finalArch}/${folderName}/applist.json`;
+        logger.info(`加载入口目录: ${entryId} (来源: ${mode})`);
+        const categoryApps = await fetchWithRetry<AppJson[]>(path);
+        loadedApps.push(
+          ...(categoryApps || []).map((aj) =>
+            normalizeAppJson(aj, folderName, mode),
+          ),
+        );
+      } catch (e) {
+        logger.warn(`加载入口目录 ${entryId} (${mode}) 失败: ${e}`);
+      }
+    }
+  }
+
+  tabApps.value = { ...tabApps.value, [entryId]: loadedApps };
+  logger.info(`入口 "${entryId}" 加载完成，共 ${loadedApps.length} 个应用`);
+};
+
 const loadApps = async (onFirstBatch?: () => void) => {
   try {
     logger.info("开始加载应用数据（全并发带重试）...");
@@ -2350,28 +2505,9 @@ const loadApps = async (onFirstBatch?: () => void) => {
               logger.info(`加载分类: ${category} (来源: ${mode})`);
               const categoryApps = await fetchWithRetry<AppJson[]>(path);
 
-              const normalizedApps = (categoryApps || []).map((appJson) => ({
-                name: appJson.Name,
-                pkgname: appJson.Pkgname,
-                version: appJson.Version,
-                filename: appJson.Filename,
-                torrent_address: appJson.Torrent_address,
-                author: appJson.Author,
-                contributor: appJson.Contributor,
-                website: appJson.Website,
-                update: appJson.Update,
-                size: appJson.Size,
-                more: appJson.More,
-                tags: appJson.Tags,
-                img_urls:
-                  typeof appJson.img_urls === "string"
-                    ? (JSON.parse(appJson.img_urls) as string[])
-                    : appJson.img_urls,
-                icons: appJson.icons,
-                category: category,
-                origin: mode as "spark" | "apm",
-                currentStatus: "not-installed" as const,
-              }));
+              const normalizedApps = (categoryApps || []).map((appJson) =>
+                normalizeAppJson(appJson, category, mode as "spark" | "apm"),
+              );
 
               // 增量式更新，让用户尽快看到部分数据
               apps.value.push(...normalizedApps);
@@ -2443,6 +2579,8 @@ onMounted(async () => {
   await loadCategories();
 
   await loadSidebarConfig();
+
+  await loadTabCategories();
 
   // 分类目录加载后，并行加载主页数据和所有应用列表
   // 使用非阻塞方式加载，让UI先展示出来
