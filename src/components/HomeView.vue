@@ -115,7 +115,7 @@
       <div v-if="lists.length > 0" class="space-y-6 mt-6">
         <section v-for="section in lists" :key="section.title">
           <div class="flex items-center justify-between">
-            <h3 class="text-lg font-semibold text-slate-900">
+            <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-200">
               {{ section.title }}
             </h3>
           </div>
