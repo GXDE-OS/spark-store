@@ -262,6 +262,23 @@
 
           <!-- 右侧：应用详情（上）+ 截图（下） -->
           <div class="flex-1 min-w-0 space-y-5">
+            <!-- 警醒横幅 - 早于一年未更新 -->
+            <div
+              v-if="displayApp?.update && isOutdated(displayApp.update)"
+              class="rounded-2xl border-l-4 border-amber-500 bg-amber-50 p-4 dark:bg-amber-950/30 dark:border-amber-600"
+            >
+              <div class="flex items-center gap-3">
+                <i class="fas fa-exclamation-triangle text-amber-500 text-lg"></i>
+                <div>
+                  <p class="text-sm font-medium text-amber-800 dark:text-amber-300">
+                    ⚠️ 注意：该软件已超过一年未更新
+                  </p>
+                  <p class="text-xs text-amber-700/80 dark:text-amber-400/80 mt-0.5">
+                    最后更新于 {{ displayApp.update }}，可能存在兼容性或安全问题，请谨慎安装。
+                  </p>
+                </div>
+              </div>
+            </div>
             <!-- 应用详情 -->
             <div
               v-if="displayApp?.more && displayApp.more.trim() !== ''"
@@ -632,5 +649,20 @@ const onOverlayWheel = (e: WheelEvent) => {
   const target = e.target as HTMLElement;
   if (target.closest(".overflow-y-auto, .overflow-auto")) return;
   e.preventDefault();
+};
+
+// 判断是否超过一年未更新
+const isOutdated = (updateDate: string) => {
+  if (!updateDate) return false;
+  try {
+    // 假设日期格式如 "2023-01-15" 或 "2024年12月20日"
+    const date = new Date(updateDate);
+    if (isNaN(date.getTime())) return false;
+    const oneYearAgo = new Date();
+    oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+    return date < oneYearAgo;
+  } catch {
+    return false;
+  }
 };
 </script>
