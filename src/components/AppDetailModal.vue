@@ -271,7 +271,7 @@
                 <i class="fas fa-exclamation-triangle text-amber-500 text-lg"></i>
                 <div>
                   <p class="text-sm font-medium text-amber-800 dark:text-amber-300">
-                    ⚠️ 注意：该软件已超过一年未更新
+                    注意：该软件已超过一年未更新
                   </p>
                   <p class="text-xs text-amber-700/80 dark:text-amber-400/80 mt-0.5">
                     最后更新于 {{ displayApp.update }}，可能存在兼容性或安全问题，请谨慎安装。
