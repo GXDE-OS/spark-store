@@ -26,6 +26,7 @@ linux:
       Categories: "System;"
   mimeTypes:
     - "x-scheme-handler/spk"
+    - "x-scheme-handler/apt"
   target:
     - "AppImage"
     - "deb"

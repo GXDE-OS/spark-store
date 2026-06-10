@@ -10,4 +10,4 @@ Keywords=appstore;
 Terminal=false
 StartupNotify=true
 StartupWMClass=spark-store
-MimeType=x-scheme-handler/spk
+MimeType=x-scheme-handler/spk;x-scheme-handler/apt

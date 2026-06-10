@@ -318,6 +318,21 @@ ipcMain.handle("check-for-updates", async () => {
   }
 });
 
+// Register custom protocol handlers
+if (process.defaultApp) {
+  if (process.argv.length >= 2) {
+    app.setAsDefaultProtocolClient("spk", process.execPath, [
+      path.resolve(process.argv[1]),
+    ]);
+    app.setAsDefaultProtocolClient("apt", process.execPath, [
+      path.resolve(process.argv[1]),
+    ]);
+  }
+} else {
+  app.setAsDefaultProtocolClient("spk");
+  app.setAsDefaultProtocolClient("apt");
+}
+
 app.whenReady().then(() => {
   // Set User-Agent for client
   session.defaultSession.webRequest.onBeforeSendHeaders((details, callback) => {
