@@ -45,7 +45,7 @@ class ListenersMap {
   }
 }
 
-const protocols = ["spk"];
+const protocols = ["spk", "apt"];
 const listeners = new ListenersMap();
 
 export const deepLink = {
@@ -80,6 +80,22 @@ export function handleCommandLine(commandLine: string[]) {
 
   try {
     const url = new URL(target);
+
+    // Handle apt:// protocol: convert to spk://search/pkgname
+    if (url.protocol === "apt:") {
+      // Format: apt://pkgname
+      const pkgname = url.hostname || url.pathname.split("/").filter(Boolean)[0];
+      if (pkgname) {
+        const query: Query = { pkgname };
+        logger.info(`Deep link: apt protocol converted to search: ${pkgname}`);
+        listeners.emit("search", query);
+      } else {
+        logger.warn(
+          `Deep link: invalid apt format, expected //pkgname, got ${target}`,
+        );
+      }
+      return;
+    }
 
     const action = url.hostname; // 'search'
     logger.info(`Deep link: action found: ${action}`);
