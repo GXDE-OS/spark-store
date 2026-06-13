@@ -241,3 +241,171 @@ export interface HomeList {
   title: string;
   apps: App[];
 }
+
+export interface SidebarEntry {
+  id: string;
+  name: string;
+  icon?: string;
+  type?: "category" | "search" | "link";
+  value?: string;
+}
+
+export interface SparkUser {
+  id: number;
+  flarumUserId: string;
+  username: string;
+  displayName: string;
+  avatarUrl: string;
+  coverUrl?: string;
+  forumLevel: string;
+  forumGroups: string[];
+}
+
+export interface ReviewUserProfile {
+  displayName: string;
+  username?: string;
+  avatarUrl?: string;
+  coverUrl?: string;
+  forumGroups?: string[];
+}
+
+export interface AuthSession {
+  accessToken: string;
+  tokenType: "bearer";
+  user: SparkUser;
+}
+
+export interface FlarumLoginPayload {
+  identification: string;
+  password: string;
+}
+
+export interface ReviewTags {
+  origin: "spark" | "apm";
+  category: string;
+  pkgname: string;
+  version: string;
+  packageArch: string;
+  clientArch: string;
+  distro: string;
+}
+
+export interface RatingSummary {
+  averageRating: number;
+  reviewCount: number;
+  starCounts: Record<number, number>;
+}
+
+export interface AppReviewReply {
+  id: number;
+  reviewId: number;
+  parentId: number | null;
+  content: string;
+  createdAt: string;
+  updatedAt: string;
+  userDisplayName: string;
+  userAvatarUrl: string;
+  likeCount: number;
+  likedByCurrentUser: boolean;
+  canDelete: boolean;
+  isAuthor: boolean;
+  isDeleted: boolean;
+  replies: AppReviewReply[];
+}
+
+export interface AppReview {
+  id: number;
+  userId?: number;
+  rating: number;
+  content: string;
+  version: string;
+  packageArch: string;
+  clientArch: string;
+  distro: string;
+  origin: "spark" | "apm";
+  category: string;
+  createdAt: string;
+  updatedAt: string;
+  userDisplayName: string;
+  userAvatarUrl: string;
+  likeCount?: number;
+  likedByCurrentUser?: boolean;
+  canDelete?: boolean;
+  isAuthor?: boolean;
+  isDeleted?: boolean;
+  replies?: AppReviewReply[];
+}
+
+export interface FavoriteFolder {
+  id: number;
+  name: string;
+  itemCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface FavoriteItem {
+  id: number;
+  appKey: string;
+  pkgname: string;
+  name: string;
+  category: string;
+  iconUrl: string;
+  createdAt: string;
+}
+
+export type FavoriteAvailabilityStatus =
+  | "installable"
+  | "installed"
+  | "platform-unavailable"
+  | "arch-unavailable"
+  | "downlisted";
+
+export interface ResolvedFavoriteItem {
+  item: FavoriteItem;
+  status: FavoriteAvailabilityStatus;
+  reason: string;
+  selectedApp: App | null;
+}
+
+export interface DownloadedAppRecord {
+  id: number;
+  appKey: string;
+  pkgname: string;
+  name: string;
+  category: string;
+  selectedOrigin: "spark" | "apm";
+  version: string;
+  packageArch: string;
+  downloadedAt: string;
+}
+
+export interface DownloadedAppList {
+  items: DownloadedAppRecord[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+export interface SyncedAppListItem {
+  id?: number;
+  pkgname: string;
+  origin: "spark" | "apm";
+  category: string;
+  version: string;
+  packageArch: string;
+  appName: string;
+  iconUrl: string;
+}
+
+export interface SyncedAppList {
+  snapshotName: string;
+  clientArch: string;
+  distro: string;
+  updatedAt: string;
+  items: SyncedAppListItem[];
+}
+
+export interface SystemInfo {
+  distro: string;
+}

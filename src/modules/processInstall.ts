@@ -21,16 +21,18 @@ import axios from "axios";
 
 const logger = pino({ name: "processInstall.ts" });
 
-export const handleInstall = async (appObj?: App) => {
+export const handleInstall = async (
+  appObj?: App,
+): Promise<DownloadItem | null> => {
   const targetApp = appObj || currentApp.value;
-  if (!targetApp?.pkgname) return;
+  if (!targetApp?.pkgname) return null;
 
   // APM 应用：在创建下载任务前检查 APM 是否可用
   if (targetApp.origin === "apm") {
     const hasApm = await window.ipcRenderer.invoke("check-apm-available");
     if (!hasApm) {
       showApmInstallDialog.value = true;
-      return;
+      return null;
     }
   }
 
@@ -42,7 +44,7 @@ export const handleInstall = async (appObj?: App) => {
     logger.info(
       `任务已存在，忽略重复添加: ${targetApp.pkgname} (${targetApp.origin})`,
     );
-    return;
+    return null;
   }
 
   // 创建下载任务
@@ -98,6 +100,7 @@ export const handleInstall = async (appObj?: App) => {
     .then((response) => {
       logger.info("下载次数统计已发送，状态:", response.data);
     });
+  return download;
 };
 
 export const handleRetry = (download_: DownloadItem) => {

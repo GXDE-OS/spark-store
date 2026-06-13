@@ -15,23 +15,24 @@
       @wheel="onOverlayWheel"
     >
       <div
-        class="modal-panel relative w-full max-w-5xl max-h-[85vh] overflow-y-auto overscroll-contain scrollbar-nowidth rounded-3xl border border-white/10 bg-white/95 px-6 pb-6 shadow-2xl dark:border-slate-800 dark:bg-slate-900"
+        class="modal-panel relative flex w-full max-w-5xl max-h-[85vh] overflow-y-auto overscroll-contain scrollbar-nowidth rounded-3xl border border-white/10 bg-white/95 px-6 pb-6 shadow-2xl dark:border-slate-800 dark:bg-slate-900 lg:max-h-[85vh] lg:overflow-hidden lg:pb-0"
       >
-        <!-- 返回按钮 - sticky定位在模态框内部左上角，滚动时始终可见 -->
-        <button
-          type="button"
-          class="sticky top-2 left-0 z-10 inline-flex items-center gap-2 rounded-full border border-slate-200/70 bg-white/90 px-4 py-2 text-sm font-medium text-slate-600 shadow-lg backdrop-blur-sm transition hover:bg-slate-50 hover:text-slate-900 dark:border-slate-700 dark:bg-slate-800/90 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-slate-200 mt-4"
-          @click="closeModal"
-          aria-label="返回"
-        >
-          <i class="fas fa-arrow-left"></i>
-          <span>返回</span>
-        </button>
-
         <!-- 主布局：左侧信息 + 右侧内容 -->
-        <div class="flex flex-col lg:flex-row gap-6">
+        <div class="flex w-full flex-col gap-6 lg:min-h-0 lg:flex-row">
           <!-- 左侧：图标、版本、来源、按钮、元信息 -->
-          <div class="w-full lg:w-72 flex-shrink-0 space-y-5">
+          <div
+            data-testid="detail-fixed-sidebar"
+            class="w-full flex-shrink-0 space-y-5 lg:w-72 lg:self-start lg:py-4"
+          >
+            <button
+              type="button"
+              class="inline-flex items-center gap-2 rounded-full border border-slate-200/70 bg-white/90 px-4 py-2 text-sm font-medium text-slate-600 shadow-lg backdrop-blur-sm transition hover:bg-slate-50 hover:text-slate-900 dark:border-slate-700 dark:bg-slate-800/90 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-slate-200"
+              @click="closeModal"
+              aria-label="返回"
+            >
+              <i class="fas fa-arrow-left"></i>
+              <span>返回</span>
+            </button>
             <!-- 应用图标和名称 -->
             <div class="text-center">
               <div
@@ -102,7 +103,7 @@
                       ? 'bg-orange-500 text-white'
                       : 'bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600'
                   "
-                  @click="viewingOrigin = 'spark'"
+                  @click="selectOrigin('spark')"
                 >
                   Spark
                 </button>
@@ -115,7 +116,7 @@
                       ? 'bg-blue-500 text-white'
                       : 'bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600'
                   "
-                  @click="viewingOrigin = 'apm'"
+                  @click="selectOrigin('apm')"
                 >
                   APM
                 </button>
@@ -179,6 +180,14 @@
                   </button>
                 </div>
               </template>
+              <button
+                type="button"
+                class="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-600 transition hover:bg-slate-50 hover:text-slate-900 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
+                @click="handleFavorite"
+              >
+                <i class="fas fa-star text-xs"></i>
+                <span>{{ favoriteButtonText }}</span>
+              </button>
             </div>
 
             <!-- 其他元信息 -->
@@ -261,7 +270,10 @@
           </div>
 
           <!-- 右侧：应用详情（上）+ 截图（下） -->
-          <div class="flex-1 min-w-0 space-y-5">
+          <div
+            data-testid="detail-scroll-content"
+            class="min-w-0 flex-1 space-y-5 lg:max-h-[85vh] lg:overflow-y-auto lg:overscroll-contain lg:py-4 lg:pr-2"
+          >
             <!-- 应用详情 -->
             <div
               v-if="displayApp?.more && displayApp.more.trim() !== ''"
@@ -312,6 +324,51 @@
             >
               <p class="text-sm text-slate-400">暂无应用截图</p>
             </div>
+
+            <ReviewsPanel
+              v-if="loggedIn && activeReviewAppKey && activeReviewTags"
+              :app-key="activeReviewAppKey"
+              :tags="activeReviewTags"
+              :logged-in="loggedIn"
+              :can-submit="isinstalled"
+              @request-login="$emit('request-login', $event)"
+              @show-user="emit('show-user', $event)"
+            />
+            <section
+              v-else-if="!loggedIn && reviewAppKey && reviewTags"
+              class="rounded-2xl border border-slate-200/60 bg-slate-50/50 p-5 dark:border-slate-800/60 dark:bg-slate-800/30"
+            >
+              <h3
+                class="text-base font-semibold text-slate-900 dark:text-white mb-3 flex items-center gap-2"
+              >
+                <i class="fas fa-comments text-slate-400"></i>
+                应用评价
+              </h3>
+              <p class="text-sm text-slate-500 dark:text-slate-400">
+                登录星火账号后可查看评价并发表评论。
+              </p>
+              <button
+                type="button"
+                class="mt-4 inline-flex items-center rounded-xl bg-slate-800 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-700 dark:bg-slate-700 dark:hover:bg-slate-600"
+                @click="emit('request-login', '登录后查看和发表评论。')"
+              >
+                登录后查看评价
+              </button>
+            </section>
+            <section
+              v-else-if="reviewAppKey && reviewTags"
+              class="rounded-2xl border border-slate-200/60 bg-slate-50/50 p-5 dark:border-slate-800/60 dark:bg-slate-800/30"
+            >
+              <h3
+                class="text-base font-semibold text-slate-900 dark:text-white mb-3 flex items-center gap-2"
+              >
+                <i class="fas fa-comments text-slate-400"></i>
+                应用评价
+              </h3>
+              <p class="text-sm text-slate-500 dark:text-slate-400">
+                安装应用后可发表评论。
+              </p>
+            </section>
           </div>
         </div>
       </div>
@@ -439,12 +496,14 @@
 <script setup lang="ts">
 import { computed, useAttrs, ref, watch } from "vue";
 import axios from "axios";
+import ReviewsPanel from "@/components/ReviewsPanel.vue";
 import { useInstallFeedback, downloads } from "../global/downloadStatus";
 import {
   APM_STORE_BASE_URL,
   getHybridDefaultOrigin,
 } from "../global/storeConfig";
-import type { App } from "../global/typedefinition";
+import { buildReviewAppKey, buildReviewTags } from "../modules/appIdentity";
+import type { App, AppReview, ReviewTags } from "../global/typedefinition";
 
 const attrs = useAttrs();
 
@@ -454,15 +513,24 @@ const props = defineProps<{
   screenshots: string[];
   sparkInstalled: boolean;
   apmInstalled: boolean;
+  loggedIn: boolean;
+  reviewAppKey: string;
+  reviewTags: ReviewTags | null;
+  favorited?: boolean;
+  favoriteFolderName?: string;
 }>();
 
 const emit = defineEmits<{
   (e: "close"): void;
   (e: "install", app: App): void;
   (e: "remove", app: App): void;
+  (e: "favorite", app: App): void;
+  (e: "request-login", message: string): void;
   (e: "open-preview", index: number): void;
   (e: "open-app", pkgname: string, origin?: "spark" | "apm"): void;
   (e: "check-install", app: App): void;
+  (e: "select-origin", origin: "spark" | "apm"): void;
+  (e: "show-user", review: AppReview): void;
 }>();
 
 const appPkgname = computed(() => props.app?.pkgname);
@@ -576,6 +644,29 @@ const iconPath = computed(() => {
   return `${APM_STORE_BASE_URL}/${finalArch}/${displayApp.value.category}/${displayApp.value.pkgname}/icon.png`;
 });
 
+const activeReviewAppKey = computed(() => {
+  if (!displayApp.value) return "";
+  return buildReviewAppKey(
+    displayApp.value,
+    props.reviewTags?.clientArch ?? "amd64",
+  );
+});
+
+const activeReviewTags = computed<ReviewTags | null>(() => {
+  if (!displayApp.value || !props.reviewTags) return null;
+  return buildReviewTags(displayApp.value, {
+    clientArch: props.reviewTags.clientArch,
+    distro: props.reviewTags.distro,
+  });
+});
+
+const favoriteButtonText = computed(() => {
+  if (!props.favorited) return "收藏";
+  return props.favoriteFolderName
+    ? `已收藏 · ${props.favoriteFolderName}`
+    : "已收藏";
+});
+
 const downloadCount = ref<string>("");
 
 // 监听 app 变化，获取新app的下载量
@@ -618,6 +709,20 @@ const handleRemove = () => {
   if (displayApp.value) {
     emit("remove", displayApp.value);
   }
+};
+
+const handleFavorite = () => {
+  if (!displayApp.value) return;
+  if (!props.loggedIn) {
+    emit("request-login", "收藏应用需要登录星火账号。");
+    return;
+  }
+  emit("favorite", displayApp.value);
+};
+
+const selectOrigin = (origin: "spark" | "apm") => {
+  viewingOrigin.value = origin;
+  emit("select-origin", origin);
 };
 
 const openPreview = (index: number) => {

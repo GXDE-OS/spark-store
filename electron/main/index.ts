@@ -40,6 +40,23 @@ function getAppVersion(): string {
   }
 }
 
+function getSystemInfo(): { distro: string } {
+  try {
+    const raw = fs.readFileSync("/etc/os-release", "utf8");
+    const fields = Object.fromEntries(
+      raw
+        .split("\n")
+        .map((line) => line.match(/^([A-Z_]+)=(.*)$/))
+        .filter((match): match is RegExpMatchArray => match !== null)
+        .map((match) => [match[1], match[2].replace(/^"|"$/g, "")]),
+    );
+    const distro = fields.PRETTY_NAME || fields.NAME || "unknown";
+    return { distro };
+  } catch {
+    return { distro: "unknown" };
+  }
+}
+
 // 处理 --version 参数（在单实例检查之前）
 if (process.argv.includes("--version") || process.argv.includes("-v")) {
   console.log(getAppVersion());
@@ -55,6 +72,7 @@ import "./backend/install-manager.js";
 import "./handle-url-scheme.js";
 
 const logger = pino({ name: "index.ts" });
+const FLARUM_TOKEN_URL = "https://bbs.spark-app.store/api/token";
 
 // The built directory structure
 //
@@ -117,6 +135,76 @@ ipcMain.handle("get-store-filter", (): "spark" | "apm" | "both" =>
 );
 
 ipcMain.handle("get-app-version", (): string => getAppVersion());
+ipcMain.handle("get-system-info", (): { distro: string } => getSystemInfo());
+
+ipcMain.handle("request-flarum-token", async (_event, payload: unknown) => {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    throw new Error("登录信息格式不正确，请重新输入。");
+  }
+
+  const credentials = payload as Record<string, unknown>;
+  if (
+    typeof credentials.identification !== "string" ||
+    typeof credentials.password !== "string"
+  ) {
+    throw new Error("登录信息格式不正确，请重新输入。");
+  }
+
+  logger.info({ endpoint: FLARUM_TOKEN_URL }, "Requesting Flarum login token");
+
+  let response: Response;
+  try {
+    response = await fetch(FLARUM_TOKEN_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+        "User-Agent": getUserAgent(),
+      },
+      body: JSON.stringify({
+        identification: credentials.identification,
+        password: credentials.password,
+      }),
+    });
+  } catch (err) {
+    logger.error(
+      { err, endpoint: FLARUM_TOKEN_URL },
+      "Flarum token request failed before response",
+    );
+    throw new Error("无法连接星火论坛，请检查网络后重试。");
+  }
+
+  if (!response.ok) {
+    logger.warn(
+      { endpoint: FLARUM_TOKEN_URL, status: response.status },
+      "Flarum rejected login token request",
+    );
+    throw new Error("论坛登录失败，请检查账号和密码。");
+  }
+
+  const data = (await response.json()) as Record<string, unknown>;
+  const userId = data.userId ?? data.user_id;
+  if (
+    typeof data.token !== "string" ||
+    userId === undefined ||
+    userId === null
+  ) {
+    logger.warn(
+      {
+        endpoint: FLARUM_TOKEN_URL,
+        hasToken: typeof data.token === "string" && data.token.length > 0,
+        hasUserId: userId !== undefined && userId !== null,
+      },
+      "Flarum token response missing required fields",
+    );
+    throw new Error("论坛登录响应异常，请稍后重试。");
+  }
+
+  return {
+    token: data.token,
+    userId: String(userId),
+  };
+});
 
 const getMainWindowCloseGuardState = (): MainWindowCloseGuardState => ({
   installTaskCount: tasks.size,
@@ -161,6 +249,7 @@ async function createWindow() {
     title: "星火应用商店",
     width: 1366,
     height: 768,
+    frame: false,
     autoHideMenuBar: true,
     icon: path.join(process.env.VITE_PUBLIC, "favicon.ico"),
     webPreferences: {
@@ -217,6 +306,27 @@ ipcMain.on("renderer-ready", (event, args) => {
 
 ipcMain.on("set-theme-source", (event, theme: "system" | "light" | "dark") => {
   nativeTheme.themeSource = theme;
+});
+
+ipcMain.on("window-control-minimize", () => {
+  win?.minimize();
+});
+
+ipcMain.on("window-control-toggle-maximize", () => {
+  if (!win) {
+    return;
+  }
+
+  if (win.isMaximized()) {
+    win.unmaximize();
+    return;
+  }
+
+  win.maximize();
+});
+
+ipcMain.on("window-control-close", () => {
+  win?.close();
 });
 
 // 配置文件路径

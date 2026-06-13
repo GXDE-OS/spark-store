@@ -407,7 +407,9 @@ async function processNextInQueue() {
       sendStatus("downloading");
 
       // 下载重试逻辑：共10次，5次3秒，3次5秒，2次10秒
-      const timeoutList = [3000, 3000, 3000, 3000, 3000, 5000, 5000, 5000, 10000, 10000];
+      const timeoutList = [
+        3000, 3000, 3000, 3000, 3000, 5000, 5000, 5000, 10000, 10000,
+      ];
       let retryCount = 0;
       let downloadSuccess = false;
 

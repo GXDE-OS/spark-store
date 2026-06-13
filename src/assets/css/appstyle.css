@@ -3,9 +3,9 @@
 @theme {
   --font-sans: "Inter", "system-ui", "-apple-system", "Segoe UI", "sans-serif";
 
-  --color-brand: #2563eb;
-  --color-brand-dark: #1d4ed8;
-  --color-brand-soft: #60a5fa;
+  --color-brand: #0071e3;
+  --color-brand-dark: #0066cc;
+  --color-brand-soft: #409cff;
 
   --color-surface-light: #f5f7fb;
   --color-surface-dark: #0b1220;
@@ -76,4 +76,3 @@
     border-radius: 0;
   }
 }
-

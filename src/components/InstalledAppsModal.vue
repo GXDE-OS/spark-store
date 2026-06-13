@@ -28,6 +28,23 @@
             </p>
           </div>
           <div class="flex items-center gap-3">
+            <button
+              type="button"
+              class="inline-flex items-center gap-2 rounded-2xl border border-brand/30 px-4 py-2 text-sm font-semibold text-brand transition hover:bg-brand/10 disabled:opacity-40"
+              :disabled="syncing"
+              @click="handleSyncClick"
+            >
+              <i class="fas fa-cloud-arrow-up"></i>
+              {{ syncing ? "同步中" : "同步到账号" }}
+            </button>
+            <button
+              type="button"
+              class="inline-flex items-center gap-2 rounded-2xl border border-slate-200/70 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+              @click="handleRestoreClick"
+            >
+              <i class="fas fa-cloud-arrow-down"></i>
+              从账号恢复
+            </button>
             <div
               v-if="showOriginSwitcher"
               class="flex items-center rounded-2xl border border-slate-200/70 p-1 dark:border-slate-800/70"
@@ -83,6 +100,12 @@
         <div
           class="flex-1 overflow-y-auto overscroll-contain scrollbar-nowidth scrollbar-thumb-slate-200 dark:scrollbar-thumb-slate-700 p-6 space-y-4"
         >
+          <div
+            v-if="syncMessage"
+            class="rounded-2xl border border-brand/20 bg-brand/5 px-4 py-3 text-sm font-medium text-brand dark:bg-brand/10"
+          >
+            {{ syncMessage }}
+          </div>
           <div
             v-if="loading"
             class="rounded-2xl border border-dashed border-slate-200/80 px-4 py-10 text-center text-slate-500 dark:border-slate-800/80 dark:text-slate-400"
@@ -220,16 +243,40 @@ const props = defineProps<{
   storeFilter: "spark" | "apm" | "both";
   sparkAvailable: boolean;
   apmAvailable: boolean;
+  loggedIn: boolean;
+  syncing: boolean;
+  syncMessage: string;
 }>();
 
-defineEmits<{
+const emit = defineEmits<{
   (e: "close"): void;
   (e: "refresh"): void;
   (e: "uninstall", app: App): void;
   (e: "switch-origin", origin: "apm" | "spark"): void;
   (e: "open-app", app: App): void;
   (e: "open-detail", app: App): void;
+  (e: "sync-to-account"): void;
+  (e: "restore-from-account"): void;
+  (e: "request-login"): void;
 }>();
+
+const handleSyncClick = () => {
+  if (props.loggedIn) {
+    emit("sync-to-account");
+    return;
+  }
+
+  emit("request-login");
+};
+
+const handleRestoreClick = () => {
+  if (props.loggedIn) {
+    emit("restore-from-account");
+    return;
+  }
+
+  emit("request-login");
+};
 
 const onOverlayWheel = (e: WheelEvent) => {
   const target = e.target as HTMLElement;

@@ -42,6 +42,12 @@ type IpcRendererFacade = {
   invoke: typeof ipcRenderer.invoke;
 };
 
+type WindowControlBridge = {
+  minimize: () => void;
+  toggleMaximize: () => void;
+  close: () => void;
+};
+
 type UpdateCenterStateListener = (snapshot: UpdateCenterSnapshot) => void;
 type UpdateCenterStartTask = {
   taskKey: string;
@@ -90,6 +96,12 @@ contextBridge.exposeInMainWorld("apm_store", {
     }
   })(),
 });
+
+contextBridge.exposeInMainWorld("windowControls", {
+  minimize: () => ipcRenderer.send("window-control-minimize"),
+  toggleMaximize: () => ipcRenderer.send("window-control-toggle-maximize"),
+  close: () => ipcRenderer.send("window-control-close"),
+} satisfies WindowControlBridge);
 
 contextBridge.exposeInMainWorld("updateCenter", {
   open: (storeFilter: StoreFilter = "both"): Promise<UpdateCenterSnapshot> =>

@@ -21,16 +21,13 @@
         >
           {{ app.name || "" }}
         </div>
-        <!-- 来源标识 -->
         <div class="flex shrink-0 gap-1">
-          <!-- 合并标识：两个来源都有时显示 -->
           <span
             v-if="showMergedBadge"
             class="rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider shadow-sm bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400"
           >
             SPARK/APM
           </span>
-          <!-- 单独标识 -->
           <template v-else>
             <span
               v-if="showSparkBadge"
