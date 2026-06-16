@@ -1,0 +1,40 @@
+Source: spark-store
+Section: utils
+Priority: optional
+Maintainer: shenmo <shenmo@spark-app.store>
+Rules-Requires-Root: no
+Build-Depends:
+ debhelper-compat (= 13),
+ make,
+ npm,
+Standards-Version: 4.7.2
+Homepage: https://www.spark-app.store/
+
+Package: spark-store
+Architecture: any
+Provides: spark-store-console-in-container
+Depends:
+ ${shlibs:Depends},
+ ${misc:Depends},
+ libgtk-3-0,
+ libnotify4, 
+ libnss3, 
+ libxss1, 
+ libxtst6, 
+ xdg-utils, 
+ libatspi2.0-0, 
+ libuuid1, 
+ libsecret-1-0, 
+ xdg-utils, 
+ shared-mime-info, 
+ aria2, 
+ gnupg, 
+ zenity, 
+ policykit-1 | pkexec, 
+ libnotify-bin, 
+ desktop-file-utils, 
+ lsb-release, 
+ systemd, 
+ curl
+Description: Spark Store
+ A community powered app store, powered by APM.

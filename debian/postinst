@@ -1,0 +1,78 @@
+#!/bin/bash
+
+case "$1" in
+	configure)
+
+		case `arch` in
+   			x86_64)
+				echo "Enabling i386 arch..."
+				dpkg --add-architecture i386
+			;;
+
+        		aarch64)
+        			echo "Will not enable armhf since 4271"
+			;;
+            loongarch64)
+				echo "Nope we DO NOT WANT ABI1 now"
+				dpkg --remove-architecture loongarch64
+			;;
+
+ 			*)
+				echo "Unknown architecture, skip enable 32-bit arch"
+			;;
+		esac
+
+		mkdir -p /var/lib/aptss/lists
+
+		#  Remove the sources.list file
+		rm -f /etc/apt/sources.list.d/sparkstore.list
+        rm -f /opt/durapps/spark-store/bin/apt-fast-conf/sources.list.d/sparkstore.list
+
+		# Check if /usr/local/bin existed
+		mkdir -p /usr/local/bin
+		## I hate /usr/local/bin. We will abandon them later
+		# Create symbol links for binary files
+		ln -s -f /opt/durapps/spark-store/bin/spark-store /usr/local/bin/spark-store
+		ln -s -f /opt/durapps/spark-store/bin/ssinstall /usr/local/bin/ssinstall
+		ln -s -f /opt/durapps/spark-store/bin/ssaudit /usr/local/bin/ssaudit
+		ln -s -f /opt/durapps/spark-store/bin/ssinstall /usr/bin/ssinstall
+		ln -s -f /opt/durapps/spark-store/bin/ssaudit /usr/bin/ssaudit
+		ln -s -f /opt/durapps/spark-store/bin/spark-dstore-patch /usr/local/bin/spark-dstore-patch
+		ln -s -f /opt/durapps/spark-store/bin/spark-dstore-patch /usr/bin/spark-dstore-patch
+		ln -s -f /opt/durapps/spark-store/bin/aptss /usr/local/bin/ss-apt-fast
+
+		ln -s -f /opt/durapps/spark-store/bin/aptss /usr/bin/aptss
+
+
+
+		# Install key
+		mkdir -p /tmp/spark-store-install/
+		cp -f /opt/durapps/spark-store/bin/spark-store.asc /tmp/spark-store-install/spark-store.asc
+		gpg --dearmor /tmp/spark-store-install/spark-store.asc
+		cp -f /tmp/spark-store-install/spark-store.asc.gpg /etc/apt/trusted.gpg.d/spark-store.gpg
+
+
+
+		# Start upgrade detect service
+		systemctl daemon-reload
+		systemctl enable spark-update-notifier
+		systemctl start spark-update-notifier
+
+
+		# Update certain caches
+cp -fv /opt/spark-store/extras/store.spark-app.spark-store.policy /usr/share/polkit-1/actions/store.spark-app.spark-store.policy
+xdg-mime default spark-store.desktop x-scheme-handler/spk
+update-mime-database /usr/share/mime || true
+
+		# Send email for statistics
+		#/tmp/spark-store-install/feedback.sh
+
+		# Remove temp dir
+		rm -rf /tmp/spark-store-install
+	;;
+
+	triggered)
+			spark-dstore-patch
+
+	;;
+esac
