@@ -1,6 +1,7 @@
 import {
   app,
   BrowserWindow,
+  dialog,
   ipcMain,
   Menu,
   nativeImage,
@@ -104,6 +105,7 @@ if (!app.requestSingleInstanceLock()) {
 }
 
 let win: BrowserWindow | null = null;
+let submitterWin: BrowserWindow | null = null;
 let allowAppExit = false;
 const preload = path.join(__dirname, "../preload/index.mjs");
 const indexHtml = path.join(RENDERER_DIST, "index.html");
@@ -425,6 +427,762 @@ ipcMain.handle("check-for-updates", async () => {
   } catch (err) {
     logger.error({ err }, "Failed to launch update check script");
     return { success: false, message: (err as Error)?.message || String(err) };
+  }
+});
+
+// 启动投稿器窗口
+ipcMain.handle("launch-submitter", async () => {
+  try {
+    if (submitterWin && !submitterWin.isDestroyed()) {
+      submitterWin.show();
+      submitterWin.focus();
+      return { success: true };
+    }
+
+    submitterWin = new BrowserWindow({
+      title: "星火应用商店 - 投稿应用",
+      width: 800,
+      height: 900,
+      frame: false,
+      autoHideMenuBar: true,
+      icon: path.join(process.env.VITE_PUBLIC, "favicon.ico"),
+      webPreferences: {
+        preload,
+      },
+    });
+
+    if (VITE_DEV_SERVER_URL) {
+      submitterWin.loadURL(`${VITE_DEV_SERVER_URL}#submitter`);
+    } else {
+      submitterWin.loadFile(indexHtml, { hash: "submitter" });
+    }
+
+    submitterWin.on("closed", () => {
+      submitterWin = null;
+    });
+
+    submitterWin.webContents.setWindowOpenHandler(({ url }) => {
+      if (url.startsWith("https:")) shell.openExternal(url);
+      return { action: "deny" };
+    });
+
+    logger.info("Submitter window opened");
+    return { success: true };
+  } catch (err) {
+    logger.error({ err }, "Failed to open submitter window");
+    return { success: false, message: (err as Error)?.message || String(err) };
+  }
+});
+
+ipcMain.on("close-submitter-window", () => {
+  submitterWin?.close();
+});
+
+interface DebInfo {
+  pkgname: string;
+  version: string;
+  author: string;
+  maintainer: string;
+  homepage: string;
+  description: string;
+  architecture: string;
+}
+
+interface HistoryAppInfo {
+  id: number;
+  name: string;
+  pkgname: string;
+  version: string;
+  store: string;
+  author: string;
+  contributor: string;
+  website: string;
+  category: string;
+  tags: string;
+  more: string;
+  icon: string;
+  imgs: string[];
+}
+
+ipcMain.handle("select-deb-file", async (_event) => {
+  try {
+    const result = await dialog.showOpenDialog({
+      title: "选择 deb 安装包",
+      filters: [{ name: "Debian 包", extensions: ["deb"] }],
+      properties: ["openFile"],
+    });
+
+    if (!result.canceled && result.filePaths.length > 0) {
+      return { success: true, filePath: result.filePaths[0] };
+    }
+
+    return { success: false, message: "用户取消选择" };
+  } catch (err) {
+    logger.error({ err }, "Failed to select deb file");
+    return { success: false, message: (err as Error)?.message || "选择文件失败" };
+  }
+});
+
+ipcMain.handle("parse-deb-file", async (_event, debPath: string) => {
+  try {
+    logger.info({ debPath }, "[Submitter] Starting parse-deb-file handler");
+
+    const { exec } = await import("node:child_process");
+    const util = await import("util");
+    const execAsync = util.promisify(exec);
+
+    const absoluteDebPath = path.resolve(debPath);
+    logger.info({ debPath, absoluteDebPath }, "[Submitter] Resolved absolute deb path");
+
+    if (!fs.existsSync(absoluteDebPath)) {
+      logger.error({ debPath, absoluteDebPath }, "[Submitter] Deb file not found");
+      return { success: false, message: `文件不存在: ${absoluteDebPath}` };
+    }
+
+    logger.info({ absoluteDebPath }, "[Submitter] Deb file exists, executing dpkg-deb command");
+
+    const { stdout, stderr } = await execAsync(
+      `dpkg-deb -f "${absoluteDebPath}" Package Version Maintainer Homepage Description Architecture`,
+    );
+
+    logger.info({ stdout, stderr }, "[Submitter] dpkg-deb command executed");
+
+    if (stderr) {
+      logger.error({ stderr }, "[Submitter] dpkg-deb returned error");
+      return { success: false, message: stderr };
+    }
+
+    const lines = stdout.trim().split("\n");
+    logger.info({ lineCount: lines.length, rawOutput: stdout }, "[Submitter] Parsing dpkg-deb output");
+
+    const debInfo: DebInfo = {
+      pkgname: "",
+      version: "",
+      author: "",
+      maintainer: "",
+      homepage: "",
+      description: "",
+      architecture: "",
+    };
+
+    for (const line of lines) {
+      const [key, ...valueParts] = line.split(":");
+      const value = valueParts.join(":").trim();
+      logger.debug({ line, key, value }, "[Submitter] Processing dpkg-deb line");
+
+      switch (key.trim()) {
+        case "Package":
+          debInfo.pkgname = value.toLowerCase();
+          logger.info({ pkgname: debInfo.pkgname }, "[Submitter] Found Package name");
+          break;
+        case "Version":
+          debInfo.version = value;
+          logger.info({ version: debInfo.version }, "[Submitter] Found Version");
+          break;
+        case "Maintainer":
+          debInfo.maintainer = value;
+          debInfo.author = value;
+          logger.info({ maintainer: debInfo.maintainer }, "[Submitter] Found Maintainer");
+          break;
+        case "Homepage":
+          debInfo.homepage = value;
+          logger.info({ homepage: debInfo.homepage }, "[Submitter] Found Homepage");
+          break;
+        case "Description":
+          debInfo.description = value;
+          logger.info({ description: debInfo.description.substring(0, 100) + "..." }, "[Submitter] Found Description");
+          break;
+        case "Architecture":
+          debInfo.architecture = value;
+          logger.info({ architecture: debInfo.architecture }, "[Submitter] Found Architecture");
+          break;
+      }
+    }
+
+    logger.info({ debInfo }, "[Submitter] Deb file parsing completed successfully");
+
+    return { success: true, data: debInfo };
+  } catch (err) {
+    logger.error({ err, debPath }, "[Submitter] Failed to parse deb file with exception");
+    return {
+      success: false,
+      message: (err as Error)?.message || "解析deb文件失败",
+    };
+  }
+});
+
+ipcMain.handle("search-history-app", async (_event, pkgname: string, useMirror = false) => {
+  try {
+    const baseUrl = useMirror
+      ? "https://mirrors.sdu.edu.cn/spark-store"
+      : "https://spk-json.spark-app.store";
+    const storeArchs = ["store", "aarch64-store", "loong64-store"];
+    const categories = [
+      "chat",
+      "development",
+      "games",
+      "image_graphics",
+      "music",
+      "network",
+      "office",
+      "others",
+      "reading",
+      "themes",
+      "tools",
+      "video",
+    ];
+    const results: HistoryAppInfo[] = [];
+
+    logger.info("[Submitter] ============== SEARCH HISTORY APP START ==============");
+    logger.info({ pkgname, useMirror, baseUrl, storeArchs, categories }, "[Submitter] Search parameters");
+
+    const allPromises: Promise<void>[] = [];
+
+    for (const arch of storeArchs) {
+      for (const category of categories) {
+        const url = `${baseUrl}/${arch}/${category}/${pkgname}/app.json`;
+        logger.info({ arch, category, url }, "[Submitter] Starting search request");
+
+        const promise = fetch(url, {
+          headers: { "User-Agent": getUserAgent() },
+        })
+          .then(async (response) => {
+            logger.info({ arch, category, status: response.status }, "[Submitter] Fetch completed");
+
+            if (response.ok) {
+              const json = await response.json();
+              logger.info({ arch, category, rawJson: JSON.stringify(json, null, 2) }, "[Submitter] Response parsed");
+
+              const appPkgname = json?.pkgname || json?.Pkgname || json?.packageName || "";
+              logger.info({ arch, category, appPkgname, searchPkgname: pkgname }, "[Submitter] Comparing pkgname");
+
+              if (appPkgname.toLowerCase() === pkgname.toLowerCase()) {
+                logger.info({ arch, category, item: json }, "[Submitter] Found matching item");
+
+                let iconUrl = json.icons || json.icon || "";
+                let imgs = json.imgUrls || json.imgs || [];
+
+                if (iconUrl && typeof iconUrl === "string") {
+                  if (useMirror) {
+                    iconUrl = iconUrl.replace("spk-json.spark-app.store", "mirrors.sdu.edu.cn/spark-store");
+                  }
+                }
+
+                if (Array.isArray(imgs)) {
+                  imgs = imgs.map((img: string) => {
+                    if (useMirror && typeof img === "string") {
+                      return img.replace("spk-json.spark-app.store", "mirrors.sdu.edu.cn/spark-store");
+                    }
+                    return img;
+                  });
+                }
+
+                results.push({
+                  id: json.id || json.Id || 0,
+                  name: json.name || json.Name || "",
+                  pkgname: json.pkgname || json.Pkgname || "",
+                  version: json.version || json.Version || "",
+                  store: arch,
+                  author: json.author || json.Author || "",
+                  contributor: json.contributor || json.Contributor || "",
+                  website: json.website || json.Website || "",
+                  category: category,
+                  tags: json.tags || json.Tags || "",
+                  more: json.more || json.More || "",
+                  icon: iconUrl,
+                  imgs: imgs,
+                });
+
+                logger.info({ arch, count: results.length }, "[Submitter] Added to results");
+              }
+            }
+          })
+          .catch((error) => {
+            logger.warn({ arch, category, error }, "[Submitter] Request failed or exception caught");
+          });
+
+        allPromises.push(promise);
+      }
+    }
+
+    await Promise.all(allPromises);
+
+    logger.info("[Submitter] ============== SEARCH COMPLETED ==============");
+    logger.info({ totalResults: results.length, results }, "[Submitter] Search results");
+
+    return { success: true, data: results };
+  } catch (err) {
+    logger.error("[Submitter] ============== SEARCH FAILED ==============");
+    logger.error({ errorType: (err as Error)?.name, errorMessage: (err as Error)?.message, errorStack: (err as Error)?.stack }, "[Submitter] Exception caught");
+    return {
+      success: false,
+      message: (err as Error)?.message || "搜索历史信息失败",
+    };
+  }
+});
+
+ipcMain.handle("get-category-list", async () => {
+  try {
+    const apiUrl = "https://upload.deepinos.org.cn/api/index/getTypeList";
+    logger.info("[Submitter] ============== GET CATEGORY LIST START ==============");
+    logger.info({ apiUrl, userAgent: getUserAgent() }, "[Submitter] Request parameters");
+
+    const startTime = Date.now();
+    const response = await fetch(apiUrl, {
+      headers: { "User-Agent": getUserAgent() },
+    });
+    const endTime = Date.now();
+
+    logger.info({ status: response.status, statusText: response.statusText, duration: endTime - startTime }, "[Submitter] Fetch completed");
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      logger.error({ status: response.status, errorBody: errorText }, "[Submitter] Request failed");
+      return { success: false, message: `获取分类列表失败 (${response.status})` };
+    }
+
+    const json = await response.json();
+    logger.info({ code: json?.code, msg: json?.msg, dataType: typeof json?.data, dataLength: json?.data?.length || "N/A", response: json }, "[Submitter] Response parsed");
+
+    return { success: true, data: json };
+  } catch (err) {
+    logger.error({ errorType: (err as Error)?.name, errorMessage: (err as Error)?.message, errorStack: (err as Error)?.stack }, "[Submitter] Exception caught");
+    return {
+      success: false,
+      message: (err as Error)?.message || "获取分类列表失败",
+    };
+  }
+});
+
+ipcMain.handle("get-tags-list", async () => {
+  try {
+    const apiUrl = "https://upload.deepinos.org.cn/api/index/getTagsList";
+    logger.info("[Submitter] ============== GET TAGS LIST START ==============");
+    logger.info({ apiUrl, userAgent: getUserAgent() }, "[Submitter] Request parameters");
+
+    const startTime = Date.now();
+    const response = await fetch(apiUrl, {
+      headers: { "User-Agent": getUserAgent() },
+    });
+    const endTime = Date.now();
+
+    logger.info({ status: response.status, statusText: response.statusText, duration: endTime - startTime }, "[Submitter] Fetch completed");
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      logger.error({ status: response.status, errorBody: errorText }, "[Submitter] Request failed");
+      return { success: false, message: `获取标签列表失败 (${response.status})` };
+    }
+
+    const json = await response.json();
+    logger.info({ code: json?.code, msg: json?.msg, dataType: typeof json?.data, dataLength: json?.data?.length || "N/A", response: json }, "[Submitter] Response parsed");
+
+    return { success: true, data: json };
+  } catch (err) {
+    logger.error({ errorType: (err as Error)?.name, errorMessage: (err as Error)?.message, errorStack: (err as Error)?.stack }, "[Submitter] Exception caught");
+    return {
+      success: false,
+      message: (err as Error)?.message || "获取标签列表失败",
+    };
+  }
+});
+
+interface OssUploadMetadata {
+  code: number;
+  msg: string;
+  data: {
+    dir: string;
+    host: string;
+    ossAccessKeyId: string;
+    policy: string;
+    signature: string;
+  };
+}
+
+const categoryNameToIdMap: Record<string, number> = {
+  "影音播放": 1,
+  "图形图像": 2,
+  "系统工具": 3,
+  "办公学习": 4,
+  "网络通讯": 5,
+  "游戏娱乐": 6,
+  "开发工具": 7,
+  "科学计算": 8,
+  "编程开发": 9,
+  "系统软件": 10,
+  "桌面环境": 11,
+  "主题美化": 12,
+  "网络工具": 13,
+  "办公软件": 14,
+  "教育学习": 15,
+  "影音图像": 16,
+  "实用工具": 17,
+  "游戏": 18,
+  "其他": 19,
+};
+
+function getCategoryIdByName(categoryName: string): number {
+  return categoryNameToIdMap[categoryName] || 1;
+}
+
+function generateUUID(): string {
+  return `${Date.now().toString(36)}-${Math.random().toString(36).substr(2, 9)}-${Math.random().toString(36).substr(2, 9)}`;
+}
+
+function getUUIDFileNameSuggestIcoPic(filePath: string): string {
+  const ext = path.extname(filePath).toLowerCase();
+  const uuid = generateUUID();
+  return `${uuid}${ext}`;
+}
+
+function getUUIDFileNameSuggestDeb(filePath: string): string {
+  const fileName = path.basename(filePath).replace(/\s+/g, "_plus_");
+  const ext = path.extname(fileName).toLowerCase();
+  const nameWithoutExt = path.basename(fileName, ext);
+  const uuid = generateUUID().substring(0, 8);
+  return `${nameWithoutExt}_${uuid}${ext}`;
+}
+
+async function getOssUploadMetadata(type: "icons" | "pic" | "deb"): Promise<OssUploadMetadata> {
+  const startTime = Date.now();
+  const pathMap: Record<string, string> = {
+    icons: "upload_icons",
+    pic: "upload_pic",
+    deb: "upload_deb",
+  };
+  const url = `https://upload.deepinos.org.cn/api/index/${pathMap[type]}`;
+  logger.info(`[Submitter] ============== GET OSS METADATA START (${type}) ==============`);
+  logger.info({ url, timestamp: new Date().toISOString() }, `[Submitter] Getting OSS metadata for ${type}`);
+
+  const response = await fetch(url, {
+    method: "GET",
+    headers: {
+      "User-Agent": getUserAgent(),
+    },
+  });
+
+  const duration = Date.now() - startTime;
+  logger.info({ status: response.status, statusText: response.statusText, duration }, `[Submitter] OSS metadata response for ${type}`);
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    logger.error({ errorText }, `[Submitter] Failed to get OSS metadata for ${type}`);
+    throw new Error(`获取 ${type} 上传签名失败: ${response.status} - ${errorText.substring(0, 200)}`);
+  }
+
+  const responseText = await response.text();
+  logger.info({ responseTextLength: responseText.length, responseText: responseText.substring(0, 1000) }, `[Submitter] Raw OSS metadata response for ${type}`);
+
+  let result: unknown;
+  try {
+    result = JSON.parse(responseText);
+    logger.info({ resultType: typeof result, resultKeys: typeof result === "object" && result !== null ? Object.keys(result as object) : [] }, `[Submitter] Parsed OSS metadata result type for ${type}`);
+  } catch (parseError) {
+    logger.error({ parseError: (parseError as Error)?.message }, `[Submitter] Failed to parse OSS metadata response for ${type}`);
+    throw new Error(`解析 ${type} 上传签名响应失败: ${(parseError as Error)?.message}`);
+  }
+
+  if (typeof result !== "object" || result === null) {
+    logger.error({ result }, `[Submitter] OSS metadata response is not an object for ${type}`);
+    throw new Error(`${type} 上传签名响应格式错误`);
+  }
+
+  const resultObj = result as Record<string, unknown>;
+  if (resultObj.data === undefined || resultObj.data === null) {
+    logger.error({ result }, `[Submitter] OSS metadata response data field is undefined for ${type}`);
+    throw new Error(`${type} 上传签名响应缺少 data 字段`);
+  }
+
+  const dataObj = resultObj.data as Record<string, unknown>;
+  if (!dataObj.host || !dataObj.dir) {
+    logger.error({ data: resultObj.data }, `[Submitter] OSS metadata response data missing host or dir for ${type}`);
+    throw new Error(`${type} 上传签名响应 data 字段缺少 host 或 dir`);
+  }
+
+  const ossMetadata: OssUploadMetadata = {
+    code: Number(resultObj.code) || 0,
+    msg: String(resultObj.msg || ""),
+    data: {
+      dir: String(dataObj.dir),
+      host: String(dataObj.host),
+      ossAccessKeyId: String(dataObj.OSSAccessKeyId || dataObj.ossAccessKeyId || dataObj.oss_access_key_id || ""),
+      policy: String(dataObj.policy || ""),
+      signature: String(dataObj.signature || ""),
+    },
+  };
+
+  logger.info(`[Submitter] ============== OSS METADATA RECEIVED (${type}) ==============`);
+  logger.info({ code: ossMetadata.code, msg: ossMetadata.msg }, `[Submitter] OSS metadata result for ${type}`);
+  logger.info({ host: ossMetadata.data.host, dir: ossMetadata.data.dir }, `[Submitter] OSS upload host and dir for ${type}`);
+  logger.info({ ossAccessKeyIdLength: ossMetadata.data.ossAccessKeyId.length, policyLength: ossMetadata.data.policy.length, signatureLength: ossMetadata.data.signature.length }, `[Submitter] OSS credential lengths for ${type}`);
+
+  return ossMetadata;
+}
+
+async function uploadFileToOss(
+  metadata: OssUploadMetadata,
+  filePath: string,
+  fileName: string,
+  mimeType: string,
+  fileType: string
+): Promise<string> {
+  const startTime = Date.now();
+  const { host, dir, ossAccessKeyId, policy, signature } = metadata.data;
+  const uploadUrl = host;
+  const objectKey = `${dir}${fileName}`;
+
+  logger.info(`[Submitter] ============== UPLOAD FILE START (${fileType}) ==============`);
+  logger.info({ uploadUrl, objectKey, filePath, fileName, mimeType, timestamp: new Date().toISOString() }, `[Submitter] Starting upload for ${fileType}`);
+
+  const fileStat = fs.statSync(filePath);
+  logger.info({ fileSize: fileStat.size, fileSizeHuman: `${(fileStat.size / 1024 / 1024).toFixed(2)} MB` }, `[Submitter] File size for ${fileType}`);
+
+  const fileBuffer = fs.readFileSync(filePath);
+  logger.info({ bufferSize: fileBuffer.length }, `[Submitter] File buffer ready for ${fileType}`);
+
+  const form = new (globalThis as unknown as { FormData: typeof FormData }).FormData();
+  form.append("key", objectKey);
+  form.append("ossAccessKeyId", ossAccessKeyId);
+  form.append("policy", policy);
+  form.append("signature", signature);
+  form.append("success_action_status", "200");
+  form.append("file", new Blob([fileBuffer]), fileName);
+
+  logger.info(`[Submitter] ============== SENDING UPLOAD REQUEST (${fileType}) ==============`);
+  
+  const response = await fetch(uploadUrl, {
+    method: "POST",
+    headers: {
+      "User-Agent": getUserAgent(),
+    },
+    body: form as unknown as BodyInit,
+  });
+
+  const duration = Date.now() - startTime;
+  logger.info(`[Submitter] ============== UPLOAD RESPONSE RECEIVED (${fileType}) ==============`);
+  logger.info({ status: response.status, statusText: response.statusText, duration }, `[Submitter] Upload response for ${fileType}`);
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    logger.error({ errorText: errorText.substring(0, 500) }, `[Submitter] Upload failed for ${fileType}`);
+    throw new Error(`${fileType} 上传失败: ${response.status} - ${errorText.substring(0, 200)}`);
+  }
+
+  const finalUrl = `${host}${objectKey}`;
+  logger.info({ finalUrl }, `[Submitter] ${fileType} upload successful, URL: ${finalUrl}`);
+
+  return finalUrl;
+}
+
+ipcMain.handle("submit-app", async (_event, formData: unknown) => {
+  try {
+    const startTime = Date.now();
+    logger.info("[Submitter] ============== SUBMIT APP START ==============");
+    logger.info({ timestamp: new Date().toISOString() }, "[Submitter] Submission started at");
+
+    if (typeof formData !== "object" || formData === null) {
+      logger.error("[Submitter] Form data is not an object");
+      return { success: false, message: "表单数据格式错误" };
+    }
+
+    const dataObj = formData as Record<string, unknown>;
+    logger.info("[Submitter] ============== FORM DATA RECEIVED ==============");
+    logger.info({ name: dataObj.name }, "[Submitter] App name");
+    logger.info({ pkgname: dataObj.pkgname }, "[Submitter] Package name");
+    logger.info({ version: dataObj.version }, "[Submitter] Version");
+    logger.info({ author: dataObj.author }, "[Submitter] Author");
+    logger.info({ contributor: dataObj.contributor }, "[Submitter] Contributor");
+    logger.info({ website: dataObj.website }, "[Submitter] Website");
+    logger.info({ debFilePath: dataObj.debFilePath }, "[Submitter] Deb file path");
+    logger.info({ iconPath: dataObj.iconPath }, "[Submitter] Icon path");
+    logger.info({ category: dataObj.category }, "[Submitter] Category");
+    logger.info({ tags: dataObj.tags }, "[Submitter] Tags");
+    logger.info({ descriptionLength: typeof dataObj.description === "string" ? dataObj.description.length : 0 }, "[Submitter] Description length");
+    logger.info({ screenshotsCount: Array.isArray(dataObj.screenshots) ? dataObj.screenshots.length : 0 }, "[Submitter] Screenshots count");
+
+    const debFilePath = String(dataObj.debFilePath || "");
+    const iconPath = String(dataObj.iconPath || "");
+    const screenshots = Array.isArray(dataObj.screenshots) ? dataObj.screenshots : [];
+
+    if (!debFilePath) {
+      logger.error("[Submitter] Deb file path is empty");
+      return { success: false, message: "请选择 deb 文件" };
+    }
+
+    if (!fs.existsSync(debFilePath)) {
+      logger.error({ debFilePath }, "[Submitter] Deb file does not exist");
+      return { success: false, message: `deb 文件不存在: ${debFilePath}` };
+    }
+
+    let iconUrl = "";
+    if (iconPath) {
+      if (iconPath.startsWith("http://") || iconPath.startsWith("https://")) {
+        logger.info({ iconPath }, "[Submitter] Icon is a remote URL, skipping upload");
+        iconUrl = iconPath;
+      } else if (fs.existsSync(iconPath)) {
+        logger.info("[Submitter] ============== STEP 1: UPLOAD ICON ==============");
+        const iconMetadata = await getOssUploadMetadata("icons");
+        const iconFileName = getUUIDFileNameSuggestIcoPic(iconPath);
+        iconUrl = await uploadFileToOss(iconMetadata, iconPath, iconFileName, "image/png", "icon");
+        logger.info({ iconUrl }, "[Submitter] Icon upload completed");
+      } else {
+        logger.error({ iconPath }, "[Submitter] Icon file does not exist");
+        return { success: false, message: `图标文件不存在: ${iconPath}` };
+      }
+    }
+
+    const screenshotUrls: string[] = [];
+    for (let i = 0; i < screenshots.length; i++) {
+      const screenshot = screenshots[i];
+      logger.info({ index: i, screenshot }, "[Submitter] Processing screenshot");
+
+      if (typeof screenshot === "string") {
+        if (screenshot.startsWith("http://") || screenshot.startsWith("https://")) {
+          logger.info({ screenshot }, "[Submitter] Screenshot is a remote URL, skipping upload");
+          screenshotUrls.push(screenshot);
+        } else if (fs.existsSync(screenshot)) {
+          logger.info(`[Submitter] ============== STEP 2: UPLOAD SCREENSHOT ${i + 1} ==============`);
+          const picMetadata = await getOssUploadMetadata("pic");
+          const picFileName = getUUIDFileNameSuggestIcoPic(screenshot);
+          const picUrl = await uploadFileToOss(picMetadata, screenshot, picFileName, "image/png", `screenshot ${i + 1}`);
+          screenshotUrls.push(picUrl);
+          logger.info({ picUrl }, `[Submitter] Screenshot ${i + 1} upload completed`);
+        } else {
+          logger.warn({ screenshot }, "[Submitter] Screenshot file does not exist, skipping");
+        }
+      }
+    }
+
+    logger.info("[Submitter] ============== STEP 3: UPLOAD DEB ==============");
+    logger.info({ debFilePath, debFileName: getUUIDFileNameSuggestDeb(debFilePath) }, "[Submitter] Starting deb upload");
+    const debMetadata = await getOssUploadMetadata("deb");
+    const debFileName = getUUIDFileNameSuggestDeb(debFilePath);
+    const debUrl = await uploadFileToOss(debMetadata, debFilePath, debFileName, "application/vnd.debian.binary-package", "deb");
+    logger.info("[Submitter] ============== DEB UPLOAD SUCCESSFUL ==============");
+    logger.info({ debUrl, debFileName }, "[Submitter] Deb upload completed successfully");
+
+    logger.info("[Submitter] ============== STEP 4: SUBMIT APPLICATION ==============");
+
+    const debFileStat = fs.statSync(debFilePath);
+
+    const categoryName = String(dataObj.category || "");
+    const categoryId = getCategoryIdByName(categoryName);
+    logger.info({ categoryName, categoryId }, "[Submitter] Category name and ID");
+
+    const tagsString = String(dataObj.tags || "");
+    const tagsArray = tagsString ? tagsString.split(";").map((t: string) => t.trim()).filter((t: string) => t) : [];
+    logger.info({ tagsString, tagsArray }, "[Submitter] Tags conversion");
+
+    const submitData = {
+      application_name: String(dataObj.name || ""),
+      application_name_zh: String(dataObj.name || ""),
+      contributor: String(dataObj.contributor || ""),
+      icons: iconUrl,
+      size: debFileStat.size,
+      file_name: path.basename(debFilePath).replace(/\s+/g, "_plus_"),
+      website: String(dataObj.website || ""),
+      version: String(dataObj.version || ""),
+      more: String(dataObj.description || ""),
+      type_id: categoryId,
+      author: String(dataObj.author || ""),
+      remark: (dataObj.remark as string || "") + " - (来自于投稿器_v" + getAppVersion() + ")",
+      img_urls: screenshotUrls,
+      deb_url: debUrl,
+      mail: String(dataObj.mail || dataObj.contributor || ""),
+      tags: tagsArray,
+    };
+
+    logger.info("[Submitter] ============== VALIDATING SUBMISSION DATA ==============");
+    const requiredFields = ["application_name", "application_name_zh", "contributor", "icons", "size", "file_name", "version", "type_id", "author", "deb_url"];
+    const missingFields = requiredFields.filter((field) => !submitData[field as keyof typeof submitData]);
+    if (missingFields.length > 0) {
+      logger.error({ missingFields }, "[Submitter] Missing required fields");
+    }
+
+    logger.info("[Submitter] ============== PREPARING SUBMISSION REQUEST ==============");
+    logger.info({ submitData }, "[Submitter] Final submission data");
+
+    const submitterApiUrl = "https://upload.deepinos.org.cn/api/index/upload_application";
+    logger.info({ submitterApiUrl }, "[Submitter] Submission API URL");
+
+    logger.info("[Submitter] ============== SENDING SUBMISSION REQUEST ==============");
+    logger.info({ submitterApiUrl, timestamp: new Date().toISOString() }, "[Submitter] Submission request sent to API");
+
+    const response = await fetch(submitterApiUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "User-Agent": getUserAgent(),
+      },
+      body: JSON.stringify(submitData),
+    });
+
+    const requestDuration = Date.now() - startTime;
+    logger.info("[Submitter] ============== SUBMISSION RESPONSE RECEIVED ==============");
+    logger.info({ status: response.status, statusText: response.statusText }, "[Submitter] Submission response status");
+    logger.info({ duration: requestDuration }, "[Submitter] Total submission duration (ms)");
+
+    const responseText = await response.text();
+    logger.info({ responseTextLength: responseText.length }, "[Submitter] Submission response text length");
+
+    if (!response.ok) {
+      logger.error("[Submitter] ============== SUBMISSION FAILED ==============");
+      logger.error({ status: response.status, statusText: response.statusText }, "[Submitter] Submission failed with status");
+      logger.error({ responseText: responseText.substring(0, 2000) }, "[Submitter] Submission API error response (full)");
+
+      let message = "提交失败";
+      let apiResponse: unknown = null;
+
+      try {
+        apiResponse = JSON.parse(responseText);
+        logger.error({ apiResponse }, "[Submitter] Parsed API error response");
+      } catch (parseError) {
+        logger.warn({ parseError: (parseError as Error)?.message }, "[Submitter] Failed to parse error response as JSON");
+      }
+
+      if (response.status === 521) {
+        message = "服务器暂时不可用，请稍后重试";
+      } else if (response.status === 400) {
+        if (typeof apiResponse === "object" && apiResponse !== null) {
+          const errorObj = apiResponse as Record<string, unknown>;
+          message = String(errorObj.msg || errorObj.message || "请求参数错误");
+        } else {
+          message = responseText.substring(0, 200) || "请求参数错误";
+        }
+      } else if (response.status === 401) {
+        message = "未授权，请登录后再试";
+      } else if (response.status === 403) {
+        message = "权限不足";
+      } else if (response.status === 429) {
+        message = "请求过于频繁，请稍后重试";
+      } else {
+        message = `提交失败 [${response.status}]: ${responseText.substring(0, 200)}`;
+      }
+
+      logger.error({ finalMessage: message }, "[Submitter] Final error message to user");
+      return { success: false, message, apiResponse };
+    }
+
+    let result: unknown;
+    try {
+      result = JSON.parse(responseText);
+    } catch (parseError) {
+      logger.warn({ parseError: (parseError as Error)?.message }, "[Submitter] Failed to parse success response as JSON");
+      result = responseText;
+    }
+
+    logger.info("[Submitter] ============== SUBMISSION SUCCESSFUL ==============");
+    logger.info({ result }, "[Submitter] Submission API response content");
+    logger.info({ duration: requestDuration }, "[Submitter] Total duration (ms)");
+
+    return { success: true, data: result };
+  } catch (err) {
+    logger.error("[Submitter] ============== EXCEPTION CAUGHT ==============");
+    logger.error({ errorType: (err as Error)?.name }, "[Submitter] Error type");
+    logger.error({ errorMessage: (err as Error)?.message }, "[Submitter] Error message");
+    logger.error({ errorStack: (err as Error)?.stack }, "[Submitter] Error stack");
+
+    return { success: false, message: (err as Error)?.message || "提交失败" };
   }
 });
 
