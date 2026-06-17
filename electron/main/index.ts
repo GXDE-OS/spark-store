@@ -15,6 +15,7 @@ import path from "node:path";
 import os from "node:os";
 import fs from "node:fs";
 import pino from "pino";
+import https from "node:https";
 import { handleCommandLine } from "./deeplink.js";
 import { isLoaded } from "../global.js";
 import { tasks } from "./backend/install-manager.js";
@@ -660,7 +661,17 @@ ipcMain.handle("search-history-app", async (_event, pkgname: string, useMirror =
                 logger.info({ arch, category, item: json }, "[Submitter] Found matching item");
 
                 let iconUrl = json.icons || json.icon || "";
-                let imgs = json.imgUrls || json.imgs || [];
+                let imgs = json.imgUrls || json.imgs || json.img_urls || [];
+                
+                if (typeof imgs === "string") {
+                  try {
+                    imgs = JSON.parse(imgs);
+                    logger.info({ arch, category, parsedImgsCount: Array.isArray(imgs) ? imgs.length : 0 }, "[Submitter] Parsed img_urls from string");
+                  } catch {
+                    imgs = [];
+                    logger.warn({ arch, category, imgsString: imgs }, "[Submitter] Failed to parse img_urls string");
+                  }
+                }
 
                 if (iconUrl && typeof iconUrl === "string") {
                   if (useMirror) {
@@ -919,12 +930,15 @@ async function getOssUploadMetadata(type: "icons" | "pic" | "deb"): Promise<OssU
   return ossMetadata;
 }
 
+type UploadProgressCallback = (progress: number, fileType: string) => void;
+
 async function uploadFileToOss(
   metadata: OssUploadMetadata,
   filePath: string,
   fileName: string,
   mimeType: string,
-  fileType: string
+  fileType: string,
+  progressCallback?: UploadProgressCallback
 ): Promise<string> {
   const startTime = Date.now();
   const { host, dir, ossAccessKeyId, policy, signature } = metadata.data;
@@ -935,46 +949,120 @@ async function uploadFileToOss(
   logger.info({ uploadUrl, objectKey, filePath, fileName, mimeType, timestamp: new Date().toISOString() }, `[Submitter] Starting upload for ${fileType}`);
 
   const fileStat = fs.statSync(filePath);
-  logger.info({ fileSize: fileStat.size, fileSizeHuman: `${(fileStat.size / 1024 / 1024).toFixed(2)} MB` }, `[Submitter] File size for ${fileType}`);
+  const fileSize = fileStat.size;
+  logger.info({ fileSize, fileSizeHuman: `${(fileSize / 1024 / 1024).toFixed(2)} MB` }, `[Submitter] File size for ${fileType}`);
 
   const fileBuffer = fs.readFileSync(filePath);
   logger.info({ bufferSize: fileBuffer.length }, `[Submitter] File buffer ready for ${fileType}`);
 
-  const form = new (globalThis as unknown as { FormData: typeof FormData }).FormData();
-  form.append("key", objectKey);
-  form.append("ossAccessKeyId", ossAccessKeyId);
-  form.append("policy", policy);
-  form.append("signature", signature);
-  form.append("success_action_status", "200");
-  form.append("file", new Blob([fileBuffer]), fileName);
-
-  logger.info(`[Submitter] ============== SENDING UPLOAD REQUEST (${fileType}) ==============`);
+  const boundary = `----SparkStoreUploadBoundary${Date.now().toString(36)}`;
+  const CRLF = Buffer.from("\r\n", "ascii");
   
-  const response = await fetch(uploadUrl, {
-    method: "POST",
-    headers: {
-      "User-Agent": getUserAgent(),
-    },
-    body: form as unknown as BodyInit,
+  const encodeField = (str: string) => Buffer.from(str, "utf8");
+  
+  const headerBuffers: Buffer[] = [];
+  headerBuffers.push(encodeField(`--${boundary}\r\n`));
+  headerBuffers.push(encodeField(`Content-Disposition: form-data; name="key"\r\n\r\n`));
+  headerBuffers.push(encodeField(objectKey));
+  headerBuffers.push(CRLF);
+  
+  headerBuffers.push(encodeField(`--${boundary}\r\n`));
+  headerBuffers.push(encodeField(`Content-Disposition: form-data; name="ossAccessKeyId"\r\n\r\n`));
+  headerBuffers.push(encodeField(ossAccessKeyId));
+  headerBuffers.push(CRLF);
+  
+  headerBuffers.push(encodeField(`--${boundary}\r\n`));
+  headerBuffers.push(encodeField(`Content-Disposition: form-data; name="policy"\r\n\r\n`));
+  headerBuffers.push(encodeField(policy));
+  headerBuffers.push(CRLF);
+  
+  headerBuffers.push(encodeField(`--${boundary}\r\n`));
+  headerBuffers.push(encodeField(`Content-Disposition: form-data; name="signature"\r\n\r\n`));
+  headerBuffers.push(encodeField(signature));
+  headerBuffers.push(CRLF);
+  
+  headerBuffers.push(encodeField(`--${boundary}\r\n`));
+  headerBuffers.push(encodeField(`Content-Disposition: form-data; name="success_action_status"\r\n\r\n`));
+  headerBuffers.push(encodeField("200"));
+  headerBuffers.push(CRLF);
+  
+  headerBuffers.push(encodeField(`--${boundary}\r\n`));
+  headerBuffers.push(encodeField(`Content-Disposition: form-data; name="file"; filename="${fileName}"\r\n`));
+  headerBuffers.push(encodeField(`Content-Type: ${mimeType}\r\n\r\n`));
+  
+  const formHeaderBuffer = Buffer.concat(headerBuffers);
+  const formFooterBuffer = Buffer.concat([CRLF, encodeField(`--${boundary}--\r\n`)]);
+  const totalLength = formHeaderBuffer.length + fileBuffer.length + formFooterBuffer.length;
+  
+  logger.info({ formHeaderLength: formHeaderBuffer.length, formFooterLength: formFooterBuffer.length, totalLength, fileSize }, `[Submitter] Form lengths for ${fileType}`);
+
+  return new Promise((resolve, reject) => {
+    const url = new URL(uploadUrl);
+    const options: https.RequestOptions = {
+      hostname: url.hostname,
+      port: url.port ? parseInt(url.port) : 443,
+      path: url.pathname + url.search,
+      method: "POST",
+      headers: {
+        "User-Agent": getUserAgent(),
+        "Content-Type": `multipart/form-data; boundary=${boundary}`,
+        "Content-Length": totalLength,
+      },
+    };
+
+    logger.info(`[Submitter] ============== SENDING UPLOAD REQUEST (${fileType}) ==============`);
+    
+    const req = https.request(options, (res) => {
+      let responseData = "";
+      res.on("data", (chunk) => {
+        responseData += chunk;
+      });
+      res.on("end", () => {
+        const duration = Date.now() - startTime;
+        logger.info(`[Submitter] ============== UPLOAD RESPONSE RECEIVED (${fileType}) ==============`);
+        logger.info({ status: res.statusCode, duration }, `[Submitter] Upload response for ${fileType}`);
+        logger.info({ responseHeaders: res.headers }, `[Submitter] Response headers for ${fileType}`);
+        logger.info({ responseBody: responseData.substring(0, 1000) }, `[Submitter] Response body for ${fileType}`);
+
+        if (res.statusCode !== 200) {
+          logger.error({ errorText: responseData.substring(0, 500) }, `[Submitter] Upload failed for ${fileType}`);
+          reject(new Error(`${fileType} 上传失败: ${res.statusCode} - ${responseData.substring(0, 500)}`));
+          return;
+        }
+
+        const finalUrl = `${host}${objectKey}`;
+        logger.info({ finalUrl }, `[Submitter] ${fileType} upload successful, URL: ${finalUrl}`);
+        resolve(finalUrl);
+      });
+    });
+
+    req.on("error", (err) => {
+      logger.error({ err }, `[Submitter] Upload request error for ${fileType}`);
+      reject(new Error(`${fileType} 上传失败: ${err.message}`));
+    });
+
+    req.write(formHeaderBuffer);
+    
+    let uploadedBytes = formHeaderBuffer.length;
+    
+    const chunkSize = 1024 * 1024;
+    for (let offset = 0; offset < fileBuffer.length; offset += chunkSize) {
+      const chunk = fileBuffer.slice(offset, Math.min(offset + chunkSize, fileBuffer.length));
+      req.write(chunk);
+      uploadedBytes += chunk.length;
+      
+      if (progressCallback) {
+        const progress = Math.min((uploadedBytes / totalLength) * 100, 100);
+        progressCallback(progress, fileType);
+      }
+    }
+    
+    req.write(formFooterBuffer);
+    req.end();
   });
-
-  const duration = Date.now() - startTime;
-  logger.info(`[Submitter] ============== UPLOAD RESPONSE RECEIVED (${fileType}) ==============`);
-  logger.info({ status: response.status, statusText: response.statusText, duration }, `[Submitter] Upload response for ${fileType}`);
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    logger.error({ errorText: errorText.substring(0, 500) }, `[Submitter] Upload failed for ${fileType}`);
-    throw new Error(`${fileType} 上传失败: ${response.status} - ${errorText.substring(0, 200)}`);
-  }
-
-  const finalUrl = `${host}${objectKey}`;
-  logger.info({ finalUrl }, `[Submitter] ${fileType} upload successful, URL: ${finalUrl}`);
-
-  return finalUrl;
 }
 
-ipcMain.handle("submit-app", async (_event, formData: unknown) => {
+ipcMain.handle("submit-app", async (event, formData: unknown) => {
   try {
     const startTime = Date.now();
     logger.info("[Submitter] ============== SUBMIT APP START ==============");
@@ -1014,6 +1102,10 @@ ipcMain.handle("submit-app", async (_event, formData: unknown) => {
       return { success: false, message: `deb 文件不存在: ${debFilePath}` };
     }
 
+    const sendUploadProgress = (step: string, progress: number, message: string) => {
+      event.sender.send("submit-upload-progress", { step, progress, message });
+    };
+
     let iconUrl = "";
     if (iconPath) {
       if (iconPath.startsWith("http://") || iconPath.startsWith("https://")) {
@@ -1023,7 +1115,11 @@ ipcMain.handle("submit-app", async (_event, formData: unknown) => {
         logger.info("[Submitter] ============== STEP 1: UPLOAD ICON ==============");
         const iconMetadata = await getOssUploadMetadata("icons");
         const iconFileName = getUUIDFileNameSuggestIcoPic(iconPath);
-        iconUrl = await uploadFileToOss(iconMetadata, iconPath, iconFileName, "image/png", "icon");
+        sendUploadProgress("icon", 0, "正在上传图标...");
+        iconUrl = await uploadFileToOss(iconMetadata, iconPath, iconFileName, "image/png", "icon", (progress) => {
+          sendUploadProgress("icon", progress, `正在上传图标... ${Math.floor(progress)}%`);
+        });
+        sendUploadProgress("icon", 100, "图标上传完成");
         logger.info({ iconUrl }, "[Submitter] Icon upload completed");
       } else {
         logger.error({ iconPath }, "[Submitter] Icon file does not exist");
@@ -1044,7 +1140,11 @@ ipcMain.handle("submit-app", async (_event, formData: unknown) => {
           logger.info(`[Submitter] ============== STEP 2: UPLOAD SCREENSHOT ${i + 1} ==============`);
           const picMetadata = await getOssUploadMetadata("pic");
           const picFileName = getUUIDFileNameSuggestIcoPic(screenshot);
-          const picUrl = await uploadFileToOss(picMetadata, screenshot, picFileName, "image/png", `screenshot ${i + 1}`);
+          sendUploadProgress(`screenshot-${i}`, 0, `正在上传截图 ${i + 1}...`);
+          const picUrl = await uploadFileToOss(picMetadata, screenshot, picFileName, "image/png", `screenshot ${i + 1}`, (progress) => {
+            sendUploadProgress(`screenshot-${i}`, progress, `正在上传截图 ${i + 1}... ${Math.floor(progress)}%`);
+          });
+          sendUploadProgress(`screenshot-${i}`, 100, `截图 ${i + 1} 上传完成`);
           screenshotUrls.push(picUrl);
           logger.info({ picUrl }, `[Submitter] Screenshot ${i + 1} upload completed`);
         } else {
@@ -1057,7 +1157,11 @@ ipcMain.handle("submit-app", async (_event, formData: unknown) => {
     logger.info({ debFilePath, debFileName: getUUIDFileNameSuggestDeb(debFilePath) }, "[Submitter] Starting deb upload");
     const debMetadata = await getOssUploadMetadata("deb");
     const debFileName = getUUIDFileNameSuggestDeb(debFilePath);
-    const debUrl = await uploadFileToOss(debMetadata, debFilePath, debFileName, "application/vnd.debian.binary-package", "deb");
+    sendUploadProgress("deb", 0, "正在上传安装包...");
+    const debUrl = await uploadFileToOss(debMetadata, debFilePath, debFileName, "application/vnd.debian.binary-package", "deb", (progress) => {
+      sendUploadProgress("deb", progress, `正在上传安装包... ${Math.floor(progress)}%`);
+    });
+    sendUploadProgress("deb", 100, "安装包上传完成");
     logger.info("[Submitter] ============== DEB UPLOAD SUCCESSFUL ==============");
     logger.info({ debUrl, debFileName }, "[Submitter] Deb upload completed successfully");
 

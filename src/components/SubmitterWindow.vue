@@ -1063,6 +1063,5 @@ import { onMounted, nextTick } from "vue";
 onMounted(() => {
   console.log("[Submitter] Component mounted, loading categories and tags");
   loadCategoriesList();
-  loadTagsList();
 });
 </script>

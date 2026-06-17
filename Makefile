@@ -15,7 +15,7 @@ install:
 	mkdir -p $(DESTDIR)/usr/bin/
 	cp -rv release/*/linux-unpacked/* $(DESTDIR)/opt/spark-store/bin/
 	cp -rv release/*/linux-unpacked/extras/* $(DESTDIR)/opt/spark-store/extras/
-	cp -rv tool/* $(DESTDIR)/opt/spark-store/bin/
+	cp -rv tool/* $(DESTDIR)/opt/durapps/spark-store/bin/
 	cp -rv pkg/usr/share/fish/ $(DESTDIR)/usr/share/
 	cp -rv icons/hicolor/ $(DESTDIR)/usr/share/icons/
 	cp -rv pkg/usr/share/icons/hicolor/ $(DESTDIR)/usr/share/icons/
