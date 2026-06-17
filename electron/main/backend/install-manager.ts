@@ -6,6 +6,7 @@ import pino from "pino";
 
 import { ChannelPayload } from "../../typedefinition";
 import axios from "axios";
+import { findExecutable, SUPER_USER_COMMAND_CANDIDATES } from "./superuser";
 
 const logger = pino({ name: "install-manager" });
 
@@ -43,41 +44,10 @@ type InstallTask = {
 };
 
 const SHELL_CALLER_PATH = "/opt/spark-store/extras/shell-caller.sh";
-const SUPER_USER_COMMAND_CANDIDATES = [
-  "/usr/bin/pkexec",
-  "/run/wrappers/bin/pkexec",
-  "pkexec",
-];
 
 export const tasks = new Map<number, InstallTask>();
 
 let idle = true; // Indicates if the installation manager is idle
-
-const findExecutable = async (command: string): Promise<string> => {
-  if (path.isAbsolute(command)) {
-    try {
-      await fs.promises.access(command, fs.constants.X_OK);
-      return command;
-    } catch {
-      return "";
-    }
-  }
-
-  return await new Promise((resolve) => {
-    const child = spawn("which", [command]);
-    let stdout = "";
-
-    child.stdout?.on("data", (data) => {
-      stdout += data.toString();
-    });
-    child.on("close", (code) => {
-      resolve(code === 0 ? stdout.trim() : "");
-    });
-    child.on("error", () => {
-      resolve("");
-    });
-  });
-};
 
 export const checkSuperUserCommand = async (): Promise<string> => {
   if (process.getuid?.() === 0) return "";

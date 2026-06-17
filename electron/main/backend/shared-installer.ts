@@ -8,15 +8,11 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import axios from "axios";
 import pino from "pino";
+import { findExecutable, SUPER_USER_COMMAND_CANDIDATES } from "./superuser";
 
 const logger = pino({ name: "shared-installer" });
 
 export const SHELL_CALLER_PATH = "/opt/spark-store/extras/shell-caller.sh";
-const SUPER_USER_COMMAND_CANDIDATES = [
-  "/usr/bin/pkexec",
-  "/run/wrappers/bin/pkexec",
-  "pkexec",
-];
 
 export interface DownloadOptions {
   pkgname: string;
@@ -362,30 +358,4 @@ export const checkSuperUserCommand = async (): Promise<string> => {
 
   logger.error("没有找到提升权限的命令 pkexec!");
   return "";
-};
-
-const findExecutable = async (command: string): Promise<string> => {
-  if (path.isAbsolute(command)) {
-    try {
-      await fs.promises.access(command, fs.constants.X_OK);
-      return command;
-    } catch {
-      return "";
-    }
-  }
-
-  return await new Promise((resolve) => {
-    const child = spawn("which", [command]);
-    let stdout = "";
-
-    child.stdout?.on("data", (data) => {
-      stdout += data.toString();
-    });
-    child.on("close", (code) => {
-      resolve(code === 0 ? stdout.trim() : "");
-    });
-    child.on("error", () => {
-      resolve("");
-    });
-  });
 };
