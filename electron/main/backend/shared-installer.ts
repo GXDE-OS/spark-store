@@ -12,6 +12,11 @@ import pino from "pino";
 const logger = pino({ name: "shared-installer" });
 
 export const SHELL_CALLER_PATH = "/opt/spark-store/extras/shell-caller.sh";
+const SUPER_USER_COMMAND_CANDIDATES = [
+  "/usr/bin/pkexec",
+  "/run/wrappers/bin/pkexec",
+  "pkexec",
+];
 
 export interface DownloadOptions {
   pkgname: string;
@@ -345,18 +350,39 @@ export const checkApmAvailable = async (): Promise<boolean> => {
  * 检查提权命令
  */
 export const checkSuperUserCommand = async (): Promise<string> => {
-  return new Promise((resolve) => {
-    const child = spawn("which", ["/usr/bin/pkexec"]);
+  if (process.getuid?.() === 0) return "";
+
+  for (const command of SUPER_USER_COMMAND_CANDIDATES) {
+    const superUserCmd = await findExecutable(command);
+    if (superUserCmd.length > 0) {
+      logger.info(`找到提升权限命令: ${superUserCmd}`);
+      return superUserCmd;
+    }
+  }
+
+  logger.error("没有找到提升权限的命令 pkexec!");
+  return "";
+};
+
+const findExecutable = async (command: string): Promise<string> => {
+  if (path.isAbsolute(command)) {
+    try {
+      await fs.promises.access(command, fs.constants.X_OK);
+      return command;
+    } catch {
+      return "";
+    }
+  }
+
+  return await new Promise((resolve) => {
+    const child = spawn("which", [command]);
     let stdout = "";
+
     child.stdout?.on("data", (data) => {
       stdout += data.toString();
     });
     child.on("close", (code) => {
-      if (code === 0) {
-        resolve(stdout.trim());
-      } else {
-        resolve("");
-      }
+      resolve(code === 0 ? stdout.trim() : "");
     });
     child.on("error", () => {
       resolve("");

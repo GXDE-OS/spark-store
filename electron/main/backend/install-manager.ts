@@ -1,6 +1,5 @@
 import { ipcMain, WebContents } from "electron";
-import { spawn, ChildProcess, exec } from "node:child_process";
-import { promisify } from "node:util";
+import { spawn, ChildProcess } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import pino from "pino";
@@ -44,28 +43,55 @@ type InstallTask = {
 };
 
 const SHELL_CALLER_PATH = "/opt/spark-store/extras/shell-caller.sh";
+const SUPER_USER_COMMAND_CANDIDATES = [
+  "/usr/bin/pkexec",
+  "/run/wrappers/bin/pkexec",
+  "pkexec",
+];
 
 export const tasks = new Map<number, InstallTask>();
 
 let idle = true; // Indicates if the installation manager is idle
 
-export const checkSuperUserCommand = async (): Promise<string> => {
-  let superUserCmd = "";
-  const execAsync = promisify(exec);
-  if (process.getuid && process.getuid() !== 0) {
-    const { stdout, stderr } = await execAsync("which /usr/bin/pkexec");
-    if (stderr) {
-      logger.error("没有找到 pkexec 命令");
-      return;
-    }
-    logger.info(`找到提升权限命令: ${stdout.trim()}`);
-    superUserCmd = stdout.trim();
-
-    if (superUserCmd.length === 0) {
-      logger.error("没有找到提升权限的命令 pkexec!");
+const findExecutable = async (command: string): Promise<string> => {
+  if (path.isAbsolute(command)) {
+    try {
+      await fs.promises.access(command, fs.constants.X_OK);
+      return command;
+    } catch {
+      return "";
     }
   }
-  return superUserCmd;
+
+  return await new Promise((resolve) => {
+    const child = spawn("which", [command]);
+    let stdout = "";
+
+    child.stdout?.on("data", (data) => {
+      stdout += data.toString();
+    });
+    child.on("close", (code) => {
+      resolve(code === 0 ? stdout.trim() : "");
+    });
+    child.on("error", () => {
+      resolve("");
+    });
+  });
+};
+
+export const checkSuperUserCommand = async (): Promise<string> => {
+  if (process.getuid?.() === 0) return "";
+
+  for (const command of SUPER_USER_COMMAND_CANDIDATES) {
+    const superUserCmd = await findExecutable(command);
+    if (superUserCmd.length > 0) {
+      logger.info(`找到提升权限命令: ${superUserCmd}`);
+      return superUserCmd;
+    }
+  }
+
+  logger.error("没有找到提升权限的命令 pkexec!");
+  return "";
 };
 
 const runCommandCapture = async (execCommand: string, execParams: string[]) => {
