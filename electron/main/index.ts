@@ -811,47 +811,42 @@ interface OssUploadMetadata {
 }
 
 const categoryNameToIdMap: Record<string, number> = {
-  "影音播放": 1,
-  "图形图像": 2,
-  "系统工具": 3,
-  "办公学习": 4,
-  "网络通讯": 5,
-  "游戏娱乐": 6,
-  "开发工具": 7,
-  "科学计算": 8,
-  "编程开发": 9,
-  "系统软件": 10,
-  "桌面环境": 11,
-  "主题美化": 12,
-  "网络工具": 13,
-  "办公软件": 14,
-  "教育学习": 15,
-  "影音图像": 16,
-  "实用工具": 17,
-  "游戏": 18,
-  "其他": 19,
+  "network": 3,
+  "chat": 9,
+  "music": 2,
+  "video": 12,
+  "image_graphics": 6,
+  "games": 1,
+  "office": 4,
+  "reading": 8,
+  "development": 7,
+  "tools": 11,
+  "themes": 10,
+  "others": 5,
 };
 
 function getCategoryIdByName(categoryName: string): number {
-  return categoryNameToIdMap[categoryName] || 1;
+  return categoryNameToIdMap[categoryName];
 }
 
 function generateUUID(): string {
-  return `${Date.now().toString(36)}-${Math.random().toString(36).substr(2, 9)}-${Math.random().toString(36).substr(2, 9)}`;
+  const hexChars = "0123456789abcdef";
+  let uuid = "";
+  for (let i = 0; i < 32; i++) {
+    uuid += hexChars[Math.floor(Math.random() * 16)];
+  }
+  return uuid;
 }
 
 function getUUIDFileNameSuggestIcoPic(filePath: string): string {
-  const ext = path.extname(filePath).toLowerCase();
+  const ext = path.extname(filePath).toLowerCase().replace(".", "");
   const uuid = generateUUID();
-  return `${uuid}${ext}`;
+  return `${uuid}.${ext}`;
 }
 
-function getUUIDFileNameSuggestDeb(filePath: string): string {
-  const fileName = path.basename(filePath).replace(/\s+/g, "_plus_");
-  const ext = path.extname(fileName).toLowerCase();
-  const nameWithoutExt = path.basename(fileName, ext);
-  const uuid = generateUUID().substring(0, 8);
-  return `${nameWithoutExt}_${uuid}${ext}`;
+function getUUIDFileNameSuggestDeb(_filePath: string): string {
+  const uuid = generateUUID();
+  return `${uuid}.deb`;
 }
 
 async function getOssUploadMetadata(type: "icons" | "pic" | "deb"): Promise<OssUploadMetadata> {
@@ -1108,22 +1103,46 @@ ipcMain.handle("submit-app", async (event, formData: unknown) => {
 
     let iconUrl = "";
     if (iconPath) {
+      logger.info("[Submitter] ============== STEP 1: UPLOAD ICON ==============");
+      let iconFilePath = iconPath;
+      
       if (iconPath.startsWith("http://") || iconPath.startsWith("https://")) {
-        logger.info({ iconPath }, "[Submitter] Icon is a remote URL, skipping upload");
-        iconUrl = iconPath;
-      } else if (fs.existsSync(iconPath)) {
-        logger.info("[Submitter] ============== STEP 1: UPLOAD ICON ==============");
+        logger.info({ iconPath }, "[Submitter] Icon is a remote URL, downloading first");
+        const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "spark-store-submitter-"));
+        iconFilePath = path.join(tempDir, "icon.png");
+        
+        try {
+          const response = await fetch(iconPath);
+          if (!response.ok) {
+            throw new Error(`下载图标失败: ${response.status}`);
+          }
+          const blob = await response.blob();
+          const buffer = Buffer.from(await blob.arrayBuffer());
+          fs.writeFileSync(iconFilePath, buffer);
+          logger.info({ iconFilePath, size: buffer.length }, "[Submitter] Icon downloaded successfully");
+        } catch (err) {
+          logger.error({ err, iconPath }, "[Submitter] Failed to download icon from URL");
+          return { success: false, message: `下载图标失败: ${(err as Error).message}` };
+        }
+      }
+      
+      if (fs.existsSync(iconFilePath)) {
         const iconMetadata = await getOssUploadMetadata("icons");
-        const iconFileName = getUUIDFileNameSuggestIcoPic(iconPath);
+        const iconFileName = getUUIDFileNameSuggestIcoPic(iconFilePath);
         sendUploadProgress("icon", 0, "正在上传图标...");
-        iconUrl = await uploadFileToOss(iconMetadata, iconPath, iconFileName, "image/png", "icon", (progress) => {
+        iconUrl = await uploadFileToOss(iconMetadata, iconFilePath, iconFileName, "image/png", "icon", (progress) => {
           sendUploadProgress("icon", progress, `正在上传图标... ${Math.floor(progress)}%`);
         });
         sendUploadProgress("icon", 100, "图标上传完成");
         logger.info({ iconUrl }, "[Submitter] Icon upload completed");
+        
+        if (iconPath.startsWith("http://") || iconPath.startsWith("https://")) {
+          fs.unlinkSync(iconFilePath);
+          fs.rmdirSync(path.dirname(iconFilePath));
+        }
       } else {
-        logger.error({ iconPath }, "[Submitter] Icon file does not exist");
-        return { success: false, message: `图标文件不存在: ${iconPath}` };
+        logger.error({ iconFilePath }, "[Submitter] Icon file does not exist");
+        return { success: false, message: `图标文件不存在: ${iconFilePath}` };
       }
     }
 
@@ -1133,22 +1152,46 @@ ipcMain.handle("submit-app", async (event, formData: unknown) => {
       logger.info({ index: i, screenshot }, "[Submitter] Processing screenshot");
 
       if (typeof screenshot === "string") {
+        logger.info(`[Submitter] ============== STEP 2: UPLOAD SCREENSHOT ${i + 1} ==============`);
+        let screenshotFilePath = screenshot;
+        
         if (screenshot.startsWith("http://") || screenshot.startsWith("https://")) {
-          logger.info({ screenshot }, "[Submitter] Screenshot is a remote URL, skipping upload");
-          screenshotUrls.push(screenshot);
-        } else if (fs.existsSync(screenshot)) {
-          logger.info(`[Submitter] ============== STEP 2: UPLOAD SCREENSHOT ${i + 1} ==============`);
+          logger.info({ screenshot }, "[Submitter] Screenshot is a remote URL, downloading first");
+          const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "spark-store-submitter-"));
+          screenshotFilePath = path.join(tempDir, `screen_${i + 1}.png`);
+          
+          try {
+            const response = await fetch(screenshot);
+            if (!response.ok) {
+              throw new Error(`下载截图失败: ${response.status}`);
+            }
+            const blob = await response.blob();
+            const buffer = Buffer.from(await blob.arrayBuffer());
+            fs.writeFileSync(screenshotFilePath, buffer);
+            logger.info({ screenshotFilePath, size: buffer.length }, "[Submitter] Screenshot downloaded successfully");
+          } catch (err) {
+            logger.error({ err, screenshot }, "[Submitter] Failed to download screenshot from URL");
+            continue;
+          }
+        }
+        
+        if (fs.existsSync(screenshotFilePath)) {
           const picMetadata = await getOssUploadMetadata("pic");
-          const picFileName = getUUIDFileNameSuggestIcoPic(screenshot);
+          const picFileName = getUUIDFileNameSuggestIcoPic(screenshotFilePath);
           sendUploadProgress(`screenshot-${i}`, 0, `正在上传截图 ${i + 1}...`);
-          const picUrl = await uploadFileToOss(picMetadata, screenshot, picFileName, "image/png", `screenshot ${i + 1}`, (progress) => {
+          const picUrl = await uploadFileToOss(picMetadata, screenshotFilePath, picFileName, "image/png", `screenshot ${i + 1}`, (progress) => {
             sendUploadProgress(`screenshot-${i}`, progress, `正在上传截图 ${i + 1}... ${Math.floor(progress)}%`);
           });
           sendUploadProgress(`screenshot-${i}`, 100, `截图 ${i + 1} 上传完成`);
           screenshotUrls.push(picUrl);
           logger.info({ picUrl }, `[Submitter] Screenshot ${i + 1} upload completed`);
+          
+          if (screenshot.startsWith("http://") || screenshot.startsWith("https://")) {
+            fs.unlinkSync(screenshotFilePath);
+            fs.rmdirSync(path.dirname(screenshotFilePath));
+          }
         } else {
-          logger.warn({ screenshot }, "[Submitter] Screenshot file does not exist, skipping");
+          logger.warn({ screenshotFilePath }, "[Submitter] Screenshot file does not exist, skipping");
         }
       }
     }
@@ -1178,7 +1221,7 @@ ipcMain.handle("submit-app", async (event, formData: unknown) => {
     logger.info({ tagsString, tagsArray }, "[Submitter] Tags conversion");
 
     const submitData = {
-      application_name: String(dataObj.name || ""),
+      application_name: String(dataObj.pkgname || ""),
       application_name_zh: String(dataObj.name || ""),
       contributor: String(dataObj.contributor || ""),
       icons: iconUrl,
