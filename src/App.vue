@@ -1,5 +1,7 @@
 <template>
+  <SubmitterWindow v-if="isSubmitterView" />
   <div
+    v-else
     class="flex min-h-screen flex-col bg-slate-50 text-slate-900 transition-colors duration-300 dark:bg-slate-950 dark:text-slate-100"
   >
     <WindowTitleBar />
@@ -33,6 +35,7 @@
           @close="isSidebarOpen = false"
           @list="handleList"
           @update="handleUpdate"
+          @submit="handleSubmit"
           @request-login="showLoginModal = true"
           @open-user-management="openUserManagement"
           @open-favorites="openFavoriteManagement"
@@ -304,6 +307,7 @@ import FavoriteFolderManager from "./components/FavoriteFolderManager.vue";
 import UserManagementModal from "./components/UserManagementModal.vue";
 import ReviewUserProfileModal from "./components/ReviewUserProfileModal.vue";
 import WindowTitleBar from "./components/WindowTitleBar.vue";
+import SubmitterWindow from "./components/SubmitterWindow.vue";
 import {
   APM_STORE_BASE_URL,
   FLARUM_BASE_URL,
@@ -433,6 +437,8 @@ const isDarkTheme = computed(() => {
   if (themeMode.value === "auto") return systemIsDark.value;
   return themeMode.value === "dark";
 });
+
+const isSubmitterView = ref(false);
 
 const categories: Ref<Record<string, CategoryInfo>> = ref({});
 const apps: Ref<App[]> = ref([]);
@@ -1149,6 +1155,19 @@ const handleOpenInstallSettings = () => {
 
 const handleList = () => {
   openInstalledModal();
+};
+
+const handleSubmit = async () => {
+  try {
+    const result = await window.ipcRenderer.invoke("launch-submitter");
+    if (!result?.success) {
+      logger.error(
+        "Failed to launch submitter: " + (result?.message || "unknown error"),
+      );
+    }
+  } catch (error) {
+    logger.error(`Failed to launch submitter: ${error}`);
+  }
 };
 
 const openUpdateModal = async () => {
@@ -2550,6 +2569,13 @@ const handleSearchFocus = () => {
 onMounted(async () => {
   initTheme();
   updateCenterStore.bind();
+
+  const handleHashChange = () => {
+    isSubmitterView.value = window.location.hash === "#submitter";
+  };
+
+  handleHashChange();
+  window.addEventListener("hashchange", handleHashChange);
 
   try {
     systemInfo.value = await window.ipcRenderer.invoke("get-system-info");

@@ -123,6 +123,14 @@
         <span class="sidebar-tab-icon"><i class="fas fa-sync-alt"></i></span>
         <span class="sidebar-tab-label">软件更新</span>
       </button>
+      <button
+        type="button"
+        class="sidebar-tab"
+        @click="emitSidebarAction('submit')"
+      >
+        <span class="sidebar-tab-icon"><i class="fas fa-upload"></i></span>
+        <span class="sidebar-tab-label">投稿应用</span>
+      </button>
     </div>
   </div>
 </template>
@@ -152,6 +160,7 @@ const emit = defineEmits<{
   (e: "close"): void;
   (e: "list"): void;
   (e: "update"): void;
+  (e: "submit"): void;
   (e: "request-login"): void;
   (e: "open-user-management"): void;
   (e: "open-favorites"): void;
@@ -227,10 +236,11 @@ const selectTab = (tab: string) => {
   emit("select-tab", tab);
 };
 
-const emitSidebarAction = (action: "list" | "update") => {
+const emitSidebarAction = (action: "list" | "update" | "submit") => {
   showAccountMenu.value = false;
   if (action === "list") emit("list");
-  else emit("update");
+  else if (action === "update") emit("update");
+  else emit("submit");
 };
 </script>
 

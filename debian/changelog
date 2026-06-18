@@ -1,0 +1,5 @@
+spark-store (5.2.0~alpha1) UNRELEASED; urgency=medium
+
+  * Initial release. (Closes: #nnnn)  <nnnn is the bug number of your ITP>
+
+ -- shenmo <shenmo@spark-app.store>  Tue, 16 Jun 2026 21:45:35 +0800

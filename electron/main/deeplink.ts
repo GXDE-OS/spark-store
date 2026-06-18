@@ -84,7 +84,8 @@ export function handleCommandLine(commandLine: string[]) {
     // Handle apt:// protocol: convert to spk://search/pkgname
     if (url.protocol === "apt:") {
       // Format: apt://pkgname
-      const pkgname = url.hostname || url.pathname.split("/").filter(Boolean)[0];
+      const pkgname =
+        url.hostname || url.pathname.split("/").filter(Boolean)[0];
       if (pkgname) {
         const query: Query = { pkgname };
         logger.info(`Deep link: apt protocol converted to search: ${pkgname}`);
