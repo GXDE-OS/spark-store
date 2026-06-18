@@ -18,7 +18,7 @@ Linux 应用的数量相对有限，Wine 软件的可获取性也颇为困难。
 
 **当前支持的 Linux 发行版包括（但不限于）：**
 
-- **amd64 架构：** Debian 10+ / Ubuntu 22.04+ / Arch Linux / Fedora / deepin / UOS / 银河麒麟 
+- **amd64 架构：** Debian 10+ / Ubuntu 22.04+ / Arch Linux / Fedora / deepin / UOS / 银河麒麟 / NixOS
 - **arm64 架构：** Debian 10+ / Ubuntu 22.04+ / Arch Linux / deepin / UOS / 银河麒麟 
 - **loong64 架构：** deepin 23/25
 

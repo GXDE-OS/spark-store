@@ -1,12 +1,12 @@
 import { ipcMain, WebContents } from "electron";
-import { spawn, ChildProcess, exec } from "node:child_process";
-import { promisify } from "node:util";
+import { spawn, ChildProcess } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import pino from "pino";
 
 import { ChannelPayload } from "../../typedefinition";
 import axios from "axios";
+import { findExecutable, SUPER_USER_COMMAND_CANDIDATES } from "./superuser";
 
 const logger = pino({ name: "install-manager" });
 
@@ -50,22 +50,18 @@ export const tasks = new Map<number, InstallTask>();
 let idle = true; // Indicates if the installation manager is idle
 
 export const checkSuperUserCommand = async (): Promise<string> => {
-  let superUserCmd = "";
-  const execAsync = promisify(exec);
-  if (process.getuid && process.getuid() !== 0) {
-    const { stdout, stderr } = await execAsync("which /usr/bin/pkexec");
-    if (stderr) {
-      logger.error("没有找到 pkexec 命令");
-      return;
-    }
-    logger.info(`找到提升权限命令: ${stdout.trim()}`);
-    superUserCmd = stdout.trim();
+  if (process.getuid?.() === 0) return "";
 
-    if (superUserCmd.length === 0) {
-      logger.error("没有找到提升权限的命令 pkexec!");
+  for (const command of SUPER_USER_COMMAND_CANDIDATES) {
+    const superUserCmd = await findExecutable(command);
+    if (superUserCmd.length > 0) {
+      logger.info(`找到提升权限命令: ${superUserCmd}`);
+      return superUserCmd;
     }
   }
-  return superUserCmd;
+
+  logger.error("没有找到提升权限的命令 pkexec!");
+  return "";
 };
 
 const runCommandCapture = async (execCommand: string, execParams: string[]) => {

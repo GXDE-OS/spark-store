@@ -8,6 +8,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import axios from "axios";
 import pino from "pino";
+import { findExecutable, SUPER_USER_COMMAND_CANDIDATES } from "./superuser";
 
 const logger = pino({ name: "shared-installer" });
 
@@ -345,21 +346,16 @@ export const checkApmAvailable = async (): Promise<boolean> => {
  * 检查提权命令
  */
 export const checkSuperUserCommand = async (): Promise<string> => {
-  return new Promise((resolve) => {
-    const child = spawn("which", ["/usr/bin/pkexec"]);
-    let stdout = "";
-    child.stdout?.on("data", (data) => {
-      stdout += data.toString();
-    });
-    child.on("close", (code) => {
-      if (code === 0) {
-        resolve(stdout.trim());
-      } else {
-        resolve("");
-      }
-    });
-    child.on("error", () => {
-      resolve("");
-    });
-  });
+  if (process.getuid?.() === 0) return "";
+
+  for (const command of SUPER_USER_COMMAND_CANDIDATES) {
+    const superUserCmd = await findExecutable(command);
+    if (superUserCmd.length > 0) {
+      logger.info(`找到提升权限命令: ${superUserCmd}`);
+      return superUserCmd;
+    }
+  }
+
+  logger.error("没有找到提升权限的命令 pkexec!");
+  return "";
 };
