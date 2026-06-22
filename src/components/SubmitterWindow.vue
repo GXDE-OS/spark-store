@@ -136,9 +136,7 @@
             </div>
             <div v-else>
               <i class="fas fa-cloud-upload text-4xl text-slate-400 mb-4"></i>
-              <p class="text-slate-600 dark:text-slate-400">
-                点击浏览
-              </p>
+              <p class="text-slate-600 dark:text-slate-400">点击浏览</p>
               <p v-if="formData.debFilePath" class="mt-2 text-sm text-blue-500">
                 {{ formData.debFilePath.split("/").pop() }}
               </p>
@@ -282,23 +280,45 @@
             v-model="formData.category"
             class="w-full px-4 py-2.5 rounded-lg border border-slate-200 bg-white dark:bg-slate-800 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           >
-            <option v-for="category in categoriesList" :key="category.id" :value="category.name">
+            <option
+              v-for="category in categoriesList"
+              :key="category.id"
+              :value="category.name"
+            >
               {{ category.name }}
             </option>
           </select>
         </div>
 
-        <div class="flex gap-4 pt-4">
+        <div class="flex gap-3 pt-4">
           <button
             type="button"
-            class="flex-1 px-6 py-3 rounded-lg border border-slate-200 bg-white text-slate-700 font-medium hover:bg-slate-50 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-700 transition-colors"
+            class="px-5 py-3 rounded-lg border border-slate-200 bg-white text-slate-700 font-medium hover:bg-slate-50 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-700 transition-colors"
             @click="resetForm"
           >
             重置
           </button>
           <button
             type="button"
-            class="flex-1 px-6 py-3 rounded-lg bg-blue-500 text-white font-medium hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            class="flex-1 px-5 py-3 rounded-lg border-2 border-emerald-500 bg-emerald-50 text-emerald-700 font-medium hover:bg-emerald-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors dark:bg-emerald-900/20 dark:border-emerald-600 dark:text-emerald-400 dark:hover:bg-emerald-900/30"
+            :disabled="isPackaging || !isFormValid"
+            @click="showArchPackDialog = true"
+          >
+            <span
+              v-if="isPackaging"
+              class="flex items-center justify-center gap-2"
+            >
+              <i class="fas fa-spinner fa-spin"></i>
+              打包中...
+            </span>
+            <span v-else class="flex items-center justify-center gap-2">
+              <i class="fas fa-box-archive"></i>
+              打包 tar.gz
+            </span>
+          </button>
+          <button
+            type="button"
+            class="flex-1 px-5 py-3 rounded-lg bg-blue-500 text-white font-medium hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             :disabled="isSubmitting || !isFormValid"
             @click="submitForm"
           >
@@ -309,7 +329,10 @@
               <i class="fas fa-spinner fa-spin"></i>
               提交中...
             </span>
-            <span v-else>提交投稿</span>
+            <span v-else class="flex items-center justify-center gap-2">
+              <i class="fas fa-paper-plane"></i>
+              提交投稿
+            </span>
           </button>
         </div>
 
@@ -334,8 +357,94 @@
             <span>{{ submitError }}</span>
           </div>
         </div>
+
+        <div
+          v-if="packageSuccess"
+          class="p-4 bg-emerald-50 border border-emerald-200 rounded-lg dark:bg-emerald-900/20 dark:border-emerald-800"
+        >
+          <div
+            class="flex items-center gap-2 text-emerald-700 dark:text-emerald-400"
+          >
+            <i class="fas fa-check-circle"></i>
+            <span
+              >打包完成！文件已保存到: {{ packageResult?.tarFileName }}</span
+            >
+          </div>
+        </div>
+
+        <div
+          v-if="packageError"
+          class="p-4 bg-red-50 border border-red-200 rounded-lg dark:bg-red-900/20 dark:border-red-800"
+        >
+          <div class="flex items-center gap-2 text-red-700 dark:text-red-400">
+            <i class="fas fa-exclamation-circle"></i>
+            <span>{{ packageError }}</span>
+          </div>
+        </div>
       </div>
     </div>
+
+    <Teleport to="body">
+      <div
+        v-if="showArchPackDialog"
+        data-submitter-arch-pack-dialog
+        class="fixed inset-0 z-50 flex items-center justify-center p-4"
+      >
+        <div
+          class="absolute inset-0 bg-black/50"
+          @click="showArchPackDialog = false"
+        ></div>
+        <div
+          class="relative bg-white dark:bg-slate-900 rounded-xl shadow-2xl w-full max-w-md p-6"
+        >
+          <div class="flex items-center justify-between mb-6">
+            <h2
+              class="text-lg font-semibold text-slate-900 dark:text-slate-100"
+            >
+              选择打包架构
+            </h2>
+            <button
+              type="button"
+              class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+              @click="showArchPackDialog = false"
+            >
+              <i class="fas fa-times"></i>
+            </button>
+          </div>
+
+          <p class="text-slate-600 dark:text-slate-400 mb-4">
+            请选择目标架构以生成对应的 tar.gz 包：
+          </p>
+
+          <div class="space-y-3 mb-6">
+            <button
+              v-for="arch in packArchOptions"
+              :key="arch.store"
+              type="button"
+              class="w-full p-4 rounded-lg border-2 border-slate-200 dark:border-slate-700 hover:border-emerald-500 transition-colors text-left"
+              @click="selectPackArch(arch)"
+            >
+              <div class="font-medium text-slate-900 dark:text-slate-100">
+                {{ getArchDisplayName(arch.store) }}
+              </div>
+              <div class="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                输出: {{ formData.pkgname }}-{{ arch.store }}.tar.gz
+              </div>
+            </button>
+          </div>
+
+          <div class="flex gap-3">
+            <button
+              type="button"
+              class="flex-1 px-4 py-2 rounded-lg border border-slate-200 bg-white text-slate-700 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700"
+              @click="showArchPackDialog = false"
+            >
+              取消
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
 
     <Teleport to="body">
       <div
@@ -449,6 +558,22 @@ const availableArchs = ref<HistoryArchInfo[]>([]);
 const currentDebArch = ref("");
 const iconPreview = ref("");
 
+const isPackaging = ref(false);
+const packageSuccess = ref(false);
+const packageError = ref("");
+const showArchPackDialog = ref(false);
+const packageResult = ref<{
+  tarPath: string;
+  tempDir: string;
+  tarFileName: string;
+} | null>(null);
+
+const packArchOptions = [
+  { store: "store", label: "AMD64 (x86_64)" },
+  { store: "aarch64-store", label: "ARM64 (aarch64)" },
+  { store: "loong64-store", label: "LoongArch64" },
+];
+
 interface Category {
   id: number;
   name: string;
@@ -483,47 +608,75 @@ const getArchDisplayName = (store: string): string => {
 };
 
 const loadCategoriesList = async () => {
-  console.log("[Submitter] ============== LOAD CATEGORIES START ==============");
+  console.log(
+    "[Submitter] ============== LOAD CATEGORIES START ==============",
+  );
   console.log("[Submitter] Calling IPC: get-category-list");
-  
+
   try {
     const startTime = Date.now();
     const result = await window.ipcRenderer.invoke("get-category-list");
     const endTime = Date.now();
-    
-    console.log("[Submitter] ============== IPC RESPONSE RECEIVED ==============");
+
+    console.log(
+      "[Submitter] ============== IPC RESPONSE RECEIVED ==============",
+    );
     console.log("[Submitter] Request duration:", endTime - startTime, "ms");
     console.log("[Submitter] Result success:", result?.success);
     console.log("[Submitter] Result message:", result?.message);
     console.log("[Submitter] Full result:", JSON.stringify(result, null, 2));
-    
+
     if (result?.success && result.data) {
       const data = result.data;
-      console.log("[Submitter] ============== PROCESSING RESPONSE ==============");
+      console.log(
+        "[Submitter] ============== PROCESSING RESPONSE ==============",
+      );
       console.log("[Submitter] Response code:", data.code);
       console.log("[Submitter] Response message:", data.msg);
       console.log("[Submitter] Data type:", typeof data.data);
       console.log("[Submitter] Data length:", data.data?.length);
       console.log("[Submitter] Raw data:", JSON.stringify(data.data, null, 2));
-      
+
       if (data.code === 200 && data.data) {
-        categoriesList.value = data.data.map((item: { id: number; name: string; value: string }, index: number) => ({
-          id: typeof item.id === "number" ? item.id : index + 1,
-          name: item.name || item.value || "",
-        }));
-        console.log("[Submitter] ============== CATEGORIES LOADED ==============");
+        categoriesList.value = data.data.map(
+          (
+            item: { id: number; name: string; value: string },
+            index: number,
+          ) => ({
+            id: typeof item.id === "number" ? item.id : index + 1,
+            name: item.name || item.value || "",
+          }),
+        );
+        console.log(
+          "[Submitter] ============== CATEGORIES LOADED ==============",
+        );
         console.log("[Submitter] Categories list:", categoriesList.value);
-        console.log("[Submitter] Categories count:", categoriesList.value.length);
+        console.log(
+          "[Submitter] Categories count:",
+          categoriesList.value.length,
+        );
       } else if (data.code === 200 && Array.isArray(data)) {
-        categoriesList.value = data.map((item: { id: number; name: string; value: string }, index: number) => ({
-          id: typeof item.id === "number" ? item.id : index + 1,
-          name: item.name || item.value || "",
-        }));
-        console.log("[Submitter] ============== CATEGORIES LOADED (direct array) ==============");
+        categoriesList.value = data.map(
+          (
+            item: { id: number; name: string; value: string },
+            index: number,
+          ) => ({
+            id: typeof item.id === "number" ? item.id : index + 1,
+            name: item.name || item.value || "",
+          }),
+        );
+        console.log(
+          "[Submitter] ============== CATEGORIES LOADED (direct array) ==============",
+        );
         console.log("[Submitter] Categories list:", categoriesList.value);
-        console.log("[Submitter] Categories count:", categoriesList.value.length);
+        console.log(
+          "[Submitter] Categories count:",
+          categoriesList.value.length,
+        );
       } else {
-        console.error("[Submitter] ============== INVALID RESPONSE CODE ==============");
+        console.error(
+          "[Submitter] ============== INVALID RESPONSE CODE ==============",
+        );
         console.error("[Submitter] Expected code 200, got:", data.code);
         console.error("[Submitter] Response message:", data.msg);
         categoriesList.value = [
@@ -540,11 +693,15 @@ const loadCategoriesList = async () => {
           { id: 11, name: "tools" },
           { id: 12, name: "video" },
         ];
-        console.log("[Submitter] ============== USING FALLBACK CATEGORIES ==============");
+        console.log(
+          "[Submitter] ============== USING FALLBACK CATEGORIES ==============",
+        );
         console.log("[Submitter] Categories list:", categoriesList.value);
       }
     } else {
-      console.error("[Submitter] ============== IPC CALL FAILED ==============");
+      console.error(
+        "[Submitter] ============== IPC CALL FAILED ==============",
+      );
       console.error("[Submitter] Success:", result?.success);
       console.error("[Submitter] Message:", result?.message);
       console.error("[Submitter] Data:", result?.data);
@@ -562,7 +719,9 @@ const loadCategoriesList = async () => {
         { id: 11, name: "tools" },
         { id: 12, name: "video" },
       ];
-      console.log("[Submitter] ============== USING FALLBACK CATEGORIES ==============");
+      console.log(
+        "[Submitter] ============== USING FALLBACK CATEGORIES ==============",
+      );
       console.log("[Submitter] Categories list:", categoriesList.value);
     }
   } catch (error) {
@@ -584,7 +743,9 @@ const loadCategoriesList = async () => {
       { id: 11, name: "tools" },
       { id: 12, name: "video" },
     ];
-    console.log("[Submitter] ============== USING FALLBACK CATEGORIES ==============");
+    console.log(
+      "[Submitter] ============== USING FALLBACK CATEGORIES ==============",
+    );
     console.log("[Submitter] Categories list:", categoriesList.value);
   }
 };
@@ -592,42 +753,52 @@ const loadCategoriesList = async () => {
 const loadTagsList = async () => {
   console.log("[Submitter] ============== LOAD TAGS START ==============");
   console.log("[Submitter] Calling IPC: get-tags-list");
-  
+
   try {
     const startTime = Date.now();
     const result = await window.ipcRenderer.invoke("get-tags-list");
     const endTime = Date.now();
-    
-    console.log("[Submitter] ============== IPC RESPONSE RECEIVED ==============");
+
+    console.log(
+      "[Submitter] ============== IPC RESPONSE RECEIVED ==============",
+    );
     console.log("[Submitter] Request duration:", endTime - startTime, "ms");
     console.log("[Submitter] Result success:", result?.success);
     console.log("[Submitter] Result message:", result?.message);
     console.log("[Submitter] Full result:", JSON.stringify(result, null, 2));
-    
+
     if (result?.success && result.data) {
       const data = result.data;
-      console.log("[Submitter] ============== PROCESSING RESPONSE ==============");
+      console.log(
+        "[Submitter] ============== PROCESSING RESPONSE ==============",
+      );
       console.log("[Submitter] Response code:", data.code);
       console.log("[Submitter] Response message:", data.msg);
       console.log("[Submitter] Data type:", typeof data.data);
       console.log("[Submitter] Data length:", data.data?.length);
       console.log("[Submitter] Raw data:", JSON.stringify(data.data, null, 2));
-      
+
       if (data.code === 200 && data.data) {
-        tagsList.value = data.data.map((item: { name: string; value: string }) => ({
-          name: item.name,
-          value: item.value,
-        }));
+        tagsList.value = data.data.map(
+          (item: { name: string; value: string }) => ({
+            name: item.name,
+            value: item.value,
+          }),
+        );
         console.log("[Submitter] ============== TAGS LOADED ==============");
         console.log("[Submitter] Tags list:", tagsList.value);
         console.log("[Submitter] Tags count:", tagsList.value.length);
       } else {
-        console.error("[Submitter] ============== INVALID RESPONSE CODE ==============");
+        console.error(
+          "[Submitter] ============== INVALID RESPONSE CODE ==============",
+        );
         console.error("[Submitter] Expected code 200, got:", data.code);
         console.error("[Submitter] Response message:", data.msg);
       }
     } else {
-      console.error("[Submitter] ============== IPC CALL FAILED ==============");
+      console.error(
+        "[Submitter] ============== IPC CALL FAILED ==============",
+      );
       console.error("[Submitter] Success:", result?.success);
       console.error("[Submitter] Message:", result?.message);
       console.error("[Submitter] Data:", result?.data);
@@ -685,7 +856,9 @@ const parseDebFileAndSearchHistory = async (debPath: string) => {
   debParseError.value = "";
 
   try {
-    console.log("[Submitter] ============== STARTING DEB FILE PARSING ==============");
+    console.log(
+      "[Submitter] ============== STARTING DEB FILE PARSING ==============",
+    );
     console.log("[Submitter] Input debPath:", debPath);
     console.log("[Submitter] debPath type:", typeof debPath);
     console.log("[Submitter] debPath length:", debPath.length);
@@ -695,11 +868,17 @@ const parseDebFileAndSearchHistory = async (debPath: string) => {
       "parse-deb-file",
       debPath,
     );
-    console.log("[Submitter] Received IPC response:", JSON.stringify(parseResult, null, 2));
+    console.log(
+      "[Submitter] Received IPC response:",
+      JSON.stringify(parseResult, null, 2),
+    );
 
     if (parseResult?.success && parseResult.data) {
       const debInfo = parseResult.data;
-      console.log("[Submitter] Parsed debInfo successfully:", JSON.stringify(debInfo, null, 2));
+      console.log(
+        "[Submitter] Parsed debInfo successfully:",
+        JSON.stringify(debInfo, null, 2),
+      );
 
       console.log("[Submitter] Setting form data from debInfo:");
       console.log("[Submitter]   pkgname:", debInfo.pkgname);
@@ -718,72 +897,140 @@ const parseDebFileAndSearchHistory = async (debPath: string) => {
       formData.description = debInfo.description || "";
       currentDebArch.value = debInfo.architecture || "";
 
-      console.log("[Submitter] Form data after setting:", JSON.stringify(formData, null, 2));
+      console.log(
+        "[Submitter] Form data after setting:",
+        JSON.stringify(formData, null, 2),
+      );
 
       selectMirrorSource();
       console.log("[Submitter] Mirror source selected:", useMirror.value);
 
       if (formData.pkgname) {
-        console.log("[Submitter] ============== SEARCHING HISTORY INFO ==============");
-        console.log("[Submitter] pkgname is not empty, searching history with:", formData.pkgname);
+        console.log(
+          "[Submitter] ============== SEARCHING HISTORY INFO ==============",
+        );
+        console.log(
+          "[Submitter] pkgname is not empty, searching history with:",
+          formData.pkgname,
+        );
         console.log("[Submitter] Using mirror:", useMirror.value);
-        
-        console.log("[Submitter] Calling IPC: search-history-app with pkgname:", formData.pkgname);
+
+        console.log(
+          "[Submitter] Calling IPC: search-history-app with pkgname:",
+          formData.pkgname,
+        );
         const historyResult = await window.ipcRenderer.invoke(
           "search-history-app",
           formData.pkgname,
           useMirror.value,
         );
-        console.log("[Submitter] Received history search response:", JSON.stringify(historyResult, null, 2));
+        console.log(
+          "[Submitter] Received history search response:",
+          JSON.stringify(historyResult, null, 2),
+        );
 
         if (
           historyResult?.success &&
           historyResult.data &&
           historyResult.data.length > 0
         ) {
-          console.log("[Submitter] ============== HISTORY INFO FOUND ==============");
-          console.log("[Submitter] History info count:", historyResult.data.length);
-          console.log("[Submitter] Available archs data:", JSON.stringify(historyResult.data, null, 2));
-          
-          console.log("[Submitter] ============== BEFORE SETTING STATE ==============");
-          console.log("[Submitter] availableArchs before:", availableArchs.value);
-          console.log("[Submitter] showArchDialog before:", showArchDialog.value);
-          
+          console.log(
+            "[Submitter] ============== HISTORY INFO FOUND ==============",
+          );
+          console.log(
+            "[Submitter] History info count:",
+            historyResult.data.length,
+          );
+          console.log(
+            "[Submitter] Available archs data:",
+            JSON.stringify(historyResult.data, null, 2),
+          );
+
+          console.log(
+            "[Submitter] ============== BEFORE SETTING STATE ==============",
+          );
+          console.log(
+            "[Submitter] availableArchs before:",
+            availableArchs.value,
+          );
+          console.log(
+            "[Submitter] showArchDialog before:",
+            showArchDialog.value,
+          );
+
           availableArchs.value = historyResult.data;
-          console.log("[Submitter] availableArchs after:", availableArchs.value);
-          console.log("[Submitter] availableArchs length:", availableArchs.value.length);
-          
+          console.log(
+            "[Submitter] availableArchs after:",
+            availableArchs.value,
+          );
+          console.log(
+            "[Submitter] availableArchs length:",
+            availableArchs.value.length,
+          );
+
           showArchDialog.value = true;
-          console.log("[Submitter] showArchDialog after:", showArchDialog.value);
-          
-          console.log("[Submitter] ============== DIALOG SHOULD BE SHOWING ==============");
+          console.log(
+            "[Submitter] showArchDialog after:",
+            showArchDialog.value,
+          );
+
+          console.log(
+            "[Submitter] ============== DIALOG SHOULD BE SHOWING ==============",
+          );
           console.log("[Submitter] Dialog visibility:", showArchDialog.value);
-          console.log("[Submitter] Available architectures to display:", availableArchs.value.map((a) => a.store));
-          
+          console.log(
+            "[Submitter] Available architectures to display:",
+            availableArchs.value.map((a) => a.store),
+          );
+
           nextTick(() => {
-            console.log("[Submitter] ============== AFTER NEXT TICK ==============");
-            console.log("[Submitter] showArchDialog in nextTick:", showArchDialog.value);
-            console.log("[Submitter] availableArchs in nextTick:", availableArchs.value);
-            
-            const dialogElement = document.querySelector('[data-submitter-arch-dialog]');
+            console.log(
+              "[Submitter] ============== AFTER NEXT TICK ==============",
+            );
+            console.log(
+              "[Submitter] showArchDialog in nextTick:",
+              showArchDialog.value,
+            );
+            console.log(
+              "[Submitter] availableArchs in nextTick:",
+              availableArchs.value,
+            );
+
+            const dialogElement = document.querySelector(
+              "[data-submitter-arch-dialog]",
+            );
             console.log("[Submitter] Dialog element found:", !!dialogElement);
             if (dialogElement) {
               console.log("[Submitter] Dialog element:", dialogElement);
-              console.log("[Submitter] Dialog element style:", window.getComputedStyle(dialogElement));
+              console.log(
+                "[Submitter] Dialog element style:",
+                window.getComputedStyle(dialogElement),
+              );
             }
           });
         } else {
-          console.log("[Submitter] ============== NO HISTORY INFO FOUND ==============");
-          console.log("[Submitter] historyResult.success:", historyResult?.success);
+          console.log(
+            "[Submitter] ============== NO HISTORY INFO FOUND ==============",
+          );
+          console.log(
+            "[Submitter] historyResult.success:",
+            historyResult?.success,
+          );
           console.log("[Submitter] historyResult.data:", historyResult?.data);
-          console.log("[Submitter] historyResult.data.length:", historyResult?.data?.length);
-          
+          console.log(
+            "[Submitter] historyResult.data.length:",
+            historyResult?.data?.length,
+          );
+
           if (historyResult?.success === true && historyResult.data) {
             console.log("[Submitter] Success is true but no data found");
             console.log("[Submitter] Data is:", historyResult.data);
             console.log("[Submitter] Data type:", typeof historyResult.data);
           } else if (!historyResult?.success) {
-            console.log("[Submitter] Search failed with message:", historyResult?.message);
+            console.log(
+              "[Submitter] Search failed with message:",
+              historyResult?.message,
+            );
           }
         }
       } else {
@@ -801,16 +1048,20 @@ const parseDebFileAndSearchHistory = async (debPath: string) => {
     debParseError.value = (error as Error)?.message || "解析deb文件失败";
   } finally {
     isParsingDeb.value = false;
-    console.log("[Submitter] ============== DEB FILE PARSING COMPLETED ==============");
+    console.log(
+      "[Submitter] ============== DEB FILE PARSING COMPLETED ==============",
+    );
   }
 };
 
-const handleDebFileSelect = async (_event: Event) => {
-};
+const handleDebFileSelect = async (_event: Event) => {};
 
 const handleDragOver = (event: DragEvent) => {
   event.preventDefault();
-  console.log("[Submitter] Drag over detected, types available:", event.dataTransfer?.types);
+  console.log(
+    "[Submitter] Drag over detected, types available:",
+    event.dataTransfer?.types,
+  );
 };
 
 const handleDragEnter = (event: DragEvent) => {
@@ -824,38 +1075,38 @@ const handleDragLeave = (event: DragEvent) => {
 
 const handleDrop = async (event: DragEvent) => {
   event.preventDefault();
-  
+
   console.log("[Submitter] Drop event triggered");
   console.log("[Submitter] DataTransfer types:", event.dataTransfer?.types);
-  
+
   const files = event.dataTransfer?.files;
   console.log("[Submitter] Files count:", files?.length);
-  
+
   if (files && files.length > 0) {
     const file = files[0] as File & { path?: string };
     console.log("[Submitter] File name:", file.name);
     console.log("[Submitter] File type:", file.type);
     console.log("[Submitter] File path (from File object):", file.path);
-    
+
     if (file.name.endsWith(".deb")) {
       console.log("[Submitter] File is a deb package");
-      
+
       const textUriList = event.dataTransfer?.getData("text/uri-list");
       console.log("[Submitter] text/uri-list:", textUriList);
-      
+
       const textPlain = event.dataTransfer?.getData("text/plain");
       console.log("[Submitter] text/plain:", textPlain);
-      
+
       const filePath = file.path || textUriList || textPlain;
       console.log("[Submitter] Final filePath:", filePath);
-      
+
       if (filePath) {
         let path = filePath;
         if (path.startsWith("file://")) {
           path = path.replace("file://", "");
         }
         console.log("[Submitter] Cleaned path:", path);
-        
+
         formData.debFilePath = path;
         console.log("[Submitter] Calling parseDebFileAndSearchHistory...");
         await parseDebFileAndSearchHistory(path);
@@ -903,7 +1154,10 @@ const selectArch = (arch: HistoryArchInfo) => {
     ? `https://mirrors.sdu.edu.cn/spark-store/${arch.store}/${arch.category}/${arch.pkgname}`
     : `https://spk-json.spark-app.store/${arch.store}/${arch.category}/${arch.pkgname}`;
 
-  console.log("[Submitter] Building icon and screenshot URLs with baseUrl:", baseUrl);
+  console.log(
+    "[Submitter] Building icon and screenshot URLs with baseUrl:",
+    baseUrl,
+  );
 
   if (arch.icon) {
     formData.iconPath = `${baseUrl}/icon.png`;
@@ -1009,6 +1263,9 @@ const resetForm = () => {
   submitSuccess.value = false;
   submitError.value = "";
   debParseError.value = "";
+  packageSuccess.value = false;
+  packageError.value = "";
+  packageResult.value = null;
 };
 
 const submitForm = async () => {
@@ -1035,8 +1292,14 @@ const submitForm = async () => {
     };
 
     console.log("[Submitter] ============== SUBMIT FORM ==============");
-    console.log("[Submitter] Submit data:", JSON.stringify(submitData, null, 2));
-    console.log("[Submitter] Screenshots count:", submitData.screenshots.length);
+    console.log(
+      "[Submitter] Submit data:",
+      JSON.stringify(submitData, null, 2),
+    );
+    console.log(
+      "[Submitter] Screenshots count:",
+      submitData.screenshots.length,
+    );
     console.log("[Submitter] Icon path:", submitData.iconPath);
 
     const result = await window.ipcRenderer.invoke("submit-app", submitData);
@@ -1051,6 +1314,57 @@ const submitForm = async () => {
     submitError.value = (error as Error)?.message || "提交失败";
   } finally {
     isSubmitting.value = false;
+  }
+};
+
+const selectPackArch = async (arch: { store: string; label: string }) => {
+  showArchPackDialog.value = false;
+  await packageApp(arch.store);
+};
+
+const packageApp = async (storeArch: string) => {
+  if (!isFormValid.value) return;
+
+  isPackaging.value = true;
+  packageSuccess.value = false;
+  packageError.value = "";
+  packageResult.value = null;
+
+  try {
+    const packageData = {
+      name: formData.name,
+      pkgname: formData.pkgname,
+      version: formData.version,
+      author: formData.author,
+      contributor: formData.contributor,
+      website: formData.website,
+      debFilePath: formData.debFilePath,
+      iconPath: formData.iconPath,
+      screenshots: [...formData.screenshots],
+      description: formData.description,
+      tags: formData.tags,
+      category: formData.category,
+      storeArch,
+    };
+
+    console.log("[Submitter] ============== PACKAGE APP ==============");
+    console.log(
+      "[Submitter] Package data:",
+      JSON.stringify(packageData, null, 2),
+    );
+
+    const result = await window.ipcRenderer.invoke("package-app", packageData);
+
+    if (result?.success) {
+      packageSuccess.value = true;
+      packageResult.value = result.data;
+    } else {
+      packageError.value = result?.message || "打包失败";
+    }
+  } catch (error) {
+    packageError.value = (error as Error)?.message || "打包失败";
+  } finally {
+    isPackaging.value = false;
   }
 };
 
