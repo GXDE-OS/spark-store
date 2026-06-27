@@ -1,4 +1,4 @@
-import { type BrowserWindow, dialog, ipcMain, shell } from "electron";
+import { BrowserWindow, dialog, ipcMain, shell } from "electron";
 import path from "node:path";
 import fs from "node:fs";
 import os from "node:os";
@@ -462,13 +462,12 @@ export function registerSubmitterHandlers(
         return { success: true };
       }
 
-      const BrowserWindowClass = (await import("electron")).BrowserWindow;
-
-      const newWin = new BrowserWindowClass({
+      const newWin = new BrowserWindow({
         title: "星火应用商店 - 投稿应用",
         width: 800,
         height: 900,
         frame: false,
+        show: false,
         autoHideMenuBar: true,
         icon: path.join(process.env.VITE_PUBLIC!, "favicon.ico"),
         webPreferences: {
@@ -481,6 +480,11 @@ export function registerSubmitterHandlers(
       } else {
         newWin.loadFile(indexHtml, { hash: "submitter" });
       }
+
+      newWin.once("ready-to-show", () => {
+        newWin.show();
+        newWin.focus();
+      });
 
       newWin.on("closed", () => {
         setSubmitterWin(null);

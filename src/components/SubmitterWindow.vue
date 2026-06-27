@@ -274,6 +274,19 @@
         <div>
           <label
             class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2"
+            >测试情况</label
+          >
+          <input
+            v-model="formData.remark"
+            type="text"
+            placeholder="写明在何种平台的测试情况"
+            class="w-full px-4 py-2.5 rounded-lg border border-slate-200 bg-white dark:bg-slate-800 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          />
+        </div>
+
+        <div>
+          <label
+            class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2"
             >分类</label
           >
           <select
@@ -507,6 +520,77 @@
         </div>
       </div>
     </Teleport>
+
+    <Teleport to="body">
+      <div
+        v-if="showMirrorConfirmDialog"
+        data-submitter-mirror-confirm-dialog
+        class="fixed inset-0 z-50 flex items-center justify-center p-4"
+      >
+        <div
+          class="fixed inset-0 bg-black/50"
+          @click="showMirrorConfirmDialog = false"
+        ></div>
+        <div
+          class="relative z-10 bg-white dark:bg-slate-900 rounded-xl shadow-2xl w-full max-w-md p-6"
+        >
+          <div class="flex items-center justify-between mb-4">
+            <h2
+              class="text-lg font-semibold text-slate-900 dark:text-slate-100"
+            >
+              选择数据源
+            </h2>
+            <button
+              type="button"
+              class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+              @click="showMirrorConfirmDialog = false"
+            >
+              <i class="fas fa-times"></i>
+            </button>
+          </div>
+
+          <p class="text-slate-600 dark:text-slate-400 mb-4">
+            请选择搜索历史信息的数据源：
+          </p>
+
+          <div class="space-y-3 mb-4">
+            <div class="p-3 rounded-lg bg-slate-50 dark:bg-slate-800">
+              <div class="font-medium text-slate-900 dark:text-slate-100">
+                镜像源
+              </div>
+              <div class="text-sm text-slate-500 dark:text-slate-400">
+                mirrors.sdu.edu.cn - 建议在中国内地使用以获得更好的网络体验
+              </div>
+            </div>
+            <div class="p-3 rounded-lg bg-slate-50 dark:bg-slate-800">
+              <div class="font-medium text-slate-900 dark:text-slate-100">
+                主站
+              </div>
+              <div class="text-sm text-slate-500 dark:text-slate-400">
+                spk-json.spark-app.store - 全球可用
+              </div>
+            </div>
+          </div>
+
+          <div class="flex gap-3">
+            <button
+              type="button"
+              class="flex-1 px-4 py-2 rounded-lg border-2 border-emerald-500 bg-emerald-50 text-emerald-700 font-medium hover:bg-emerald-100 dark:bg-emerald-900/20 dark:border-emerald-600 dark:text-emerald-400 dark:hover:bg-emerald-900/30"
+              @click="confirmMirrorSource(true)"
+            >
+              使用镜像源
+            </button>
+            <button
+              type="button"
+              class="flex-1 px-4 py-2 rounded-lg border border-slate-200 bg-white text-slate-700 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700"
+              @click="confirmMirrorSource(false)"
+            >
+              使用主站
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
 
@@ -546,6 +630,7 @@ const formData = reactive({
   description: "",
   tags: "",
   category: "",
+  remark: "",
 });
 
 const isSubmitting = ref(false);
@@ -557,6 +642,7 @@ const showArchDialog = ref(false);
 const availableArchs = ref<HistoryArchInfo[]>([]);
 const currentDebArch = ref("");
 const iconPreview = ref("");
+const showMirrorConfirmDialog = ref(false);
 
 const isPackaging = ref(false);
 const packageSuccess = ref(false);
@@ -843,12 +929,150 @@ const selectDebFile = async () => {
 };
 
 const useMirror = ref(false);
+let pendingSearchHistory = false;
 
 const selectMirrorSource = () => {
-  const useMirrorSource = window.confirm(
-    "是否使用镜像源搜索历史信息？\n\n镜像源：mirrors.sdu.edu.cn\n主站：spk-json.spark-app.store\n\n建议在中国内地使用镜像源以获得更好的网络体验。",
-  );
+  showMirrorConfirmDialog.value = true;
+};
+
+const confirmMirrorSource = async (useMirrorSource: boolean) => {
   useMirror.value = useMirrorSource;
+  showMirrorConfirmDialog.value = false;
+
+  if (pendingSearchHistory && formData.pkgname) {
+    pendingSearchHistory = false;
+    await searchHistoryApp();
+  }
+};
+
+const searchHistoryApp = async () => {
+  console.log(
+    "[Submitter] ============== SEARCHING HISTORY INFO ==============",
+  );
+  console.log(
+    "[Submitter] pkgname is not empty, searching history with:",
+    formData.pkgname,
+  );
+  console.log("[Submitter] Using mirror:", useMirror.value);
+
+  console.log(
+    "[Submitter] Calling IPC: search-history-app with pkgname:",
+    formData.pkgname,
+  );
+  const historyResult = await window.ipcRenderer.invoke(
+    "search-history-app",
+    formData.pkgname,
+    useMirror.value,
+  );
+  console.log(
+    "[Submitter] Received history search response:",
+    JSON.stringify(historyResult, null, 2),
+  );
+
+  if (
+    historyResult?.success &&
+    historyResult.data &&
+    historyResult.data.length > 0
+  ) {
+    console.log(
+      "[Submitter] ============== HISTORY INFO FOUND ==============",
+    );
+    console.log(
+      "[Submitter] History info count:",
+      historyResult.data.length,
+    );
+    console.log(
+      "[Submitter] Available archs data:",
+      JSON.stringify(historyResult.data, null, 2),
+    );
+
+    console.log(
+      "[Submitter] ============== BEFORE SETTING STATE ==============",
+    );
+    console.log(
+      "[Submitter] availableArchs before:",
+      availableArchs.value,
+    );
+    console.log(
+      "[Submitter] showArchDialog before:",
+      showArchDialog.value,
+    );
+
+    availableArchs.value = historyResult.data;
+    console.log(
+      "[Submitter] availableArchs after:",
+      availableArchs.value,
+    );
+    console.log(
+      "[Submitter] availableArchs length:",
+      availableArchs.value.length,
+    );
+
+    showArchDialog.value = true;
+    console.log(
+      "[Submitter] showArchDialog after:",
+      showArchDialog.value,
+    );
+
+    console.log(
+      "[Submitter] ============== DIALOG SHOULD BE SHOWING ==============",
+    );
+    console.log("[Submitter] Dialog visibility:", showArchDialog.value);
+    console.log(
+      "[Submitter] Available architectures to display:",
+      availableArchs.value.map((a) => a.store),
+    );
+
+    nextTick(() => {
+      console.log(
+        "[Submitter] ============== AFTER NEXT TICK ==============",
+      );
+      console.log(
+        "[Submitter] showArchDialog in nextTick:",
+        showArchDialog.value,
+      );
+      console.log(
+        "[Submitter] availableArchs in nextTick:",
+        availableArchs.value,
+      );
+
+      const dialogElement = document.querySelector(
+        "[data-submitter-arch-dialog]",
+      );
+      console.log("[Submitter] Dialog element found:", !!dialogElement);
+      if (dialogElement) {
+        console.log("[Submitter] Dialog element:", dialogElement);
+        console.log(
+          "[Submitter] Dialog element style:",
+          window.getComputedStyle(dialogElement),
+        );
+      }
+    });
+  } else {
+    console.log(
+      "[Submitter] ============== NO HISTORY INFO FOUND ==============",
+    );
+    console.log(
+      "[Submitter] historyResult.success:",
+      historyResult?.success,
+    );
+    console.log("[Submitter] historyResult.data:", historyResult?.data);
+    console.log(
+      "[Submitter] historyResult.data.length:",
+      historyResult?.data?.length,
+    );
+
+    if (historyResult?.success === true && historyResult.data) {
+      console.log("[Submitter] Success is true but no data found");
+      console.log("[Submitter] Data is:", historyResult.data);
+      console.log("[Submitter] Data type:", typeof historyResult.data);
+    } else if (!historyResult?.success) {
+      console.log(
+        "[Submitter] Search failed with message:",
+        historyResult?.message,
+      );
+    }
+  }
 };
 
 const parseDebFileAndSearchHistory = async (debPath: string) => {
@@ -902,139 +1126,9 @@ const parseDebFileAndSearchHistory = async (debPath: string) => {
         JSON.stringify(formData, null, 2),
       );
 
-      selectMirrorSource();
-      console.log("[Submitter] Mirror source selected:", useMirror.value);
-
       if (formData.pkgname) {
-        console.log(
-          "[Submitter] ============== SEARCHING HISTORY INFO ==============",
-        );
-        console.log(
-          "[Submitter] pkgname is not empty, searching history with:",
-          formData.pkgname,
-        );
-        console.log("[Submitter] Using mirror:", useMirror.value);
-
-        console.log(
-          "[Submitter] Calling IPC: search-history-app with pkgname:",
-          formData.pkgname,
-        );
-        const historyResult = await window.ipcRenderer.invoke(
-          "search-history-app",
-          formData.pkgname,
-          useMirror.value,
-        );
-        console.log(
-          "[Submitter] Received history search response:",
-          JSON.stringify(historyResult, null, 2),
-        );
-
-        if (
-          historyResult?.success &&
-          historyResult.data &&
-          historyResult.data.length > 0
-        ) {
-          console.log(
-            "[Submitter] ============== HISTORY INFO FOUND ==============",
-          );
-          console.log(
-            "[Submitter] History info count:",
-            historyResult.data.length,
-          );
-          console.log(
-            "[Submitter] Available archs data:",
-            JSON.stringify(historyResult.data, null, 2),
-          );
-
-          console.log(
-            "[Submitter] ============== BEFORE SETTING STATE ==============",
-          );
-          console.log(
-            "[Submitter] availableArchs before:",
-            availableArchs.value,
-          );
-          console.log(
-            "[Submitter] showArchDialog before:",
-            showArchDialog.value,
-          );
-
-          availableArchs.value = historyResult.data;
-          console.log(
-            "[Submitter] availableArchs after:",
-            availableArchs.value,
-          );
-          console.log(
-            "[Submitter] availableArchs length:",
-            availableArchs.value.length,
-          );
-
-          showArchDialog.value = true;
-          console.log(
-            "[Submitter] showArchDialog after:",
-            showArchDialog.value,
-          );
-
-          console.log(
-            "[Submitter] ============== DIALOG SHOULD BE SHOWING ==============",
-          );
-          console.log("[Submitter] Dialog visibility:", showArchDialog.value);
-          console.log(
-            "[Submitter] Available architectures to display:",
-            availableArchs.value.map((a) => a.store),
-          );
-
-          nextTick(() => {
-            console.log(
-              "[Submitter] ============== AFTER NEXT TICK ==============",
-            );
-            console.log(
-              "[Submitter] showArchDialog in nextTick:",
-              showArchDialog.value,
-            );
-            console.log(
-              "[Submitter] availableArchs in nextTick:",
-              availableArchs.value,
-            );
-
-            const dialogElement = document.querySelector(
-              "[data-submitter-arch-dialog]",
-            );
-            console.log("[Submitter] Dialog element found:", !!dialogElement);
-            if (dialogElement) {
-              console.log("[Submitter] Dialog element:", dialogElement);
-              console.log(
-                "[Submitter] Dialog element style:",
-                window.getComputedStyle(dialogElement),
-              );
-            }
-          });
-        } else {
-          console.log(
-            "[Submitter] ============== NO HISTORY INFO FOUND ==============",
-          );
-          console.log(
-            "[Submitter] historyResult.success:",
-            historyResult?.success,
-          );
-          console.log("[Submitter] historyResult.data:", historyResult?.data);
-          console.log(
-            "[Submitter] historyResult.data.length:",
-            historyResult?.data?.length,
-          );
-
-          if (historyResult?.success === true && historyResult.data) {
-            console.log("[Submitter] Success is true but no data found");
-            console.log("[Submitter] Data is:", historyResult.data);
-            console.log("[Submitter] Data type:", typeof historyResult.data);
-          } else if (!historyResult?.success) {
-            console.log(
-              "[Submitter] Search failed with message:",
-              historyResult?.message,
-            );
-          }
-        }
-      } else {
-        console.log("[Submitter] pkgname is empty, skipping history search");
+        pendingSearchHistory = true;
+        selectMirrorSource();
       }
     } else {
       console.error("[Submitter] Failed to parse deb file");
@@ -1126,6 +1220,7 @@ const handleDrop = async (event: DragEvent) => {
 };
 
 const selectArch = (arch: HistoryArchInfo) => {
+  showArchDialog.value = false;
   console.log("[Submitter] selectArch called with:", arch);
 
   formData.name = arch.name || formData.name;
@@ -1260,6 +1355,7 @@ const resetForm = () => {
   formData.description = "";
   formData.tags = "";
   formData.category = "";
+  formData.remark = "";
   submitSuccess.value = false;
   submitError.value = "";
   debParseError.value = "";
@@ -1289,6 +1385,7 @@ const submitForm = async () => {
       description: formData.description,
       tags: formData.tags,
       category: formData.category,
+      remark: formData.remark,
     };
 
     console.log("[Submitter] ============== SUBMIT FORM ==============");
@@ -1344,6 +1441,7 @@ const packageApp = async (storeArch: string) => {
       description: formData.description,
       tags: formData.tags,
       category: formData.category,
+      remark: formData.remark,
       storeArch,
     };
 
