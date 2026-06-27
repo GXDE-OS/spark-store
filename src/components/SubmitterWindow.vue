@@ -520,77 +520,6 @@
         </div>
       </div>
     </Teleport>
-
-    <Teleport to="body">
-      <div
-        v-if="showMirrorConfirmDialog"
-        data-submitter-mirror-confirm-dialog
-        class="fixed inset-0 z-50 flex items-center justify-center p-4"
-      >
-        <div
-          class="fixed inset-0 bg-black/50"
-          @click="showMirrorConfirmDialog = false"
-        ></div>
-        <div
-          class="relative z-10 bg-white dark:bg-slate-900 rounded-xl shadow-2xl w-full max-w-md p-6"
-        >
-          <div class="flex items-center justify-between mb-4">
-            <h2
-              class="text-lg font-semibold text-slate-900 dark:text-slate-100"
-            >
-              选择数据源
-            </h2>
-            <button
-              type="button"
-              class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
-              @click="showMirrorConfirmDialog = false"
-            >
-              <i class="fas fa-times"></i>
-            </button>
-          </div>
-
-          <p class="text-slate-600 dark:text-slate-400 mb-4">
-            请选择搜索历史信息的数据源：
-          </p>
-
-          <div class="space-y-3 mb-4">
-            <div class="p-3 rounded-lg bg-slate-50 dark:bg-slate-800">
-              <div class="font-medium text-slate-900 dark:text-slate-100">
-                镜像源
-              </div>
-              <div class="text-sm text-slate-500 dark:text-slate-400">
-                mirrors.sdu.edu.cn - 建议在中国内地使用以获得更好的网络体验
-              </div>
-            </div>
-            <div class="p-3 rounded-lg bg-slate-50 dark:bg-slate-800">
-              <div class="font-medium text-slate-900 dark:text-slate-100">
-                主站
-              </div>
-              <div class="text-sm text-slate-500 dark:text-slate-400">
-                spk-json.spark-app.store - 全球可用
-              </div>
-            </div>
-          </div>
-
-          <div class="flex gap-3">
-            <button
-              type="button"
-              class="flex-1 px-4 py-2 rounded-lg border-2 border-emerald-500 bg-emerald-50 text-emerald-700 font-medium hover:bg-emerald-100 dark:bg-emerald-900/20 dark:border-emerald-600 dark:text-emerald-400 dark:hover:bg-emerald-900/30"
-              @click="confirmMirrorSource(true)"
-            >
-              使用镜像源
-            </button>
-            <button
-              type="button"
-              class="flex-1 px-4 py-2 rounded-lg border border-slate-200 bg-white text-slate-700 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700"
-              @click="confirmMirrorSource(false)"
-            >
-              使用主站
-            </button>
-          </div>
-        </div>
-      </div>
-    </Teleport>
   </div>
 </template>
 
@@ -642,7 +571,6 @@ const showArchDialog = ref(false);
 const availableArchs = ref<HistoryArchInfo[]>([]);
 const currentDebArch = ref("");
 const iconPreview = ref("");
-const showMirrorConfirmDialog = ref(false);
 
 const isPackaging = ref(false);
 const packageSuccess = ref(false);
@@ -928,22 +856,7 @@ const selectDebFile = async () => {
   }
 };
 
-const useMirror = ref(false);
-let pendingSearchHistory = false;
-
-const selectMirrorSource = () => {
-  showMirrorConfirmDialog.value = true;
-};
-
-const confirmMirrorSource = async (useMirrorSource: boolean) => {
-  useMirror.value = useMirrorSource;
-  showMirrorConfirmDialog.value = false;
-
-  if (pendingSearchHistory && formData.pkgname) {
-    pendingSearchHistory = false;
-    await searchHistoryApp();
-  }
-};
+const useMirror = ref(true);
 
 const searchHistoryApp = async () => {
   console.log(
@@ -1127,8 +1040,7 @@ const parseDebFileAndSearchHistory = async (debPath: string) => {
       );
 
       if (formData.pkgname) {
-        pendingSearchHistory = true;
-        selectMirrorSource();
+        await searchHistoryApp();
       }
     } else {
       console.error("[Submitter] Failed to parse deb file");
