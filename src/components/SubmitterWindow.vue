@@ -665,7 +665,7 @@ const loadCategoriesList = async () => {
       console.log("[Submitter] Data length:", data.data?.length);
       console.log("[Submitter] Raw data:", JSON.stringify(data.data, null, 2));
 
-      if (data.code === 200 && data.data) {
+      if (data.code === 0 && data.data) {
         categoriesList.value = data.data.map(
           (
             item: { id: number; name: string; value: string },
@@ -683,7 +683,7 @@ const loadCategoriesList = async () => {
           "[Submitter] Categories count:",
           categoriesList.value.length,
         );
-      } else if (data.code === 200 && Array.isArray(data)) {
+      } else if (data.code === 0 && Array.isArray(data)) {
         categoriesList.value = data.map(
           (
             item: { id: number; name: string; value: string },
@@ -806,7 +806,7 @@ const loadTagsList = async () => {
       console.log("[Submitter] Data length:", data.data?.length);
       console.log("[Submitter] Raw data:", JSON.stringify(data.data, null, 2));
 
-      if (data.code === 200 && data.data) {
+      if (data.code === 0 && data.data) {
         tagsList.value = data.data.map(
           (item: { name: string; value: string }) => ({
             name: item.name,
@@ -820,7 +820,7 @@ const loadTagsList = async () => {
         console.error(
           "[Submitter] ============== INVALID RESPONSE CODE ==============",
         );
-        console.error("[Submitter] Expected code 200, got:", data.code);
+        console.error("[Submitter] Expected code 0, got:", data.code);
         console.error("[Submitter] Response message:", data.msg);
       }
     } else {
@@ -1404,5 +1404,6 @@ import { onMounted, nextTick } from "vue";
 onMounted(() => {
   console.log("[Submitter] Component mounted, loading categories and tags");
   loadCategoriesList();
+  loadTagsList();
 });
 </script>

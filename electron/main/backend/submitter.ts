@@ -846,7 +846,7 @@ export function registerSubmitterHandlers(
 
   ipcMain.handle("get-category-list", async () => {
     try {
-      const apiUrl = "https://upload.deepinos.org.cn/api/index/getTypeList";
+      const apiUrl = "https://upload.deepinos.org.cn/api/index/get_type_list";
       logger.info(
         "[Submitter] ============== GET CATEGORY LIST START ==============",
       );
@@ -913,7 +913,7 @@ export function registerSubmitterHandlers(
 
   ipcMain.handle("get-tags-list", async () => {
     try {
-      const apiUrl = "https://upload.deepinos.org.cn/api/index/getTagsList";
+      const apiUrl = "https://upload.deepinos.org.cn/api/index/get_tags_list";
       logger.info(
         "[Submitter] ============== GET TAGS LIST START ==============",
       );
