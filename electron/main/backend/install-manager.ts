@@ -1,6 +1,7 @@
 import { ipcMain, WebContents } from "electron";
 import { spawn, ChildProcess } from "node:child_process";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import pino from "pino";
 
@@ -44,6 +45,86 @@ type InstallTask = {
 };
 
 const SHELL_CALLER_PATH = "/opt/spark-store/extras/shell-caller.sh";
+
+// 以下路径配置参考自index.ts并且与其保持一致
+// 其中，SPARK_CONFIG_DIR为配置目录，若此目录下出现ssshell-config-do-not-create-desktop文件
+// 则代表「关闭『自动创建桌面启动器』功能」
+const SPARK_CONFIG_DIR = path.join(
+  os.homedir(),
+  ".config/spark-union/spark-store",
+);
+const CREATE_DESKTOP_CONFIG = "ssshell-config-do-not-create-desktop";
+const CREATE_DESKTOP_CONFIG_PATH = path.join(
+  SPARK_CONFIG_DIR,
+  CREATE_DESKTOP_CONFIG,
+);
+
+// APM应用的.desktop文件可能在以下几个位置
+const APM_DESKTOP_ENTRY_DIRS = [
+  "/var/lib/apm",  // 实体机/宿主系统
+  "/var/lib/apm/apm/files/ace-env/var/lib/apm",  // ACE容器
+];
+
+
+
+// Helper: 为APM安装的应用创建桌面快捷方式（如果启用了「自动创建桌面启动器」）
+const createApmDesktopShortcut = (pkgname: string, sendLog: (msg: string) => void) => {
+  // 如上所述，配置目录里面有ssshell-config-do-not-create-desktop文件就是功能关闭
+  if (fs.existsSync(CREATE_DESKTOP_CONFIG_PATH)) {
+    logger.debug(
+      `Desktop shortcut creation has been disabled. Skipping creating it for ${pkgname}.`,
+    );
+
+    // 这种情况直接终止这个函数的执行即可
+    return;
+  }
+
+  // 桌面路径
+  const desktopDir = path.join(os.homedir(), "Desktop");
+
+  // 遍历APM应用的.desktop文件可能在以下几个位置
+  for (const baseDir of APM_DESKTOP_ENTRY_DIRS) {
+    const entriesPath = path.join(baseDir, pkgname, "entries", "applications");
+    if (!fs.existsSync(entriesPath)) {
+      // 没找到就下一个
+      continue;
+    }
+
+    // 找着了
+    try {
+      const files = fs.readdirSync(entriesPath);
+      for (const file of files) {
+        // 忽略扩展名不符的
+        if (!file.endsWith(".desktop")) {
+          continue;
+        } 
+
+        const srcPath = path.join(entriesPath, file);
+        const destPath = path.join(desktopDir, file);
+
+        // 目标已存在则跳过
+        if (fs.existsSync(destPath)) {
+          logger.debug(`Shortcut already exists: ${destPath}`);
+          sendLog(`Shortcut already exists: ${file}`);
+          return;
+        }
+
+        // 读取.desktop文件内容
+        const content = fs.readFileSync(srcPath, "utf-8");
+
+        // 写入用户桌面，顺带处理一下权限问题
+        fs.writeFileSync(destPath, content, { mode: 0o755 });
+        sendLog(`Wrote desktop shortcut: ${file}`);
+        logger.info(`Wrote shortcut ${destPath} for ${pkgname}.`);
+        return;
+      }
+    } catch (err) {
+      logger.warn(`Failed to read APM .desktop file for ${entriesPath}: ${err}.`);
+    }
+  }
+
+  logger.debug(`Could NOT find ${pkgname}'s .desktop file...`);
+};
 
 export const tasks = new Map<number, InstallTask>();
 
@@ -584,8 +665,17 @@ async function processNextInQueue() {
       stderr: result.stderr,
     };
 
-    if (success) logger.info(msgObj);
-    else logger.error(msgObj);
+    if (success) {
+      logger.info(msgObj);
+
+      // 安装成功后，如果是APM安装的，就调用createApmDesktopShortcut
+      // 这个函数负责处理桌面快捷方式，它自己会读取设置并且决定要不要创建
+      if (task.origin === "apm" && task.pkgname) {
+        createApmDesktopShortcut(task.pkgname, sendLog);
+      }
+    } else {
+      logger.error(msgObj);
+    }
 
     webContents?.send("install-complete", {
       id,
