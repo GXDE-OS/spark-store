@@ -67,11 +67,11 @@ const APM_DESKTOP_ENTRY_DIRS = [
 ];
 
 // Helper: 用XDG_DESKTOP_DIR拿桌面路径，读不到我就回退到~/Desktop
-const resolveDesktopDir = (): string => {
+const resolveDesktopDir = async (): Promise<string> => {
   const userDirsPath = path.join(os.homedir(), ".config", "user-dirs.dirs");
 
   try {
-    const content = fs.readFileSync(userDirsPath, "utf-8");
+    const content = await fsp.readFile(userDirsPath, "utf-8");
     const matchRes = content.match(/^XDG_DESKTOP_DIR="\$HOME\/(.+)"$/m);
     if (matchRes?.[1]) {
       return path.join(os.homedir(), matchRes[1]);
@@ -100,7 +100,7 @@ const createApmDesktopShortcut = async (
   }
 
   // 解析桌面路径，确保目录存在
-  const desktopDir = resolveDesktopDir();
+  const desktopDir = await resolveDesktopDir();
   try {
     await fsp.mkdir(desktopDir, { recursive: true });
   } catch (err) {
@@ -127,12 +127,12 @@ const createApmDesktopShortcut = async (
       const srcPath = path.join(entriesPath, file);
       const destPath = path.join(desktopDir, file);
 
-      // 目标已存在则跳过
+      // 目标已存在则跳过，继续检查下一个
       try {
         await fsp.access(destPath);
         logger.debug(`Shortcut already exists: ${destPath}`);
         sendLog(`Shortcut already exists: ${file}`);
-        return;
+        continue;
       } catch {
         // 不存在，继续
       }
@@ -703,7 +703,13 @@ async function processNextInQueue() {
       // 安装成功后，如果是APM安装的，就调用createApmDesktopShortcut
       // 这个函数负责处理桌面快捷方式，它自己会读取设置并且决定要不要创建
       if (task.origin === "apm" && task.pkgname) {
-        await createApmDesktopShortcut(task.pkgname, sendLog);
+        try {
+          await createApmDesktopShortcut(task.pkgname, sendLog);
+        } catch (err) {
+          logger.warn(
+            `Failed to create shortcut for ${task.pkgname}: ${err}`,
+          );
+        }
       }
     } else {
       logger.error(msgObj);
