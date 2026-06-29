@@ -1,6 +1,7 @@
 import { ipcMain, WebContents } from "electron";
 import { spawn, ChildProcess } from "node:child_process";
 import fs from "node:fs";
+import { promises as fsp } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import pino from "pino";
@@ -65,61 +66,92 @@ const APM_DESKTOP_ENTRY_DIRS = [
   "/var/lib/apm/apm/files/ace-env/var/lib/apm",  // ACE容器
 ];
 
+// Helper: 用XDG_DESKTOP_DIR拿桌面路径，读不到我就回退到~/Desktop
+const resolveDesktopDir = (): string => {
+  const userDirsPath = path.join(os.homedir(), ".config", "user-dirs.dirs");
 
+  try {
+    const content = fs.readFileSync(userDirsPath, "utf-8");
+    const matchRes = content.match(/^XDG_DESKTOP_DIR="\$HOME\/(.+)"$/m);
+    if (matchRes?.[1]) {
+      return path.join(os.homedir(), matchRes[1]);
+    }
+  } catch {
+    // user-dirs.dirs无法读取
+    logger.warn(`Failed to get XDG_DESKTOP_DIR, I'm falling back to ~/Desktop!!`);
+  }
+  return path.join(os.homedir(), "Desktop");
+};
 
 // Helper: 为APM安装的应用创建桌面快捷方式（如果启用了「自动创建桌面启动器」）
-const createApmDesktopShortcut = (pkgname: string, sendLog: (msg: string) => void) => {
+const createApmDesktopShortcut = async (
+  pkgname: string,
+  sendLog: (msg: string) => void,
+) => {
   // 如上所述，配置目录里面有ssshell-config-do-not-create-desktop文件就是功能关闭
-  if (fs.existsSync(CREATE_DESKTOP_CONFIG_PATH)) {
+  try {
+    await fsp.access(CREATE_DESKTOP_CONFIG_PATH);
     logger.debug(
       `Desktop shortcut creation has been disabled. Skipping creating it for ${pkgname}.`,
     );
-
-    // 这种情况直接终止这个函数的执行即可
     return;
+  } catch {
+    // 文件不存在就是功能启用 继续
   }
 
-  // 桌面路径
-  const desktopDir = path.join(os.homedir(), "Desktop");
+  // 解析桌面路径，确保目录存在
+  const desktopDir = resolveDesktopDir();
+  try {
+    await fsp.mkdir(desktopDir, { recursive: true });
+  } catch (err) {
+    logger.warn(`Failed to create desktop directory ${desktopDir}: ${err}`);
+    return;
+  }
 
   // 遍历APM应用的.desktop文件可能在以下几个位置
   for (const baseDir of APM_DESKTOP_ENTRY_DIRS) {
     const entriesPath = path.join(baseDir, pkgname, "entries", "applications");
-    if (!fs.existsSync(entriesPath)) {
-      // 没找到就下一个
+    let files: string[];
+    try {
+      files = await fsp.readdir(entriesPath);
+    } catch {
       continue;
     }
 
-    // 找着了
-    try {
-      const files = fs.readdirSync(entriesPath);
-      for (const file of files) {
-        // 忽略扩展名不符的
-        if (!file.endsWith(".desktop")) {
-          continue;
-        } 
+    for (const file of files) {
+      // 忽略扩展名不符的
+      if (!file.endsWith(".desktop")) {
+        continue;
+      }
 
-        const srcPath = path.join(entriesPath, file);
-        const destPath = path.join(desktopDir, file);
+      const srcPath = path.join(entriesPath, file);
+      const destPath = path.join(desktopDir, file);
 
-        // 目标已存在则跳过
-        if (fs.existsSync(destPath)) {
-          logger.debug(`Shortcut already exists: ${destPath}`);
-          sendLog(`Shortcut already exists: ${file}`);
-          return;
-        }
+      // 目标已存在则跳过
+      try {
+        await fsp.access(destPath);
+        logger.debug(`Shortcut already exists: ${destPath}`);
+        sendLog(`Shortcut already exists: ${file}`);
+        return;
+      } catch {
+        // 不存在，继续
+      }
 
+      try {
         // 读取.desktop文件内容
-        const content = fs.readFileSync(srcPath, "utf-8");
+        const content = await fsp.readFile(srcPath, "utf-8");
 
         // 写入用户桌面，顺带处理一下权限问题
-        fs.writeFileSync(destPath, content, { mode: 0o755 });
+        await fsp.writeFile(destPath, content, { mode: 0o755 });
         sendLog(`Wrote desktop shortcut: ${file}`);
         logger.info(`Wrote shortcut ${destPath} for ${pkgname}.`);
         return;
+      } catch (err) {
+        logger.warn(
+          `Failed to create desktop shortcut for ${pkgname}: ${err}`,
+        );
+        return;
       }
-    } catch (err) {
-      logger.warn(`Failed to read APM .desktop file for ${entriesPath}: ${err}.`);
     }
   }
 
@@ -671,7 +703,7 @@ async function processNextInQueue() {
       // 安装成功后，如果是APM安装的，就调用createApmDesktopShortcut
       // 这个函数负责处理桌面快捷方式，它自己会读取设置并且决定要不要创建
       if (task.origin === "apm" && task.pkgname) {
-        createApmDesktopShortcut(task.pkgname, sendLog);
+        await createApmDesktopShortcut(task.pkgname, sendLog);
       }
     } else {
       logger.error(msgObj);
