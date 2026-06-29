@@ -88,7 +88,20 @@
           <input
             v-model="formData.contributor"
             type="text"
-            placeholder="你的名字或邮箱"
+            placeholder="你的名字"
+            class="w-full px-4 py-2.5 rounded-lg border border-slate-200 bg-white dark:bg-slate-800 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          />
+        </div>
+
+        <div>
+          <label
+            class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2"
+            >联系邮箱</label
+          >
+          <input
+            v-model="formData.mail"
+            type="email"
+            placeholder="your@email.com"
             class="w-full px-4 py-2.5 rounded-lg border border-slate-200 bg-white dark:bg-slate-800 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
         </div>
@@ -552,6 +565,7 @@ const formData = reactive({
   version: "",
   author: "",
   contributor: "",
+  mail: "",
   website: "",
   debFilePath: "",
   iconPath: "",
@@ -1260,6 +1274,7 @@ const resetForm = () => {
   formData.version = "";
   formData.author = "";
   formData.contributor = "";
+  formData.mail = "";
   formData.website = "";
   formData.debFilePath = "";
   formData.iconPath = "";
@@ -1290,6 +1305,7 @@ const submitForm = async () => {
       version: formData.version,
       author: formData.author,
       contributor: formData.contributor,
+      mail: formData.mail,
       website: formData.website,
       debFilePath: formData.debFilePath,
       iconPath: formData.iconPath,
@@ -1346,6 +1362,7 @@ const packageApp = async (storeArch: string) => {
       version: formData.version,
       author: formData.author,
       contributor: formData.contributor,
+      mail: formData.mail,
       website: formData.website,
       debFilePath: formData.debFilePath,
       iconPath: formData.iconPath,
