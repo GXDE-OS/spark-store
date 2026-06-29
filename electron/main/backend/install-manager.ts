@@ -142,7 +142,7 @@ const createApmDesktopShortcut = async (
         const content = await fsp.readFile(srcPath, "utf-8");
 
         // 写入用户桌面，顺带处理一下权限问题
-        await fsp.writeFile(destPath, content, { mode: 0o755 });
+        await fsp.writeFile(destPath, content, { mode: 0o644 });
         sendLog(`Wrote desktop shortcut: ${file}`);
         logger.info(`Wrote shortcut ${destPath} for ${pkgname}.`);
         return;
