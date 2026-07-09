@@ -52,3 +52,6 @@ yarn.lock
 test-results.json
 .worktrees/
 .superpowers/
+
+# VSCode CMake Extension
+build/*
