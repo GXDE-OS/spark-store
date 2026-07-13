@@ -155,7 +155,10 @@ case "$command_type" in
                 echo "操作已取消"
                 exit 0
             fi
-
+        elif [[ "$2" == "ssupdate" ]]; then
+                /usr/bin/aptss "${@:2}" -y 2>&1
+                exit_code=$?
+                exit $?
         else
             # 非 remove/install 命令，拒绝执行
             echo "拒绝执行 aptss 白名单外的指令"

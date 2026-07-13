@@ -152,6 +152,8 @@ export const createUpdateCenterStore = (): UpdateCenterStore => {
     lastStoreFilter = storeFilter;
     loading.value = true;
     try {
+      // 先运行系统更新（aptss update / apm update），确保本地包信息最新
+      await window.ipcRenderer.invoke("update-center-run-system-update", storeFilter);
       const nextSnapshot = await window.updateCenter.refresh(storeFilter);
       applySnapshot(nextSnapshot);
     } finally {

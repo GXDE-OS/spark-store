@@ -46,12 +46,12 @@
               class="hidden"
               @change="handleDebFileSelect"
             />
-            <div v-if="isParsingDeb" class="flex flex-col items-center">
+            <div v-if="isParsingDeb || isSearchingHistory" class="flex flex-col items-center">
               <div
                 class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mb-4"
               ></div>
               <p class="text-slate-600 dark:text-slate-400">
-                正在解析 deb 文件...
+                {{ isParsingDeb ? '正在解析 deb 文件...' : '正在从服务器查询已上架信息...' }}
               </p>
             </div>
             <div v-else>
@@ -93,8 +93,9 @@
             <input
               v-model="formData.pkgname"
               type="text"
-              placeholder="唯一标识符"
-              class="w-full px-4 py-2.5 rounded-lg border border-slate-200 bg-white dark:bg-slate-800 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              disabled
+              title="包名由 deb 文件自动解析，不可手动修改"
+              class="w-full px-4 py-2.5 rounded-lg border border-slate-200 bg-slate-100 dark:bg-slate-700 dark:border-slate-600 text-slate-500 dark:text-slate-400 cursor-not-allowed"
             />
           </div>
         </div>
@@ -108,8 +109,9 @@
             <input
               v-model="formData.version"
               type="text"
-              placeholder="如 1.0.0"
-              class="w-full px-4 py-2.5 rounded-lg border border-slate-200 bg-white dark:bg-slate-800 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              disabled
+              title="版本号由 deb 文件自动解析，不可手动修改"
+              class="w-full px-4 py-2.5 rounded-lg border border-slate-200 bg-slate-100 dark:bg-slate-700 dark:border-slate-600 text-slate-500 dark:text-slate-400 cursor-not-allowed"
             />
           </div>
           <div>
@@ -302,14 +304,27 @@
             class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2"
             >分类</label
           >
+          <div v-if="isLoadingCategories" class="text-sm text-slate-400 py-2">
+            正在加载分类列表...
+          </div>
+          <div
+            v-else-if="categoriesLoadError"
+            class="p-3 bg-yellow-50 border border-yellow-200 rounded-lg dark:bg-yellow-900/20 dark:border-yellow-800"
+          >
+            <p class="text-yellow-700 dark:text-yellow-400 text-sm">
+              分类加载失败: {{ categoriesLoadError }}
+            </p>
+          </div>
           <select
+            v-else
             v-model="formData.category"
             class="w-full px-4 py-2.5 rounded-lg border border-slate-200 bg-white dark:bg-slate-800 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           >
+            <option value="" disabled>请选择分类</option>
             <option
               v-for="category in categoriesList"
               :key="category.id"
-              :value="category.name"
+              :value="category.value"
             >
               {{ category.name }}
             </option>
@@ -581,10 +596,14 @@ const submitSuccess = ref(false);
 const submitError = ref("");
 const isParsingDeb = ref(false);
 const debParseError = ref("");
+const isSearchingHistory = ref(false);
 const showArchDialog = ref(false);
 const availableArchs = ref<HistoryArchInfo[]>([]);
 const currentDebArch = ref("");
 const iconPreview = ref("");
+
+const isLoadingCategories = ref(false);
+const categoriesLoadError = ref("");
 
 const isPackaging = ref(false);
 const packageSuccess = ref(false);
@@ -605,7 +624,25 @@ const packArchOptions = [
 interface Category {
   id: number;
   name: string;
+  value: string;
 }
+
+// 服务器分类 id → 英文标识符映射（与后端 submitter.ts 的 categoryNameToIdMap 反向）
+// 历史记录中 category 字段存储的就是这些英文标识符
+const categoryIdToValueMap: Record<number, string> = {
+  1: "games",
+  2: "music",
+  3: "network",
+  4: "office",
+  5: "others",
+  6: "image_graphics",
+  7: "development",
+  8: "reading",
+  9: "chat",
+  10: "themes",
+  11: "tools",
+  12: "video",
+};
 
 interface Tag {
   name: string;
@@ -622,6 +659,7 @@ const isFormValid = computed(() => {
     formData.name.trim() &&
     formData.pkgname.trim() &&
     formData.version.trim() &&
+    formData.category.trim() &&
     formData.debFilePath
   );
 });
@@ -635,147 +673,75 @@ const getArchDisplayName = (store: string): string => {
   return archMap[store] || store;
 };
 
-const loadCategoriesList = async () => {
-  console.log(
-    "[Submitter] ============== LOAD CATEGORIES START ==============",
-  );
-  console.log("[Submitter] Calling IPC: get-category-list");
+const loadCategoriesPromise = ref<Promise<void> | null>(null);
 
-  try {
-    const startTime = Date.now();
-    const result = await window.ipcRenderer.invoke("get-category-list");
-    const endTime = Date.now();
-
-    console.log(
-      "[Submitter] ============== IPC RESPONSE RECEIVED ==============",
-    );
-    console.log("[Submitter] Request duration:", endTime - startTime, "ms");
-    console.log("[Submitter] Result success:", result?.success);
-    console.log("[Submitter] Result message:", result?.message);
-    console.log("[Submitter] Full result:", JSON.stringify(result, null, 2));
-
-    if (result?.success && result.data) {
-      const data = result.data;
-      console.log(
-        "[Submitter] ============== PROCESSING RESPONSE ==============",
-      );
-      console.log("[Submitter] Response code:", data.code);
-      console.log("[Submitter] Response message:", data.msg);
-      console.log("[Submitter] Data type:", typeof data.data);
-      console.log("[Submitter] Data length:", data.data?.length);
-      console.log("[Submitter] Raw data:", JSON.stringify(data.data, null, 2));
-
-      if (data.code === 0 && data.data) {
-        categoriesList.value = data.data.map(
-          (
-            item: { id: number; name: string; value: string },
-            index: number,
-          ) => ({
-            id: typeof item.id === "number" ? item.id : index + 1,
-            name: item.name || item.value || "",
-          }),
-        );
-        console.log(
-          "[Submitter] ============== CATEGORIES LOADED ==============",
-        );
-        console.log("[Submitter] Categories list:", categoriesList.value);
-        console.log(
-          "[Submitter] Categories count:",
-          categoriesList.value.length,
-        );
-      } else if (data.code === 0 && Array.isArray(data)) {
-        categoriesList.value = data.map(
-          (
-            item: { id: number; name: string; value: string },
-            index: number,
-          ) => ({
-            id: typeof item.id === "number" ? item.id : index + 1,
-            name: item.name || item.value || "",
-          }),
-        );
-        console.log(
-          "[Submitter] ============== CATEGORIES LOADED (direct array) ==============",
-        );
-        console.log("[Submitter] Categories list:", categoriesList.value);
-        console.log(
-          "[Submitter] Categories count:",
-          categoriesList.value.length,
-        );
-      } else {
-        console.error(
-          "[Submitter] ============== INVALID RESPONSE CODE ==============",
-        );
-        console.error("[Submitter] Expected code 200, got:", data.code);
-        console.error("[Submitter] Response message:", data.msg);
-        categoriesList.value = [
-          { id: 1, name: "chat" },
-          { id: 2, name: "development" },
-          { id: 3, name: "games" },
-          { id: 4, name: "image_graphics" },
-          { id: 5, name: "music" },
-          { id: 6, name: "network" },
-          { id: 7, name: "office" },
-          { id: 8, name: "others" },
-          { id: 9, name: "reading" },
-          { id: 10, name: "themes" },
-          { id: 11, name: "tools" },
-          { id: 12, name: "video" },
-        ];
-        console.log(
-          "[Submitter] ============== USING FALLBACK CATEGORIES ==============",
-        );
-        console.log("[Submitter] Categories list:", categoriesList.value);
-      }
-    } else {
-      console.error(
-        "[Submitter] ============== IPC CALL FAILED ==============",
-      );
-      console.error("[Submitter] Success:", result?.success);
-      console.error("[Submitter] Message:", result?.message);
-      console.error("[Submitter] Data:", result?.data);
-      categoriesList.value = [
-        { id: 1, name: "chat" },
-        { id: 2, name: "development" },
-        { id: 3, name: "games" },
-        { id: 4, name: "image_graphics" },
-        { id: 5, name: "music" },
-        { id: 6, name: "network" },
-        { id: 7, name: "office" },
-        { id: 8, name: "others" },
-        { id: 9, name: "reading" },
-        { id: 10, name: "themes" },
-        { id: 11, name: "tools" },
-        { id: 12, name: "video" },
-      ];
-      console.log(
-        "[Submitter] ============== USING FALLBACK CATEGORIES ==============",
-      );
-      console.log("[Submitter] Categories list:", categoriesList.value);
+const loadCategoriesList = async (): Promise<void> => {
+  // 防止并发调用
+  if (isLoadingCategories.value) {
+    if (loadCategoriesPromise.value) {
+      return loadCategoriesPromise.value;
     }
-  } catch (error) {
-    console.error("[Submitter] ============== EXCEPTION CAUGHT ==============");
-    console.error("[Submitter] Error type:", (error as Error)?.name);
-    console.error("[Submitter] Error message:", (error as Error)?.message);
-    console.error("[Submitter] Error stack:", (error as Error)?.stack);
-    categoriesList.value = [
-      { id: 1, name: "chat" },
-      { id: 2, name: "development" },
-      { id: 3, name: "games" },
-      { id: 4, name: "image_graphics" },
-      { id: 5, name: "music" },
-      { id: 6, name: "network" },
-      { id: 7, name: "office" },
-      { id: 8, name: "others" },
-      { id: 9, name: "reading" },
-      { id: 10, name: "themes" },
-      { id: 11, name: "tools" },
-      { id: 12, name: "video" },
-    ];
-    console.log(
-      "[Submitter] ============== USING FALLBACK CATEGORIES ==============",
-    );
-    console.log("[Submitter] Categories list:", categoriesList.value);
+    return;
   }
+
+  isLoadingCategories.value = true;
+  categoriesLoadError.value = "";
+
+  const promise = (async () => {
+    console.log(
+      "[Submitter] ============== LOAD CATEGORIES START ==============",
+    );
+
+    try {
+      const result = await window.ipcRenderer.invoke("get-category-list");
+
+      if (result?.success && result.data) {
+        const data = result.data;
+
+        if (data.code === 0 && Array.isArray(data.data) && data.data.length > 0) {
+          categoriesList.value = data.data.map(
+            (item: { id: number; name: string }, index: number) => ({
+              id: typeof item.id === "number" ? item.id : index + 1,
+              // API 只返回中文 name，value 通过 id 反向映射为英文标识符
+              // 英文标识符与历史记录中的 category 字段一致，用于匹配
+              name: item.name || "",
+              value: categoryIdToValueMap[item.id] || item.name || "",
+            }),
+          );
+          categoriesLoadError.value = "";
+          console.log("[Submitter] Categories loaded from API:", categoriesList.value);
+        } else if (data.code === 0 && Array.isArray(data)) {
+          categoriesList.value = data.map(
+            (item: { id: number; name: string }, index: number) => ({
+              id: typeof item.id === "number" ? item.id : index + 1,
+              name: item.name || "",
+              value: categoryIdToValueMap[item.id] || item.name || "",
+            }),
+          );
+          categoriesLoadError.value = "";
+          console.log("[Submitter] Categories loaded from API (direct array):", categoriesList.value);
+        } else {
+          const errMsg = `服务器返回异常: code=${data.code}, msg=${data.msg || "未知"}`;
+          categoriesLoadError.value = errMsg;
+          console.error("[Submitter]", errMsg);
+        }
+      } else {
+        const errMsg = result?.message || "获取分类列表失败";
+        categoriesLoadError.value = errMsg;
+        console.error("[Submitter] IPC failed:", errMsg);
+      }
+    } catch (error) {
+      const errMsg = (error as Error)?.message || "获取分类列表异常";
+      categoriesLoadError.value = errMsg;
+      console.error("[Submitter] Exception:", errMsg);
+    } finally {
+      isLoadingCategories.value = false;
+      loadCategoriesPromise.value = null;
+    }
+  })();
+
+  loadCategoriesPromise.value = promise;
+  return promise;
 };
 
 const loadTagsList = async () => {
@@ -925,7 +891,15 @@ const searchHistoryApp = async () => {
       showArchDialog.value,
     );
 
-    availableArchs.value = historyResult.data;
+    // 按 amd64 → arm64 → loong64 顺序排序
+    const archOrder: Record<string, number> = {
+      store: 0,
+      "aarch64-store": 1,
+      "loong64-store": 2,
+    };
+    availableArchs.value = [...historyResult.data].sort(
+      (a, b) => (archOrder[a.store] ?? 99) - (archOrder[b.store] ?? 99),
+    );
     console.log(
       "[Submitter] availableArchs after:",
       availableArchs.value,
@@ -934,6 +908,18 @@ const searchHistoryApp = async () => {
       "[Submitter] availableArchs length:",
       availableArchs.value.length,
     );
+
+    // 确保分类列表已加载，避免 select 无法回显
+    if (categoriesList.value.length === 0) {
+      await loadCategoriesList();
+    }
+
+    // 从第一条历史记录预填名称和分类
+    const firstArch = historyResult.data[0];
+    if (firstArch) {
+      formData.name = firstArch.name || formData.name;
+      formData.category = firstArch.category || formData.category;
+    }
 
     showArchDialog.value = true;
     console.log(
@@ -1054,7 +1040,12 @@ const parseDebFileAndSearchHistory = async (debPath: string) => {
       );
 
       if (formData.pkgname) {
-        await searchHistoryApp();
+        isSearchingHistory.value = true;
+        try {
+          await searchHistoryApp();
+        } finally {
+          isSearchingHistory.value = false;
+        }
       }
     } else {
       console.error("[Submitter] Failed to parse deb file");
@@ -1145,9 +1136,14 @@ const handleDrop = async (event: DragEvent) => {
   }
 };
 
-const selectArch = (arch: HistoryArchInfo) => {
+const selectArch = async (arch: HistoryArchInfo) => {
   showArchDialog.value = false;
   console.log("[Submitter] selectArch called with:", arch);
+
+  // 确保分类列表已加载，避免 select 无法回显
+  if (categoriesList.value.length === 0) {
+    await loadCategoriesList();
+  }
 
   formData.name = arch.name || formData.name;
   formData.author = arch.author || formData.author;
@@ -1401,9 +1397,23 @@ const closeWindow = () => {
 
 import { onMounted, nextTick } from "vue";
 
-onMounted(() => {
+const getGitEmail = async () => {
+  try {
+    const result = await window.ipcRenderer.invoke("get-git-email");
+    if (result?.success && result.data) {
+      formData.mail = result.data;
+      console.log("[Submitter] Git email auto-filled:", result.data);
+    }
+  } catch (err) {
+    console.warn("[Submitter] Failed to get git email:", err);
+  }
+};
+
+onMounted(async () => {
   console.log("[Submitter] Component mounted, loading categories and tags");
-  loadCategoriesList();
-  loadTagsList();
+  // 先等待分类列表加载完成，避免后续竞态
+  await Promise.all([loadCategoriesList(), loadTagsList()]);
+  // 尝试从 git 配置读取邮箱
+  await getGitEmail();
 });
 </script>

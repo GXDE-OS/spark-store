@@ -911,6 +911,24 @@ export function registerSubmitterHandlers(
     }
   });
 
+  ipcMain.handle("get-git-email", async () => {
+    try {
+      const { exec } = await import("node:child_process");
+      const util = await import("util");
+      const execAsync = util.promisify(exec);
+      const { stdout } = await execAsync("git config user.email");
+      const email = stdout.trim();
+      logger.info({ email }, "[Submitter] Git email retrieved");
+      return { success: true, data: email || "" };
+    } catch (err) {
+      logger.warn(
+        { err },
+        "[Submitter] Failed to get git email, not a git repo or git not installed",
+      );
+      return { success: false, data: "" };
+    }
+  });
+
   ipcMain.handle("get-tags-list", async () => {
     try {
       const apiUrl = "https://upload.deepinos.org.cn/api/index/get_tags_list";
