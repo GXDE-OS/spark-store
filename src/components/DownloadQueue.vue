@@ -1,6 +1,6 @@
 <template>
   <div
-    class="fixed inset-x-4 bottom-4 z-40 rounded-3xl border border-slate-200/70 bg-white/95 shadow-2xl backdrop-blur dark:border-slate-800/70 dark:bg-slate-900/90 sm:left-auto sm:right-6 sm:w-96"
+    class="fixed inset-x-4 bottom-4 z-40 rounded-3xl border border-slate-200/70 bg-white shadow-2xl dark:border-slate-800/70 dark:bg-slate-900 sm:left-auto sm:right-6 sm:w-96"
   >
     <div
       class="flex items-center justify-between px-5 py-4"

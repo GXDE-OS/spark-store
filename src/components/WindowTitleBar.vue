@@ -1,6 +1,6 @@
 <template>
   <header
-    class="window-titlebar sticky top-0 z-20 flex h-10 shrink-0 items-center justify-between border-b border-slate-200/70 bg-white/95 px-3 text-slate-700 backdrop-blur dark:border-slate-800/70 dark:bg-slate-950/95 dark:text-slate-200"
+    class="window-titlebar sticky top-0 z-20 flex h-10 shrink-0 items-center justify-between border-b border-slate-200/70 bg-white px-3 text-slate-700 dark:border-slate-800/70 dark:bg-slate-950 dark:text-slate-200"
   >
     <div class="flex min-w-0 items-center gap-2">
       <span class="h-3 w-3 rounded-full bg-[#2b7fff]"></span>

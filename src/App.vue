@@ -15,7 +15,7 @@
       ></div>
 
       <aside
-        class="fixed top-10 bottom-0 left-0 z-50 w-64 shrink-0 transform border-r border-slate-200/70 bg-white/95 px-4 py-6 backdrop-blur transition-transform duration-300 ease-in-out dark:border-slate-800/70 dark:bg-slate-900 lg:sticky lg:top-10 lg:flex lg:h-[calc(100vh-2.5rem)] lg:translate-x-0 lg:flex-col lg:border-b-0"
+        class="fixed top-10 bottom-0 left-0 z-50 w-64 shrink-0 transform border-r border-slate-200/70 bg-white px-4 py-6 transition-transform duration-300 ease-in-out dark:border-slate-800/70 dark:bg-slate-900 lg:sticky lg:top-10 lg:flex lg:h-[calc(100vh-2.5rem)] lg:translate-x-0 lg:flex-col lg:border-b-0"
         :class="
           isSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
         "
@@ -47,7 +47,7 @@
 
       <main class="h-full min-h-0 flex-1">
         <div
-          class="sticky top-10 z-30 border-b border-slate-200/70 bg-slate-50/95 px-4 py-4 backdrop-blur lg:px-10 dark:border-slate-800/70 dark:bg-slate-950/95"
+          class="sticky top-10 z-30 border-b border-slate-200/70 bg-slate-50 px-4 py-4 lg:px-10 dark:border-slate-800/70 dark:bg-slate-950"
         >
           <AppHeader
             :search-query="searchQuery"
