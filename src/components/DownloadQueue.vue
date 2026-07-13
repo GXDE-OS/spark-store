@@ -15,7 +15,7 @@
           v-if="downloads.length"
           class="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500 dark:bg-slate-800/70 dark:text-slate-300"
         >
-          ({{ activeDownloads }}/{{ downloads.length }})
+          ({{ completedDownloads }}/{{ downloads.length }})
         </span>
       </div>
       <div class="flex items-center gap-2">
@@ -148,10 +148,8 @@ const emit = defineEmits<{
 
 const isExpanded = ref(false);
 
-const activeDownloads = computed(() => {
-  return props.downloads.filter(
-    (d) => d.status === "downloading" || d.status === "installing",
-  ).length;
+const completedDownloads = computed(() => {
+  return props.downloads.filter((d) => d.status === "completed").length;
 });
 
 const toggleExpand = () => {

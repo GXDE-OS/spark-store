@@ -43,6 +43,7 @@ type InstallTask = {
   filename?: string;
   origin: "spark" | "apm";
   cancelled?: boolean;
+  phase: "queued-download" | "downloading" | "queued-install" | "installing";
 };
 
 const SHELL_CALLER_PATH = "/opt/spark-store/extras/shell-caller.sh";
@@ -62,8 +63,8 @@ const CREATE_DESKTOP_CONFIG_PATH = path.join(
 
 // APM应用的.desktop文件可能在以下几个位置
 const APM_DESKTOP_ENTRY_DIRS = [
-  "/var/lib/apm",  // 实体机/宿主系统
-  "/var/lib/apm/apm/files/ace-env/var/lib/apm",  // ACE容器
+  "/var/lib/apm", // 实体机/宿主系统
+  "/var/lib/apm/apm/files/ace-env/var/lib/apm", // ACE容器
 ];
 
 // Helper: 用XDG_DESKTOP_DIR拿桌面路径，读不到我就回退到~/Desktop
@@ -78,7 +79,9 @@ const resolveDesktopDir = async (): Promise<string> => {
     }
   } catch {
     // user-dirs.dirs无法读取
-    logger.warn(`Failed to get XDG_DESKTOP_DIR, I'm falling back to ~/Desktop!!`);
+    logger.warn(
+      `Failed to get XDG_DESKTOP_DIR, I'm falling back to ~/Desktop!!`,
+    );
   }
   return path.join(os.homedir(), "Desktop");
 };
@@ -147,9 +150,7 @@ const createApmDesktopShortcut = async (
         logger.info(`Wrote shortcut ${destPath} for ${pkgname}.`);
         return;
       } catch (err) {
-        logger.warn(
-          `Failed to create desktop shortcut for ${pkgname}: ${err}`,
-        );
+        logger.warn(`Failed to create desktop shortcut for ${pkgname}: ${err}`);
         return;
       }
     }
@@ -160,7 +161,10 @@ const createApmDesktopShortcut = async (
 
 export const tasks = new Map<number, InstallTask>();
 
-let idle = true; // Indicates if the installation manager is idle
+// 下载与安装分离：最多 5 个并发下载，安装一次只允许一个
+const MAX_CONCURRENT_DOWNLOADS = 5;
+let activeDownloadCount = 0;
+let installIdle = true;
 
 export const checkSuperUserCommand = async (): Promise<string> => {
   if (process.getuid?.() === 0) return "";
@@ -372,72 +376,95 @@ ipcMain.on("queue-install", async (event, download_json) => {
     metalinkUrl,
     filename,
     origin: origin || "apm",
+    phase: metalinkUrl ? "queued-download" : "queued-install",
   };
   tasks.set(id, task);
-  if (idle) processNextInQueue();
+  processNextDownload();
+  processNextInstall();
 });
 
 // Cancel Handler
 ipcMain.on("cancel-install", (event, id) => {
-  if (tasks.has(id)) {
-    const task = tasks.get(id);
-    if (task) {
-      task.cancelled = true;
-      task.download_process?.kill();
-      task.install_process?.kill();
-      logger.info(`已取消任务: ${id}`);
+  const task = tasks.get(id);
+  if (!task) return;
 
-      // 删除下载目录
-      if (task.downloadDir && fs.existsSync(task.downloadDir)) {
-        try {
-          fs.rmSync(task.downloadDir, { recursive: true, force: true });
-          logger.info(`已删除下载目录: ${task.downloadDir}`);
-        } catch (err) {
-          logger.error(`删除下载目录失败 ${task.downloadDir}: ${err}`);
-        }
-      }
+  task.cancelled = true;
+  logger.info(`已取消任务: ${id}`);
 
-      // 主动发送完成（失败）事件，close 回调会因 cancelled 标志跳过
-      task.webContents?.send("install-complete", {
-        id,
-        success: false,
-        time: Date.now(),
-        exitCode: -1,
-        message: JSON.stringify({
-          message: "用户取消",
-          stdout: "",
-          stderr: "",
-        }),
-      });
-
-      tasks.delete(id);
-      idle = true;
-      if (tasks.size > 0) processNextInQueue();
+  // 删除下载目录
+  if (task.downloadDir && fs.existsSync(task.downloadDir)) {
+    try {
+      fs.rmSync(task.downloadDir, { recursive: true, force: true });
+      logger.info(`已删除下载目录: ${task.downloadDir}`);
+    } catch (err) {
+      logger.error(`删除下载目录失败 ${task.downloadDir}: ${err}`);
     }
+  }
+
+  // 主动发送完成（失败）事件
+  task.webContents?.send("install-complete", {
+    id,
+    success: false,
+    time: Date.now(),
+    exitCode: -1,
+    message: JSON.stringify({
+      message: "用户取消",
+      stdout: "",
+      stderr: "",
+    }),
+  });
+
+  const isRunning = task.phase === "downloading" || task.phase === "installing";
+
+  if (isRunning) {
+    // 运行中的任务：终止进程，由对应的阶段处理器在 finally 中清理计数器与队列
+    task.download_process?.kill();
+    task.install_process?.kill();
+  } else {
+    // 排队中的任务（未开始执行）：直接清理并调度
+    tasks.delete(id);
+    processNextDownload();
+    processNextInstall();
   }
 });
 
-async function processNextInQueue() {
-  if (!idle) return;
+/**
+ * 尝试启动排队中的下载任务，最多同时运行 MAX_CONCURRENT_DOWNLOADS 个。
+ */
+function processNextDownload() {
+  while (activeDownloadCount < MAX_CONCURRENT_DOWNLOADS) {
+    const task = Array.from(tasks.values()).find(
+      (t) => t.phase === "queued-download" && !t.cancelled,
+    );
+    if (!task) break;
+    task.phase = "downloading";
+    activeDownloadCount++;
+    void runDownloadPhase(task);
+  }
+}
 
-  // Always take the first task to ensure sequence
-  const task = Array.from(tasks.values())[0];
+/**
+ * 尝试启动排队中的安装任务，安装一次只允许一个。
+ */
+function processNextInstall() {
+  if (!installIdle) return;
+  const task = Array.from(tasks.values()).find(
+    (t) => t.phase === "queued-install" && !t.cancelled,
+  );
   if (!task) {
-    idle = true;
+    installIdle = true;
     return;
   }
+  installIdle = false;
+  task.phase = "installing";
+  void runInstallPhase(task);
+}
 
-  // 如果任务已被取消，跳过并处理下一个
-  if (task.cancelled) {
-    tasks.delete(task.id);
-    idle = true;
-    if (tasks.size > 0) {
-      processNextInQueue();
-    }
-    return;
-  }
-
-  idle = false;
+/**
+ * 下载阶段：获取 Metalink → aria2c 下载（含重试）。
+ * 下载完成后任务进入 queued-install 等待安装。
+ */
+async function runDownloadPhase(task: InstallTask) {
   const { webContents, id, downloadDir } = task;
 
   const sendLog = (msg: string) => {
@@ -452,6 +479,8 @@ async function processNextInQueue() {
   };
 
   try {
+    if (task.cancelled) throw new Error("下载已取消");
+
     // 1. Metalink & Aria2c Phase
     if (task.metalinkUrl) {
       try {
@@ -617,10 +646,50 @@ async function processNextInQueue() {
       }
     }
 
-    // 进入安装阶段前检查是否已取消
-    if (task.cancelled) {
-      throw new Error("安装已取消");
+    // 下载完成，进入安装队列等待
+    task.phase = "queued-install";
+  } catch (error) {
+    logger.error(`Task ${id} download failed: ${error}`);
+    if (!task.cancelled) {
+      webContents?.send("install-complete", {
+        id,
+        success: false,
+        time: Date.now(),
+        exitCode: -1,
+        message: JSON.stringify({
+          message: error instanceof Error ? error.message : String(error),
+          stdout: "",
+          stderr: "",
+        }),
+      });
     }
+    tasks.delete(id);
+  } finally {
+    activeDownloadCount--;
+    processNextDownload();
+    processNextInstall();
+  }
+}
+
+/**
+ * 安装阶段：执行安装命令，安装一次只允许一个。
+ */
+async function runInstallPhase(task: InstallTask) {
+  const { webContents, id } = task;
+
+  const sendLog = (msg: string) => {
+    webContents?.send("install-log", { id, time: Date.now(), message: msg });
+  };
+  const sendStatus = (status: string) => {
+    webContents?.send("install-status", {
+      id,
+      time: Date.now(),
+      message: status,
+    });
+  };
+
+  try {
+    if (task.cancelled) throw new Error("安装已取消");
 
     // 2. Install Phase
     sendStatus("installing");
@@ -706,9 +775,7 @@ async function processNextInQueue() {
         try {
           await createApmDesktopShortcut(task.pkgname, sendLog);
         } catch (err) {
-          logger.warn(
-            `Failed to create shortcut for ${task.pkgname}: ${err}`,
-          );
+          logger.warn(`Failed to create shortcut for ${task.pkgname}: ${err}`);
         }
       }
     } else {
@@ -723,27 +790,25 @@ async function processNextInQueue() {
       message: JSON.stringify(msgObj),
     });
   } catch (error) {
-    logger.error(`Task ${id} failed: ${error}`);
-    webContents?.send("install-complete", {
-      id,
-      success: false,
-      time: Date.now(),
-      exitCode: -1,
-      message: JSON.stringify({
-        message: error instanceof Error ? error.message : String(error),
-        stdout: "",
-        stderr: "",
-      }),
-    });
-  } finally {
-    // 如果已被 cancel handler 清理，跳过重复清理
+    logger.error(`Task ${id} install failed: ${error}`);
     if (!task.cancelled) {
-      tasks.delete(id);
-      idle = true;
-      if (tasks.size > 0) {
-        processNextInQueue();
-      }
+      webContents?.send("install-complete", {
+        id,
+        success: false,
+        time: Date.now(),
+        exitCode: -1,
+        message: JSON.stringify({
+          message: error instanceof Error ? error.message : String(error),
+          stdout: "",
+          stderr: "",
+        }),
+      });
     }
+  } finally {
+    tasks.delete(id);
+    installIdle = true;
+    processNextInstall();
+    processNextDownload();
   }
 }
 
