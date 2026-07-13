@@ -57,7 +57,7 @@
     "@vue/test-utils": "^2.4.3",
     "conventional-changelog": "^7.1.1",
     "conventional-changelog-angular": "^8.1.0",
-    "electron": "^28.2.1",
+    "electron": "^37.2.5",
     "eslint": "^9.39.2",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-prettier": "^5.5.5",
@@ -79,7 +79,7 @@
   "dependencies": {
     "@tailwindcss/vite": "^4.1.18",
     "axios": "^1.13.2",
-    "pino": "^9.14.0",
+    "pino": "^10.3.0",
     "tailwindcss": "^4.1.18",
     "vue-virtual-scroller": "^2.0.0-beta.8"
   }
