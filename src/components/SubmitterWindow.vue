@@ -1,6 +1,6 @@
 <template>
   <div
-    class="min-h-screen overflow-y-auto bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100"
+    class="h-screen overflow-y-auto bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100"
   >
     <div
       class="sticky top-0 z-30 border-b border-slate-200/70 bg-white px-4 py-3 dark:border-slate-800/70 dark:bg-slate-900"
@@ -26,6 +26,52 @@
 
     <div class="p-6 max-w-2xl mx-auto">
       <div class="space-y-6">
+        <div>
+          <label
+            class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2"
+            >安装包 (deb)</label
+          >
+          <div
+            class="border-2 border-dashed border-slate-200 rounded-lg p-8 text-center hover:border-blue-500 transition-colors cursor-pointer dark:border-slate-700"
+            @click="selectDebFile"
+            @drop="handleDrop"
+            @dragover="handleDragOver"
+            @dragenter="handleDragEnter"
+            @dragleave="handleDragLeave"
+          >
+            <input
+              ref="debFileInput"
+              type="file"
+              accept=".deb"
+              class="hidden"
+              @change="handleDebFileSelect"
+            />
+            <div v-if="isParsingDeb" class="flex flex-col items-center">
+              <div
+                class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mb-4"
+              ></div>
+              <p class="text-slate-600 dark:text-slate-400">
+                正在解析 deb 文件...
+              </p>
+            </div>
+            <div v-else>
+              <i class="fas fa-cloud-upload text-4xl text-slate-400 mb-4"></i>
+              <p class="text-slate-600 dark:text-slate-400">点击浏览</p>
+              <p v-if="formData.debFilePath" class="mt-2 text-sm text-blue-500">
+                {{ formData.debFilePath.split("/").pop() }}
+              </p>
+            </div>
+          </div>
+          <div
+            v-if="debParseError"
+            class="mt-2 p-3 bg-yellow-50 border border-yellow-200 rounded-lg dark:bg-yellow-900/20 dark:border-yellow-800"
+          >
+            <p class="text-yellow-700 dark:text-yellow-400 text-sm">
+              {{ debParseError }}
+            </p>
+          </div>
+        </div>
+
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label
@@ -117,52 +163,6 @@
             placeholder="https://example.com"
             class="w-full px-4 py-2.5 rounded-lg border border-slate-200 bg-white dark:bg-slate-800 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
-        </div>
-
-        <div>
-          <label
-            class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2"
-            >安装包 (deb)</label
-          >
-          <div
-            class="border-2 border-dashed border-slate-200 rounded-lg p-8 text-center hover:border-blue-500 transition-colors cursor-pointer dark:border-slate-700"
-            @click="selectDebFile"
-            @drop="handleDrop"
-            @dragover="handleDragOver"
-            @dragenter="handleDragEnter"
-            @dragleave="handleDragLeave"
-          >
-            <input
-              ref="debFileInput"
-              type="file"
-              accept=".deb"
-              class="hidden"
-              @change="handleDebFileSelect"
-            />
-            <div v-if="isParsingDeb" class="flex flex-col items-center">
-              <div
-                class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mb-4"
-              ></div>
-              <p class="text-slate-600 dark:text-slate-400">
-                正在解析 deb 文件...
-              </p>
-            </div>
-            <div v-else>
-              <i class="fas fa-cloud-upload text-4xl text-slate-400 mb-4"></i>
-              <p class="text-slate-600 dark:text-slate-400">点击浏览</p>
-              <p v-if="formData.debFilePath" class="mt-2 text-sm text-blue-500">
-                {{ formData.debFilePath.split("/").pop() }}
-              </p>
-            </div>
-          </div>
-          <div
-            v-if="debParseError"
-            class="mt-2 p-3 bg-yellow-50 border border-yellow-200 rounded-lg dark:bg-yellow-900/20 dark:border-yellow-800"
-          >
-            <p class="text-yellow-700 dark:text-yellow-400 text-sm">
-              {{ debParseError }}
-            </p>
-          </div>
         </div>
 
         <div>
