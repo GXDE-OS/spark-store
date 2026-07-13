@@ -86,14 +86,14 @@
             @open-detail="openDetail"
           />
           <template v-else-if="activeTab === 'home'">
-            <div class="max-h-[calc(100vh-8rem)] overflow-y-auto pr-2 scrollbar-nowidth">
+            <div
+              class="max-h-[calc(100vh-8rem)] overflow-y-auto pr-2 scrollbar-nowidth"
+            >
               <HomeView
                 :links="homeLinks"
-                :lists="homeLists"
                 :loading="homeLoading"
                 :error="homeError"
                 :store-filter="storeFilter"
-                @open-detail="openDetail"
               />
             </div>
           </template>
@@ -103,7 +103,8 @@
               :loading="loading"
               :scroll-key="activeTab + '-' + selectedCategory"
               :store-filter="storeFilter"
-              @open-detail="openDetail"
+              :show-origin="storeFilter === 'both' && !isHomeListTab"
+              @open-detail="handleAppCardOpenDetail"
             />
           </template>
         </div>
@@ -388,7 +389,6 @@ import type {
   ChannelPayload,
   CategoryInfo,
   HomeLink,
-  HomeList,
   FlarumLoginPayload,
   SidebarEntry,
   UpdateCenterItem,
@@ -448,6 +448,8 @@ const tabCategories: Ref<Record<string, Record<string, CategoryInfo>>> = ref(
   {},
 );
 const tabApps: Ref<Record<string, App[]>> = ref({});
+// 首页推荐列表入口对应的各来源 jsonUrl：{ [entryId]: { spark?, apm? } }
+const homeListUrls = ref<Record<string, { spark?: string; apm?: string }>>({});
 const activeTab = ref("home");
 type MainView = "default" | "favorites";
 const currentView = ref<MainView>("default");
@@ -601,9 +603,14 @@ const entryCounts = computed(() => {
 
   sidebarEntries.value.forEach((entry) => {
     if (entry.type === "category" && entry.value) {
-      counts[entry.id] = allApps.filter(
-        (app) => app.category === entry.value,
-      ).length;
+      // 优先使用已加载的入口应用总数；未加载时回退到全局分类计数
+      const tabLen = tabApps.value[entry.id]?.length;
+      counts[entry.id] =
+        tabLen !== undefined
+          ? tabLen
+          : allApps.filter((app) => app.category === entry.value).length;
+    } else if (entry.type === "homeList") {
+      counts[entry.id] = tabApps.value[entry.id]?.length || 0;
     } else {
       counts[entry.id] = 0;
     }
@@ -613,6 +620,25 @@ const entryCounts = computed(() => {
 });
 
 const currentDisplayApp = computed(() => getDisplayApp(currentApp.value));
+
+// 当前激活的侧栏入口是否为首页推荐列表类型
+const isHomeListTab = computed(
+  () =>
+    activeTab.value !== "home" &&
+    activeTab.value !== "all" &&
+    sidebarEntries.value.some(
+      (e) => e.id === activeTab.value && e.type === "homeList",
+    ),
+);
+
+// 应用卡片点击：首页推荐列表复用首页逻辑，标记 _fromHomeView 以便从双仓库获取完整信息
+const handleAppCardOpenDetail = (app: App) => {
+  if (isHomeListTab.value) {
+    openDetail({ ...app, _fromHomeView: true });
+  } else {
+    openDetail(app);
+  }
+};
 
 const clientArch = computed(() => window.apm_store.arch || "amd64");
 
@@ -731,17 +757,15 @@ const selectTab = (tab: string) => {
   selectedCategory.value = "all";
   isSidebarOpen.value = false;
   window.scrollTo({ top: 0, behavior: "smooth" });
-  if (
-    tab === "home" &&
-    homeLinks.value.length === 0 &&
-    homeLists.value.length === 0
-  ) {
+  if (tab === "home" && homeLinks.value.length === 0) {
     loadHome();
   }
   if (tab !== "home" && tab !== "all") {
     const entry = sidebarEntries.value.find((e) => e.id === tab);
     if (entry && entry.type === "category") {
       loadTabApps(tab);
+    } else if (entry && entry.type === "homeList") {
+      loadHomeListApps(tab);
     }
   }
 };
@@ -1036,7 +1060,6 @@ const closeScreenPreview = () => {
 
 // Home data
 const homeLinks = ref<HomeLink[]>([]);
-const homeLists = ref<HomeList[]>([]);
 const homeLoading = ref(false);
 const homeError = ref("");
 
@@ -1044,7 +1067,6 @@ const loadHome = async () => {
   homeLoading.value = true;
   homeError.value = "";
   homeLinks.value = [];
-  homeLists.value = [];
   try {
     const arch = window.apm_store.arch || "amd64";
     const modes: Array<"spark" | "apm"> =
@@ -1068,71 +1090,172 @@ const loadHome = async () => {
       } catch (e) {
         console.warn(`Failed to load ${mode} homelinks.json`, e);
       }
-
-      // homelist.json
-      try {
-        const res2 = await fetch(`${base}/homelist.json`);
-        if (res2.ok) {
-          const lists = await res2.json();
-          for (const item of lists) {
-            if (item.type === "appList" && item.jsonUrl) {
-              try {
-                const url = `${APM_STORE_BASE_URL}/${finalArch}${item.jsonUrl}`;
-                const r = await fetch(url);
-                if (r.ok) {
-                  const appsJson = await r.json();
-                  const rawApps = appsJson || [];
-                  const apps = await Promise.all(
-                    rawApps.map(async (a: Record<string, string>) => {
-                      const baseApp = {
-                        name: a.Name || a.name || a.Pkgname || a.PkgName || "",
-                        pkgname: a.Pkgname || a.pkgname || "",
-                        category: a.Category || a.category || "unknown",
-                        more: a.More || a.more || "",
-                        version: a.Version || "",
-                        filename: a.Filename || a.filename || "",
-                        origin: mode as "spark" | "apm",
-                      };
-
-                      try {
-                        const realAppUrl = `${APM_STORE_BASE_URL}/${finalArch}/${baseApp.category}/${baseApp.pkgname}/app.json`;
-                        const realRes = await fetch(realAppUrl);
-                        if (realRes.ok) {
-                          const realApp = await realRes.json();
-                          if (realApp.Filename)
-                            baseApp.filename = realApp.Filename;
-                          if (realApp.More) baseApp.more = realApp.More;
-                          if (realApp.Name) baseApp.name = realApp.Name;
-                        }
-                      } catch (e) {
-                        console.warn(
-                          `Failed to fetch real app.json for ${baseApp.pkgname}`,
-                          e,
-                        );
-                      }
-                      return baseApp;
-                    }),
-                  );
-                  homeLists.value.push({
-                    title: `${item.name || "推荐"} (${mode === "spark" ? "星火" : "APM"})`,
-                    apps,
-                  });
-                }
-              } catch (e) {
-                console.warn("Failed to load home list", item, e);
-              }
-            }
-          }
-        }
-      } catch (e) {
-        console.warn(`Failed to load ${mode} homelist.json`, e);
-      }
     }
   } catch (error: unknown) {
     homeError.value = (error as Error)?.message || "加载首页失败";
   } finally {
     homeLoading.value = false;
   }
+};
+
+// 加载首页推荐列表为侧边栏入口（按名称合并 spark/apm，置于分类入口上方）
+const loadHomeListEntries = async () => {
+  try {
+    const arch = window.apm_store.arch || "amd64";
+    const modes: Array<"spark" | "apm"> =
+      storeFilter.value === "both" ? ["spark", "apm"] : [storeFilter.value];
+
+    // 按列表名称合并各来源的 jsonUrl
+    const byName = new Map<
+      string,
+      { name: string; urls: { spark?: string; apm?: string } }
+    >();
+
+    for (const mode of modes) {
+      const finalArch = mode === "spark" ? `${arch}-store` : `${arch}-apm`;
+      const base = `${APM_STORE_BASE_URL}/${finalArch}/home`;
+
+      try {
+        const res = await fetch(`${base}/homelist.json`);
+        if (res.ok) {
+          const lists = await res.json();
+          lists.forEach(
+            (item: { name?: string; type?: string; jsonUrl?: string }) => {
+              if (item.type === "appList" && item.jsonUrl) {
+                const name = item.name || "推荐";
+                const existing = byName.get(name);
+                if (existing) {
+                  existing.urls[mode] = item.jsonUrl;
+                } else {
+                  byName.set(name, {
+                    name,
+                    urls: { [mode]: item.jsonUrl } as {
+                      spark?: string;
+                      apm?: string;
+                    },
+                  });
+                }
+              }
+            },
+          );
+        }
+      } catch (e) {
+        console.warn(`Failed to load ${mode} homelist.json`, e);
+      }
+    }
+
+    const entries: SidebarEntry[] = [];
+    const urlsMap: Record<string, { spark?: string; apm?: string }> = {};
+
+    byName.forEach((info, name) => {
+      const id = `home-list-${name}`;
+      entries.push({
+        id,
+        name,
+        icon: "fas fa-star",
+        type: "homeList",
+      });
+      urlsMap[id] = info.urls;
+    });
+
+    if (entries.length > 0) {
+      // 首页推荐入口置于分类入口上方
+      sidebarEntries.value = [...entries, ...sidebarEntries.value];
+      homeListUrls.value = { ...homeListUrls.value, ...urlsMap };
+      logger.info(`已加载 ${entries.length} 个首页推荐列表入口`);
+    }
+  } catch (error) {
+    logger.warn(`加载首页推荐列表入口失败: ${error}`);
+  }
+};
+
+// 加载首页推荐列表的应用数据（复用首页逻辑，合并展示 spark+apm）
+const loadHomeListApps = async (entryId: string) => {
+  if (tabApps.value[entryId]) return;
+
+  const urls = homeListUrls.value[entryId];
+  if (!urls) return;
+
+  const arch = window.apm_store.arch || "amd64";
+  const loadedApps: App[] = [];
+
+  // 同时加载各来源的推荐列表应用
+  await Promise.all(
+    (Object.keys(urls) as Array<"spark" | "apm">).map(async (mode) => {
+      const jsonUrl = urls[mode];
+      if (!jsonUrl) return;
+      const finalArch = mode === "spark" ? `${arch}-store` : `${arch}-apm`;
+
+      try {
+        const path = `/${finalArch}${jsonUrl}`;
+        const rawApps =
+          (await fetchWithRetry<Record<string, string>[]>(path)) || [];
+        const apps = await Promise.all(
+          rawApps.map(async (a) => {
+            const category = a.Category || a.category || "unknown";
+            const pkgname = a.Pkgname || a.pkgname || "";
+
+            // 复用首页逻辑：从仓库获取完整应用信息
+            try {
+              const realAppUrl = `/${finalArch}/${category}/${pkgname}/app.json`;
+              const realApp = await fetchWithRetry<AppJson>(realAppUrl);
+              return normalizeAppJson(realApp, category, mode);
+            } catch (e) {
+              console.warn(`Failed to fetch app.json for ${pkgname}`, e);
+            }
+
+            // 回退：使用列表中的基本信息构建 App 对象
+            return {
+              name: a.Name || a.name || pkgname || "",
+              pkgname,
+              version: a.Version || "",
+              filename: a.Filename || a.filename || "",
+              category,
+              more: a.More || a.more || "",
+              torrent_address: "",
+              author: "",
+              contributor: "",
+              website: "",
+              update: "",
+              size: "",
+              tags: "",
+              img_urls: [],
+              icons: "",
+              origin: mode,
+              currentStatus: "not-installed" as const,
+            } as App;
+          }),
+        );
+        loadedApps.push(...apps);
+      } catch (e) {
+        logger.warn(`加载首页列表 ${entryId} (${mode}) 失败: ${e}`);
+      }
+    }),
+  );
+
+  tabApps.value = { ...tabApps.value, [entryId]: loadedApps };
+  logger.info(`首页列表 "${entryId}" 加载完成，共 ${loadedApps.length} 个应用`);
+};
+
+// 并行预加载所有侧边栏入口的应用数据，避免点击时才加载导致缓慢
+const preloadSidebarTabApps = (): Promise<void> => {
+  const tasks: Promise<void>[] = [];
+  for (const entry of sidebarEntries.value) {
+    if (entry.type === "category") {
+      tasks.push(
+        loadTabApps(entry.id).catch((e: unknown) =>
+          logger.warn(`预加载入口 ${entry.id} 失败: ${e}`),
+        ),
+      );
+    } else if (entry.type === "homeList") {
+      tasks.push(
+        loadHomeListApps(entry.id).catch((e: unknown) =>
+          logger.warn(`预加载首页列表 ${entry.id} 失败: ${e}`),
+        ),
+      );
+    }
+  }
+  return Promise.all(tasks).then(() => undefined);
 };
 
 const prevScreen = () => {
@@ -2449,8 +2572,10 @@ const loadTabApps = async (entryId: string) => {
   const modes: Array<"spark" | "apm"> =
     storeFilter.value === "both" ? ["spark", "apm"] : [storeFilter.value];
   const folderName = entry.value || entry.id;
-  const loadedApps: App[] = [];
   const subCats = tabCategories.value[entryId];
+
+  // 收集所有需要发起的请求任务（mode × 子分类），然后全并发加载
+  const tasks: Promise<App[]>[] = [];
 
   for (const mode of modes) {
     const finalArch = mode === "spark" ? `${arch}-store` : `${arch}-apm`;
@@ -2464,36 +2589,43 @@ const loadTabApps = async (entryId: string) => {
         )
           continue;
 
-        try {
-          const path = `/${finalArch}/${folderName}/${subCat}/applist.json`;
-          logger.info(`加载入口子分类: ${entryId}/${subCat} (来源: ${mode})`);
-          const categoryApps = await fetchWithRetry<AppJson[]>(path);
-          loadedApps.push(
-            ...(categoryApps || []).map((aj) =>
-              normalizeAppJson(aj, subCat, mode),
-            ),
-          );
-        } catch (e) {
-          logger.warn(
-            `加载入口子分类 ${entryId}/${subCat} (${mode}) 失败: ${e}`,
-          );
-        }
+        const path = `/${finalArch}/${folderName}/${subCat}/applist.json`;
+        logger.info(`加载入口子分类: ${entryId}/${subCat} (来源: ${mode})`);
+        tasks.push(
+          fetchWithRetry<AppJson[]>(path)
+            .then((categoryApps) =>
+              (categoryApps || []).map((aj) =>
+                normalizeAppJson(aj, subCat, mode),
+              ),
+            )
+            .catch((e: unknown) => {
+              logger.warn(
+                `加载入口子分类 ${entryId}/${subCat} (${mode}) 失败: ${e}`,
+              );
+              return [] as App[];
+            }),
+        );
       }
     } else {
-      try {
-        const path = `/${finalArch}/${folderName}/applist.json`;
-        logger.info(`加载入口目录: ${entryId} (来源: ${mode})`);
-        const categoryApps = await fetchWithRetry<AppJson[]>(path);
-        loadedApps.push(
-          ...(categoryApps || []).map((aj) =>
-            normalizeAppJson(aj, folderName, mode),
-          ),
-        );
-      } catch (e) {
-        logger.warn(`加载入口目录 ${entryId} (${mode}) 失败: ${e}`);
-      }
+      const path = `/${finalArch}/${folderName}/applist.json`;
+      logger.info(`加载入口目录: ${entryId} (来源: ${mode})`);
+      tasks.push(
+        fetchWithRetry<AppJson[]>(path)
+          .then((categoryApps) =>
+            (categoryApps || []).map((aj) =>
+              normalizeAppJson(aj, folderName, mode),
+            ),
+          )
+          .catch((e: unknown) => {
+            logger.warn(`加载入口目录 ${entryId} (${mode}) 失败: ${e}`);
+            return [] as App[];
+          }),
+      );
     }
   }
+
+  const results = await Promise.all(tasks);
+  const loadedApps = results.flat();
 
   tabApps.value = { ...tabApps.value, [entryId]: loadedApps };
   logger.info(`入口 "${entryId}" 加载完成，共 ${loadedApps.length} 个应用`);
@@ -2608,6 +2740,8 @@ onMounted(async () => {
 
   await loadSidebarConfig();
 
+  await loadHomeListEntries();
+
   await loadTabCategories();
 
   // 分类目录加载后，并行加载主页数据和所有应用列表
@@ -2624,6 +2758,8 @@ onMounted(async () => {
         resolve();
       });
     }),
+    // 并行预加载所有侧边栏入口的应用数据
+    preloadSidebarTabApps(),
   ]).then(() => {
     // 所有数据加载完成后的回调（可选）
     logger.info("所有应用数据加载完成");

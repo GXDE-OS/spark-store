@@ -2,7 +2,7 @@
   <div class="space-y-6">
     <!-- 初始加载状态 - 只有在完全没有数据时显示 -->
     <div
-      v-if="loading && links.length === 0 && lists.length === 0"
+      v-if="loading && links.length === 0"
       class="flex flex-col items-center justify-center py-12 text-slate-500 dark:text-slate-400"
     >
       <i class="fas fa-spinner fa-spin text-2xl mb-3"></i>
@@ -16,7 +16,7 @@
     </div>
     <!-- 无数据时显示欢迎信息 -->
     <div
-      v-else-if="links.length === 0 && lists.length === 0"
+      v-else-if="links.length === 0"
       class="flex flex-col items-center justify-center py-20 text-center"
     >
       <img
@@ -110,53 +110,21 @@
           </div>
         </a>
       </div>
-
-      <!-- Lists 区域 -->
-      <div v-if="lists.length > 0" class="space-y-6 mt-6">
-        <section v-for="section in lists" :key="section.title">
-          <div class="flex items-center justify-between">
-            <h3
-              class="text-lg font-semibold text-slate-900 dark:text-slate-200"
-            >
-              {{ section.title }}
-            </h3>
-          </div>
-          <div class="mt-3 grid gap-4 app-grid">
-            <AppCard
-              v-for="app in section.apps"
-              :key="app.pkgname"
-              :app="app"
-              @open-detail="handleOpenDetail(app)"
-            />
-          </div>
-        </section>
-      </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import AppCard from "./AppCard.vue";
 import { APM_STORE_BASE_URL } from "../global/storeConfig";
 import { reactive } from "vue";
-import type { HomeLink, HomeList, App } from "../global/typedefinition";
+import type { HomeLink } from "../global/typedefinition";
 
 defineProps<{
   links: HomeLink[];
-  lists: HomeList[];
   loading: boolean;
   error: string;
   storeFilter?: "spark" | "apm" | "both";
 }>();
-
-const emit = defineEmits<{
-  (e: "open-detail", app: App | Record<string, unknown>): void;
-}>();
-
-// 处理应用卡片点击，添加来自首页的标记
-const handleOpenDetail = (app: App) => {
-  emit("open-detail", { ...app, _fromHomeView: true });
-};
 
 // 图片加载状态跟踪
 const imageLoaded = reactive<Record<string, boolean>>({});
@@ -201,18 +169,6 @@ const onLinkClick = (link: HomeLink) => {
   .auto-fit-grid {
     grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
     gap: 0.75rem;
-  }
-}
-
-/* 应用卡片网格 - 保持原来的样式 */
-.app-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-}
-
-@media (max-width: 640px) {
-  .app-grid {
-    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
   }
 }
 </style>

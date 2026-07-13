@@ -26,7 +26,7 @@
       v-for="(app, index) in apps"
       :key="index"
       :app="app"
-      :show-origin="storeFilter === 'both'"
+      :show-origin="effectiveShowOrigin"
       @open-detail="$emit('open-detail', app)"
     />
   </div>
@@ -46,7 +46,7 @@
         v-for="app in item.apps"
         :key="app.pkgname"
         :app="app"
-        :show-origin="storeFilter === 'both'"
+        :show-origin="effectiveShowOrigin"
         @open-detail="$emit('open-detail', app)"
       />
     </div>
@@ -93,7 +93,15 @@ const props = defineProps<{
   loading: boolean;
   storeFilter?: "spark" | "apm" | "both";
   scrollKey?: string;
+  showOrigin?: boolean;
 }>();
+
+// 显式传入 showOrigin 时优先使用；否则回退到根据 storeFilter 推断
+const effectiveShowOrigin = computed(() =>
+  props.showOrigin !== undefined
+    ? props.showOrigin
+    : props.storeFilter === "both",
+);
 
 defineEmits<{
   (e: "open-detail", app: App): void;

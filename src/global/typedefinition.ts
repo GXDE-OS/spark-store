@@ -237,16 +237,11 @@ export interface HomeLink {
   [k: string]: unknown;
 }
 
-export interface HomeList {
-  title: string;
-  apps: App[];
-}
-
 export interface SidebarEntry {
   id: string;
   name: string;
   icon?: string;
-  type?: "category" | "search" | "link";
+  type?: "category" | "search" | "link" | "homeList";
   value?: string;
 }
 
