@@ -15,7 +15,7 @@
       @wheel="onOverlayWheel"
     >
       <div
-        class="modal-panel relative flex w-full max-w-5xl max-h-[85vh] overflow-y-auto overscroll-contain scrollbar-nowidth rounded-3xl border border-white/10 bg-white/95 px-6 pb-6 shadow-2xl dark:border-slate-800 dark:bg-slate-900 lg:max-h-[85vh] lg:overflow-hidden lg:pb-0"
+        class="modal-panel relative flex w-full max-w-6xl max-h-[90vh] overflow-y-auto overscroll-contain scrollbar-nowidth rounded-3xl border border-white/10 bg-white/95 px-6 pb-6 shadow-2xl dark:border-slate-800 dark:bg-slate-900 lg:max-h-[90vh] lg:overflow-hidden lg:pb-0"
       >
         <!-- 主布局：左侧信息 + 右侧内容 -->
         <div class="flex w-full flex-col gap-6 lg:min-h-0 lg:flex-row">
@@ -272,7 +272,7 @@
           <!-- 右侧：应用详情（上）+ 截图（下） -->
           <div
             data-testid="detail-scroll-content"
-            class="min-w-0 flex-1 space-y-5 lg:max-h-[85vh] lg:overflow-y-auto lg:overscroll-contain lg:py-4 lg:pr-2"
+            class="min-w-0 flex-1 space-y-5 lg:max-h-[90vh] lg:overflow-y-auto lg:overscroll-contain lg:py-4 lg:pr-2"
           >
             <!-- 应用详情 -->
             <div
@@ -286,7 +286,7 @@
                 应用详情
               </h3>
               <div
-                class="max-h-48 overflow-y-auto overscroll-contain text-sm leading-relaxed text-slate-600 dark:text-slate-300 space-y-2"
+                class="text-sm leading-relaxed text-slate-600 dark:text-slate-300 space-y-2"
                 v-html="displayApp.more.replace(/\n/g, '<br>')"
               ></div>
             </div>
