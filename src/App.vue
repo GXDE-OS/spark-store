@@ -2,11 +2,11 @@
   <SubmitterWindow v-if="isSubmitterView" />
   <div
     v-else
-    class="flex min-h-screen flex-col bg-slate-50 text-slate-900 transition-colors duration-300 dark:bg-slate-950 dark:text-slate-100"
+    class="flex h-screen flex-col overflow-hidden bg-slate-50 text-slate-900 transition-colors duration-300 dark:bg-slate-950 dark:text-slate-100"
   >
     <WindowTitleBar />
 
-    <div class="flex flex-1 flex-col lg:flex-row">
+    <div class="flex min-h-0 flex-1 flex-col lg:flex-row">
       <!-- 移动端侧边栏遮罩 -->
       <div
         v-if="isSidebarOpen"
@@ -45,7 +45,7 @@
         />
       </aside>
 
-      <main class="flex-1">
+      <main class="h-full min-h-0 flex-1">
         <div
           class="sticky top-10 z-30 border-b border-slate-200/70 bg-slate-50/95 px-4 py-4 backdrop-blur lg:px-10 dark:border-slate-800/70 dark:bg-slate-950/95"
         >
@@ -86,14 +86,16 @@
             @open-detail="openDetail"
           />
           <template v-else-if="activeTab === 'home'">
-            <HomeView
-              :links="homeLinks"
-              :lists="homeLists"
-              :loading="homeLoading"
-              :error="homeError"
-              :store-filter="storeFilter"
-              @open-detail="openDetail"
-            />
+            <div class="max-h-[calc(100vh-8rem)] overflow-y-auto pr-2 scrollbar-nowidth">
+              <HomeView
+                :links="homeLinks"
+                :lists="homeLists"
+                :loading="homeLoading"
+                :error="homeError"
+                :store-filter="storeFilter"
+                @open-detail="openDetail"
+              />
+            </div>
           </template>
           <template v-else>
             <AppGrid

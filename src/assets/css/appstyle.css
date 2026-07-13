@@ -27,6 +27,7 @@
     background-color: var(--color-surface-light);
     color: #0f172a;
     min-height: 100vh;
+    overflow: hidden;
   }
 
   :root.dark body {
