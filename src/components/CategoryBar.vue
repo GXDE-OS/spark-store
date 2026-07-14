@@ -45,9 +45,10 @@ const emit = defineEmits<{
 
 const totalCount = computed(() => {
   let total = 0;
-  Object.values(props.categoryCounts).forEach((v) => {
+  for (const [key, v] of Object.entries(props.categoryCounts)) {
+    if (key === "all") continue; // all 是总计，不是分类
     if (typeof v === "number") total += v;
-  });
+  }
   return total;
 });
 

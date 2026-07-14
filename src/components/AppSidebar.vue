@@ -96,11 +96,6 @@
           <i v-else class="fas fa-folder"></i>
         </span>
         <span class="sidebar-tab-label">{{ entry.name }}</span>
-        <span
-          v-if="entryCounts[entry.id]"
-          class="ml-auto rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-500 dark:bg-slate-800/70 dark:text-slate-300"
-          >{{ entryCounts[entry.id] }}</span
-        >
       </button>
     </div>
 

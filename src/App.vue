@@ -58,6 +58,7 @@
             @open-install-settings="handleOpenInstallSettings"
             @open-about="openAboutModal"
             @toggle-sidebar="isSidebarOpen = !isSidebarOpen"
+            @spk-link="handleSpkLink"
           />
         </div>
         <CategoryBar
@@ -586,7 +587,17 @@ const categoryCounts = computed(() => {
   const sourceApps = displayApps.value;
 
   if (searchQuery.value.trim()) {
-    return countSearchMatchesByCategory(sourceApps, searchQuery.value);
+    // all 统计所有应用中的搜索匹配数（不随 tab 变化）
+    const allCounts = countSearchMatchesByCategory(
+      baseApps.value,
+      searchQuery.value,
+    );
+    // 各分类统计当前 tab 中的搜索匹配数
+    const tabCounts = countSearchMatchesByCategory(
+      sourceApps,
+      searchQuery.value,
+    );
+    return { ...tabCounts, all: allCounts.all };
   }
 
   const counts: Record<string, number> = { all: apps.value.length };
@@ -2692,6 +2703,19 @@ const loadApps = async (onFirstBatch?: () => void) => {
 const handleSearchInput = (value: string) => {
   currentView.value = "default";
   searchQuery.value = value;
+};
+
+const handleSpkLink = (pkgname: string) => {
+  currentView.value = "default";
+  activeTab.value = "all";
+  // 尝试从已加载的应用中查找
+  const target = apps.value.find((a) => a.pkgname === pkgname);
+  if (target) {
+    openDetail({ ...target, _fromDeepLink: true });
+  } else {
+    // 找不到时回退到搜索
+    searchQuery.value = pkgname;
+  }
 };
 
 const handleSearchFocus = () => {

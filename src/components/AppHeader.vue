@@ -19,7 +19,7 @@
             id="searchBox"
             v-model="localSearchQuery"
             class="w-full rounded-2xl border border-slate-200/70 bg-white/80 py-3 pl-12 pr-20 text-sm text-slate-700 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-brand/50 focus:ring-4 focus:ring-brand/10 dark:border-slate-800/70 dark:bg-slate-900/60 dark:text-slate-200"
-            placeholder="搜索应用名 / 包名 / 标签"
+            placeholder="搜索应用名 / 包名 / 标签 / 粘贴 SPK 分享链接"
             @focus="handleSearchFocus"
             @input="handleInput"
           />
@@ -68,6 +68,7 @@ const emit = defineEmits<{
   (e: "open-install-settings"): void;
   (e: "open-about"): void;
   (e: "toggle-sidebar"): void;
+  (e: "spk-link", pkgname: string): void;
 }>();
 
 const localSearchQuery = ref(props.searchQuery || "");
@@ -77,6 +78,18 @@ const handleSearchFocus = () => {
 };
 
 const handleInput = () => {
+  const value = localSearchQuery.value.trim();
+  // 检测 SPK 分享链接: spk://store/{category}/{pkgname}
+  const spkMatch = value.match(/^spk:\/\/search\/(.+)$/i) ||
+    value.match(/^spk:\/\/store\/[^/]+\/(.+)$/i);
+  if (spkMatch) {
+    const pkgname = spkMatch[1].trim();
+    if (pkgname) {
+      localSearchQuery.value = "";
+      emit("spk-link", pkgname);
+      return;
+    }
+  }
   emit("update-search", localSearchQuery.value);
 };
 

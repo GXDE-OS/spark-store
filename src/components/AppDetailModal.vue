@@ -188,6 +188,17 @@
                 <i class="fas fa-star text-xs"></i>
                 <span>{{ favoriteButtonText }}</span>
               </button>
+              <button
+                type="button"
+                class="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-600 transition hover:bg-slate-50 hover:text-slate-900 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
+                @click="copySpkLink"
+              >
+                <i
+                  class="fas text-xs"
+                  :class="spkCopied ? 'fa-check' : 'fa-share-alt'"
+                ></i>
+                <span>{{ spkCopied ? '已复制链接' : 'SPK 分享' }}</span>
+              </button>
             </div>
 
             <!-- 其他元信息 -->
@@ -731,6 +742,25 @@ const openPreview = (index: number) => {
 
 const hideImage = (e: Event) => {
   (e.target as HTMLElement).style.display = "none";
+};
+
+const spkCopied = ref(false);
+let spkCopiedTimer: ReturnType<typeof setTimeout> | null = null;
+
+const copySpkLink = async () => {
+  if (!displayApp.value?.pkgname) return;
+  const spkLink = `spk://store/${displayApp.value.category || "unknown"}/${displayApp.value.pkgname}`;
+  try {
+    await navigator.clipboard.writeText(spkLink);
+    spkCopied.value = true;
+    if (spkCopiedTimer) clearTimeout(spkCopiedTimer);
+    spkCopiedTimer = setTimeout(() => {
+      spkCopied.value = false;
+    }, 2000);
+  } catch {
+    // 降级方案：使用 prompt
+    prompt("请手动复制 SPK 分享链接：", spkLink);
+  }
 };
 
 const onOverlayWheel = (e: WheelEvent) => {
