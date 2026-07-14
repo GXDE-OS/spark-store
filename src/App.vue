@@ -1201,42 +1201,43 @@ const loadHomeListApps = async (entryId: string) => {
         const path = `/${finalArch}${jsonUrl}`;
         const rawApps =
           (await fetchWithRetry<Record<string, string>[]>(path)) || [];
-        const apps = await Promise.all(
-          rawApps.map(async (a) => {
-            const category = a.Category || a.category || "unknown";
-            const pkgname = a.Pkgname || a.pkgname || "";
+        // 直接使用列表数据构建 App 对象，避免为每个应用单独请求 app.json（N+1 问题）
+        // 应用详情会在用户点击时通过 fetchAppFromStore 按需获取
+        const apps = rawApps.map((a) => {
+          const category = a.Category || a.category || "unknown";
 
-            // 复用首页逻辑：从仓库获取完整应用信息
+          let img_urls: string[] = [];
+          const rawImgUrls = a.img_urls;
+          if (typeof rawImgUrls === "string") {
             try {
-              const realAppUrl = `/${finalArch}/${category}/${pkgname}/app.json`;
-              const realApp = await fetchWithRetry<AppJson>(realAppUrl);
-              return normalizeAppJson(realApp, category, mode);
-            } catch (e) {
-              console.warn(`Failed to fetch app.json for ${pkgname}`, e);
+              img_urls = JSON.parse(rawImgUrls);
+            } catch {
+              img_urls = [];
             }
+          } else if (Array.isArray(rawImgUrls)) {
+            img_urls = rawImgUrls;
+          }
 
-            // 回退：使用列表中的基本信息构建 App 对象
-            return {
-              name: a.Name || a.name || pkgname || "",
-              pkgname,
-              version: a.Version || "",
-              filename: a.Filename || a.filename || "",
-              category,
-              more: a.More || a.more || "",
-              torrent_address: "",
-              author: "",
-              contributor: "",
-              website: "",
-              update: "",
-              size: "",
-              tags: "",
-              img_urls: [],
-              icons: "",
-              origin: mode,
-              currentStatus: "not-installed" as const,
-            } as App;
-          }),
-        );
+          return {
+            name: a.Name || a.name || a.Pkgname || a.pkgname || "",
+            pkgname: a.Pkgname || a.pkgname || "",
+            version: a.Version || "",
+            filename: a.Filename || a.filename || "",
+            torrent_address: a.Torrent_address || "",
+            author: a.Author || "",
+            contributor: a.Contributor || "",
+            website: a.Website || "",
+            update: a.Update || "",
+            size: a.Size || "",
+            more: a.More || a.more || "",
+            tags: a.Tags || "",
+            img_urls,
+            icons: a.icons || "",
+            category,
+            origin: mode,
+            currentStatus: "not-installed" as const,
+          } as App;
+        });
         loadedApps.push(...apps);
       } catch (e) {
         logger.warn(`加载首页列表 ${entryId} (${mode}) 失败: ${e}`);
