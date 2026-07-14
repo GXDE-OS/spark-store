@@ -197,7 +197,7 @@
                   class="fas text-xs"
                   :class="spkCopied ? 'fa-check' : 'fa-share-alt'"
                 ></i>
-                <span>{{ spkCopied ? '已复制链接' : 'SPK 分享' }}</span>
+                <span>{{ spkCopied ? "已复制链接" : "SPK 分享" }}</span>
               </button>
             </div>
 

@@ -80,7 +80,8 @@ const handleSearchFocus = () => {
 const handleInput = () => {
   const value = localSearchQuery.value.trim();
   // 检测 SPK 分享链接: spk://store/{category}/{pkgname}
-  const spkMatch = value.match(/^spk:\/\/search\/(.+)$/i) ||
+  const spkMatch =
+    value.match(/^spk:\/\/search\/(.+)$/i) ||
     value.match(/^spk:\/\/store\/[^/]+\/(.+)$/i);
   if (spkMatch) {
     const pkgname = spkMatch[1].trim();

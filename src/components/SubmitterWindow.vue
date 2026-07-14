@@ -46,12 +46,19 @@
               class="hidden"
               @change="handleDebFileSelect"
             />
-            <div v-if="isParsingDeb || isSearchingHistory" class="flex flex-col items-center">
+            <div
+              v-if="isParsingDeb || isSearchingHistory"
+              class="flex flex-col items-center"
+            >
               <div
                 class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mb-4"
               ></div>
               <p class="text-slate-600 dark:text-slate-400">
-                {{ isParsingDeb ? '正在解析 deb 文件...' : '正在从服务器查询已上架信息...' }}
+                {{
+                  isParsingDeb
+                    ? "正在解析 deb 文件..."
+                    : "正在从服务器查询已上架信息..."
+                }}
               </p>
             </div>
             <div v-else>
@@ -698,7 +705,11 @@ const loadCategoriesList = async (): Promise<void> => {
       if (result?.success && result.data) {
         const data = result.data;
 
-        if (data.code === 0 && Array.isArray(data.data) && data.data.length > 0) {
+        if (
+          data.code === 0 &&
+          Array.isArray(data.data) &&
+          data.data.length > 0
+        ) {
           categoriesList.value = data.data.map(
             (item: { id: number; name: string }, index: number) => ({
               id: typeof item.id === "number" ? item.id : index + 1,
@@ -709,7 +720,10 @@ const loadCategoriesList = async (): Promise<void> => {
             }),
           );
           categoriesLoadError.value = "";
-          console.log("[Submitter] Categories loaded from API:", categoriesList.value);
+          console.log(
+            "[Submitter] Categories loaded from API:",
+            categoriesList.value,
+          );
         } else if (data.code === 0 && Array.isArray(data)) {
           categoriesList.value = data.map(
             (item: { id: number; name: string }, index: number) => ({
@@ -719,7 +733,10 @@ const loadCategoriesList = async (): Promise<void> => {
             }),
           );
           categoriesLoadError.value = "";
-          console.log("[Submitter] Categories loaded from API (direct array):", categoriesList.value);
+          console.log(
+            "[Submitter] Categories loaded from API (direct array):",
+            categoriesList.value,
+          );
         } else {
           const errMsg = `服务器返回异常: code=${data.code}, msg=${data.msg || "未知"}`;
           categoriesLoadError.value = errMsg;
@@ -867,13 +884,8 @@ const searchHistoryApp = async () => {
     historyResult.data &&
     historyResult.data.length > 0
   ) {
-    console.log(
-      "[Submitter] ============== HISTORY INFO FOUND ==============",
-    );
-    console.log(
-      "[Submitter] History info count:",
-      historyResult.data.length,
-    );
+    console.log("[Submitter] ============== HISTORY INFO FOUND ==============");
+    console.log("[Submitter] History info count:", historyResult.data.length);
     console.log(
       "[Submitter] Available archs data:",
       JSON.stringify(historyResult.data, null, 2),
@@ -882,14 +894,8 @@ const searchHistoryApp = async () => {
     console.log(
       "[Submitter] ============== BEFORE SETTING STATE ==============",
     );
-    console.log(
-      "[Submitter] availableArchs before:",
-      availableArchs.value,
-    );
-    console.log(
-      "[Submitter] showArchDialog before:",
-      showArchDialog.value,
-    );
+    console.log("[Submitter] availableArchs before:", availableArchs.value);
+    console.log("[Submitter] showArchDialog before:", showArchDialog.value);
 
     // 按 amd64 → arm64 → loong64 顺序排序
     const archOrder: Record<string, number> = {
@@ -900,10 +906,7 @@ const searchHistoryApp = async () => {
     availableArchs.value = [...historyResult.data].sort(
       (a, b) => (archOrder[a.store] ?? 99) - (archOrder[b.store] ?? 99),
     );
-    console.log(
-      "[Submitter] availableArchs after:",
-      availableArchs.value,
-    );
+    console.log("[Submitter] availableArchs after:", availableArchs.value);
     console.log(
       "[Submitter] availableArchs length:",
       availableArchs.value.length,
@@ -922,10 +925,7 @@ const searchHistoryApp = async () => {
     }
 
     showArchDialog.value = true;
-    console.log(
-      "[Submitter] showArchDialog after:",
-      showArchDialog.value,
-    );
+    console.log("[Submitter] showArchDialog after:", showArchDialog.value);
 
     console.log(
       "[Submitter] ============== DIALOG SHOULD BE SHOWING ==============",
@@ -937,9 +937,7 @@ const searchHistoryApp = async () => {
     );
 
     nextTick(() => {
-      console.log(
-        "[Submitter] ============== AFTER NEXT TICK ==============",
-      );
+      console.log("[Submitter] ============== AFTER NEXT TICK ==============");
       console.log(
         "[Submitter] showArchDialog in nextTick:",
         showArchDialog.value,
@@ -965,10 +963,7 @@ const searchHistoryApp = async () => {
     console.log(
       "[Submitter] ============== NO HISTORY INFO FOUND ==============",
     );
-    console.log(
-      "[Submitter] historyResult.success:",
-      historyResult?.success,
-    );
+    console.log("[Submitter] historyResult.success:", historyResult?.success);
     console.log("[Submitter] historyResult.data:", historyResult?.data);
     console.log(
       "[Submitter] historyResult.data.length:",

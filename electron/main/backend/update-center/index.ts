@@ -535,15 +535,29 @@ export const registerUpdateCenterIpc = (
 
       const results: { aptss?: string; apm?: string } = {};
 
-      const runCommand = (command: string, args: string[]): Promise<{ code: number; stdout: string; stderr: string }> =>
+      const runCommand = (
+        command: string,
+        args: string[],
+      ): Promise<{ code: number; stdout: string; stderr: string }> =>
         new Promise((resolve) => {
-          const child = spawn(command, args, { shell: false, env: process.env });
+          const child = spawn(command, args, {
+            shell: false,
+            env: process.env,
+          });
           let stdout = "";
           let stderr = "";
-          child.stdout?.on("data", (data) => { stdout += data.toString(); });
-          child.stderr?.on("data", (data) => { stderr += data.toString(); });
-          child.on("error", (err) => resolve({ code: -1, stdout, stderr: err.message }));
-          child.on("close", (code) => resolve({ code: code ?? -1, stdout, stderr }));
+          child.stdout?.on("data", (data) => {
+            stdout += data.toString();
+          });
+          child.stderr?.on("data", (data) => {
+            stderr += data.toString();
+          });
+          child.on("error", (err) =>
+            resolve({ code: -1, stdout, stderr: err.message }),
+          );
+          child.on("close", (code) =>
+            resolve({ code: code ?? -1, stdout, stderr }),
+          );
         });
 
       const isSourceEnabled = (
@@ -554,17 +568,31 @@ export const registerUpdateCenterIpc = (
       // aptss update — 需要提权
       if (isSourceEnabled(storeFilter, "spark")) {
         const whichResult = await runCommand("which", ["aptss"]);
-        const aptssAvailable = whichResult.code === 0 && whichResult.stdout.trim().length > 0;
+        const aptssAvailable =
+          whichResult.code === 0 && whichResult.stdout.trim().length > 0;
         if (aptssAvailable) {
-          console.log("[UpdateCenter] Running: pkexec shell-caller aptss ssupdate");
-          const superUserCmd = await findExecutable(SUPER_USER_COMMAND_CANDIDATES[0]);
+          console.log(
+            "[UpdateCenter] Running: pkexec shell-caller aptss ssupdate",
+          );
+          const superUserCmd = await findExecutable(
+            SUPER_USER_COMMAND_CANDIDATES[0],
+          );
           if (superUserCmd) {
-            const result = await runCommand(superUserCmd, [SHELL_CALLER_PATH, "aptss", "ssupdate"]);
-            results.aptss = result.code === 0 ? "ok" : `failed: ${result.stderr.substring(0, 200)}`;
+            const result = await runCommand(superUserCmd, [
+              SHELL_CALLER_PATH,
+              "aptss",
+              "ssupdate",
+            ]);
+            results.aptss =
+              result.code === 0
+                ? "ok"
+                : `failed: ${result.stderr.substring(0, 200)}`;
             console.log("[UpdateCenter] aptss ssupdate result:", results.aptss);
           } else {
             results.aptss = "failed: pkexec not found";
-            console.warn("[UpdateCenter] pkexec not found, skipping aptss update");
+            console.warn(
+              "[UpdateCenter] pkexec not found, skipping aptss update",
+            );
           }
         } else {
           results.aptss = "skipped: aptss not installed";
@@ -574,17 +602,29 @@ export const registerUpdateCenterIpc = (
       // apm update — 也需要提权
       if (isSourceEnabled(storeFilter, "apm")) {
         const whichResult = await runCommand("which", ["apm"]);
-        const apmAvailable = whichResult.code === 0 && whichResult.stdout.trim().length > 0;
+        const apmAvailable =
+          whichResult.code === 0 && whichResult.stdout.trim().length > 0;
         if (apmAvailable) {
           console.log("[UpdateCenter] Running: pkexec shell-caller apm update");
-          const superUserCmd = await findExecutable(SUPER_USER_COMMAND_CANDIDATES[0]);
+          const superUserCmd = await findExecutable(
+            SUPER_USER_COMMAND_CANDIDATES[0],
+          );
           if (superUserCmd) {
-            const result = await runCommand(superUserCmd, [SHELL_CALLER_PATH, "apm", "update"]);
-            results.apm = result.code === 0 ? "ok" : `failed: ${result.stderr.substring(0, 200)}`;
+            const result = await runCommand(superUserCmd, [
+              SHELL_CALLER_PATH,
+              "apm",
+              "update",
+            ]);
+            results.apm =
+              result.code === 0
+                ? "ok"
+                : `failed: ${result.stderr.substring(0, 200)}`;
             console.log("[UpdateCenter] apm update result:", results.apm);
           } else {
             results.apm = "failed: pkexec not found";
-            console.warn("[UpdateCenter] pkexec not found, skipping apm update");
+            console.warn(
+              "[UpdateCenter] pkexec not found, skipping apm update",
+            );
           }
         } else {
           results.apm = "skipped: apm not installed";
