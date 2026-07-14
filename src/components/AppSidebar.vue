@@ -4,30 +4,23 @@
       <div ref="accountMenuRoot" class="relative min-w-0 flex-1">
         <button
           type="button"
-          class="flex w-full min-w-0 items-center gap-3 rounded-2xl p-1 text-left transition hover:bg-slate-100 dark:hover:bg-slate-800"
+          class="flex w-full min-w-0 items-center gap-2 rounded-2xl p-1 text-left transition hover:bg-slate-100 dark:hover:bg-slate-800"
           :aria-label="accountLabel"
           @click="handleAccountClick"
         >
           <img
-            v-if="!currentUser || !currentUser.avatarUrl"
             :src="amberLogo"
-            alt="Amber PM"
-            class="h-11 w-11 rounded-2xl bg-white/70 p-2 shadow-sm ring-1 ring-slate-900/5 dark:bg-slate-800"
-          />
-          <img
-            v-else
-            :src="currentUser.avatarUrl"
-            :alt="accountLabel"
-            class="h-11 w-11 rounded-2xl object-cover shadow-sm ring-1 ring-slate-900/5"
+            alt="星火应用商店"
+            class="h-11 w-11 shrink-0 rounded-2xl bg-white/70 p-2 shadow-sm ring-1 ring-slate-900/5 dark:bg-slate-800"
           />
           <div data-testid="account-text" class="flex min-w-0 flex-col">
             <span
-              class="truncate text-xs uppercase tracking-[0.3em] text-slate-500 dark:text-slate-400"
-              >{{ currentUser ? currentUser.forumLevel : "Spark Store" }}</span
+              class="truncate text-base font-semibold text-slate-900 dark:text-white"
+              >{{ accountLabel }}</span
             >
             <span
-              class="truncate text-lg font-semibold text-slate-900 dark:text-white"
-              >{{ accountLabel }}</span
+              class="truncate text-[10px] uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500"
+              >社区版</span
             >
           </div>
         </button>
@@ -172,19 +165,10 @@ const emit = defineEmits<{
 const showAccountMenu = ref(false);
 const accountMenuRoot = ref<HTMLElement | null>(null);
 
-const accountLabel = computed(() => {
-  return props.currentUser
-    ? props.currentUser.displayName || props.currentUser.username
-    : "登录 / 注册";
-});
+const accountLabel = computed(() => "星火应用商店");
 
 const handleAccountClick = () => {
-  if (!props.currentUser) {
-    emit("request-login");
-    return;
-  }
-
-  showAccountMenu.value = !showAccountMenu.value;
+  // 登录功能暂时关闭
 };
 
 const handleDocumentPointerDown = (event: MouseEvent) => {

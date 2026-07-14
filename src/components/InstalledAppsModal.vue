@@ -28,6 +28,7 @@
             </p>
           </div>
           <div class="flex items-center gap-3">
+            <!-- 云端同步功能暂时关闭
             <button
               type="button"
               class="inline-flex items-center gap-2 rounded-2xl border border-brand/30 px-4 py-2 text-sm font-semibold text-brand transition hover:bg-brand/10 disabled:opacity-40"
@@ -45,6 +46,7 @@
               <i class="fas fa-cloud-arrow-down"></i>
               从账号恢复
             </button>
+            -->
             <div
               v-if="showOriginSwitcher"
               class="flex items-center rounded-2xl border border-slate-200/70 p-1 dark:border-slate-800/70"
@@ -248,6 +250,7 @@ const props = defineProps<{
   syncMessage: string;
 }>();
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const emit = defineEmits<{
   (e: "close"): void;
   (e: "refresh"): void;
@@ -260,23 +263,24 @@ const emit = defineEmits<{
   (e: "request-login"): void;
 }>();
 
-const handleSyncClick = () => {
-  if (props.loggedIn) {
-    emit("sync-to-account");
-    return;
-  }
+// 云端同步功能暂时关闭
+// const handleSyncClick = () => {
+//   if (props.loggedIn) {
+//     emit("sync-to-account");
+//     return;
+//   }
 
-  emit("request-login");
-};
+//   emit("request-login");
+// };
 
-const handleRestoreClick = () => {
-  if (props.loggedIn) {
-    emit("restore-from-account");
-    return;
-  }
+// const handleRestoreClick = () => {
+//   if (props.loggedIn) {
+//     emit("restore-from-account");
+//     return;
+//   }
 
-  emit("request-login");
-};
+//   emit("request-login");
+// };
 
 const onOverlayWheel = (e: WheelEvent) => {
   const target = e.target as HTMLElement;

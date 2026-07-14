@@ -117,6 +117,7 @@
               <span>卸载</span>
             </button>
           </div>
+          <!-- 收藏功能暂时关闭
           <button
             type="button"
             class="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-600 transition hover:bg-slate-50 hover:text-slate-900 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
@@ -125,6 +126,7 @@
             <i class="fas fa-star text-xs"></i>
             <span>{{ favoriteButtonText }}</span>
           </button>
+          -->
           <button
             type="button"
             class="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-600 transition hover:bg-slate-50 hover:text-slate-900 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
@@ -206,6 +208,7 @@
           <p v-else class="text-sm text-slate-400">暂无应用截图</p>
         </div>
 
+        <!-- 评论功能暂时关闭
         <ReviewsPanel
           v-if="loggedIn && reviewAppKey && reviewTags"
           :app-key="reviewAppKey"
@@ -246,6 +249,7 @@
             安装应用后可发表评论。
           </p>
         </section>
+        -->
       </div>
     </div>
   </section>
@@ -253,14 +257,14 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
-import ReviewsPanel from "@/components/ReviewsPanel.vue";
+// import ReviewsPanel from "@/components/ReviewsPanel.vue";
 import {
   APM_STORE_BASE_URL,
   getHybridDefaultOrigin,
 } from "@/global/storeConfig";
 import {
-  buildReviewAppKey,
-  buildReviewTags,
+  // buildReviewAppKey,
+  // buildReviewTags,
   getDisplayApp,
 } from "@/modules/appIdentity";
 import type { App, AppReview, ReviewTags } from "@/global/typedefinition";
@@ -351,28 +355,29 @@ const detailHtml = computed(
   () => displayApp.value?.more.replace(/\n/g, "<br>") ?? "",
 );
 
-const reviewAppKey = computed(() => {
-  if (!displayApp.value) return "";
-  return buildReviewAppKey(
-    displayApp.value,
-    props.reviewTags?.clientArch ?? "amd64",
-  );
-});
+// 评论与收藏功能暂时关闭
+// const reviewAppKey = computed(() => {
+//   if (!displayApp.value) return "";
+//   return buildReviewAppKey(
+//     displayApp.value,
+//     props.reviewTags?.clientArch ?? "amd64",
+//   );
+// });
 
-const reviewTags = computed<ReviewTags | null>(() => {
-  if (!displayApp.value || !props.reviewTags) return null;
-  return buildReviewTags(displayApp.value, {
-    clientArch: props.reviewTags.clientArch,
-    distro: props.reviewTags.distro,
-  });
-});
+// const reviewTags = computed<ReviewTags | null>(() => {
+//   if (!displayApp.value || !props.reviewTags) return null;
+//   return buildReviewTags(displayApp.value, {
+//     clientArch: props.reviewTags.clientArch,
+//     distro: props.reviewTags.distro,
+//   });
+// });
 
-const favoriteButtonText = computed(() => {
-  if (!props.favorited) return "收藏";
-  return props.favoriteFolderName
-    ? `已收藏 · ${props.favoriteFolderName}`
-    : "已收藏";
-});
+// const favoriteButtonText = computed(() => {
+//   if (!props.favorited) return "收藏";
+//   return props.favoriteFolderName
+//     ? `已收藏 · ${props.favoriteFolderName}`
+//     : "已收藏";
+// });
 
 const selectOrigin = (origin: "spark" | "apm") => {
   viewingOrigin.value = origin;
@@ -380,14 +385,15 @@ const selectOrigin = (origin: "spark" | "apm") => {
   if (displayApp.value) emit("check-install", displayApp.value);
 };
 
-const handleFavorite = () => {
-  if (!displayApp.value) return;
-  if (!props.loggedIn) {
-    emit("request-login", "收藏应用需要登录星火账号。");
-    return;
-  }
-  emit("favorite", displayApp.value);
-};
+// 收藏功能暂时关闭
+// const handleFavorite = () => {
+//   if (!displayApp.value) return;
+//   if (!props.loggedIn) {
+//     emit("request-login", "收藏应用需要登录星火账号。");
+//     return;
+//   }
+//   emit("favorite", displayApp.value);
+// };
 
 const hideImage = (event: Event) => {
   (event.target as HTMLElement).style.display = "none";
