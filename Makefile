@@ -4,7 +4,11 @@ clean:
 	rm -rf release/
 
 build:
+ifeq (${DEB_HOST_ARCH},loong64)
+	npm run build:deb-loong64
+else
 	npm run build:deb
+endif
 	
 install:
 	mkdir -p $(DESTDIR)/opt/spark-store/bin/
