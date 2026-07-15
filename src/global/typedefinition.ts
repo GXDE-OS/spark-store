@@ -243,6 +243,8 @@ export interface SidebarEntry {
   icon?: string;
   type?: "category" | "search" | "link" | "homeList";
   value?: string;
+  /** 哪些来源仓库（spark / apm）包含此入口，用于避免对不存在的仓库发起无效请求 */
+  origins?: Array<"spark" | "apm">;
 }
 
 export interface SparkUser {

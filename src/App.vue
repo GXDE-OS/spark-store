@@ -2499,13 +2499,20 @@ const loadSidebarConfig = async () => {
 
         for (const entry of entries) {
           if (entry.id && entry.name) {
-            if (!entryMap.has(entry.id)) {
+            const existing = entryMap.get(entry.id);
+            if (existing) {
+              // 多仓库共有入口，合并来源
+              if (existing.origins && !existing.origins.includes(mode)) {
+                existing.origins.push(mode);
+              }
+            } else {
               entryMap.set(entry.id, {
                 id: entry.id,
                 name: entry.name,
                 icon: entry.icon || "",
                 type: entry.type || "category",
                 value: entry.value || entry.id,
+                origins: [mode],
               });
             }
           }
@@ -2557,42 +2564,54 @@ const loadTabCategories = async () => {
     storeFilter.value === "both" ? ["spark", "apm"] : [storeFilter.value];
   const newTabCategories: Record<string, Record<string, CategoryInfo>> = {};
 
-  for (const entry of sidebarEntries.value) {
-    if (entry.type !== "category") continue;
-    const folderName = entry.value || entry.id;
-    const catData: Record<string, { zh: string; origins: string[] }> = {};
+  // 并行加载所有侧边栏入口的子分类，减少串行等待
+  const categoryEntries = sidebarEntries.value.filter(
+    (e) => e.type === "category",
+  );
 
-    for (const mode of modes) {
-      const finalArch = mode === "spark" ? `${arch}-store` : `${arch}-apm`;
-      const path = `/${finalArch}/${folderName}/categories.json`;
+  await Promise.all(
+    categoryEntries.map(async (entry) => {
+      const folderName = entry.value || entry.id;
+      const catData: Record<string, { zh: string; origins: string[] }> = {};
+      // 只查询该入口实际存在的来源仓库，避免对不存在目录的 404 重试
+      const entryModes = entry.origins?.length
+        ? entry.origins.filter((o) => modes.includes(o))
+        : modes;
 
-      try {
-        const response = await axiosInstance.get(path);
-        const data = response.data;
-        Object.keys(data).forEach((key) => {
-          if (catData[key]) {
-            if (!catData[key].origins.includes(mode)) {
-              catData[key].origins.push(mode);
-            }
-          } else {
-            catData[key] = {
-              zh: data[key].zh || data[key],
-              origins: [mode],
-            };
+      await Promise.all(
+        entryModes.map(async (mode) => {
+          const finalArch = mode === "spark" ? `${arch}-store` : `${arch}-apm`;
+          const path = `/${finalArch}/${folderName}/categories.json`;
+
+          try {
+            const response = await axiosInstance.get(path);
+            const data = response.data;
+            Object.keys(data).forEach((key) => {
+              if (catData[key]) {
+                if (!catData[key].origins.includes(mode)) {
+                  catData[key].origins.push(mode);
+                }
+              } else {
+                catData[key] = {
+                  zh: data[key].zh || data[key],
+                  origins: [mode],
+                };
+              }
+            });
+          } catch {
+            // 该入口没有子分类，静默忽略
           }
-        });
-      } catch {
-        // 该入口没有子分类，静默忽略
-      }
-    }
-
-    if (Object.keys(catData).length > 0) {
-      newTabCategories[entry.id] = catData;
-      logger.info(
-        `入口 "${entry.id}" 加载到 ${Object.keys(catData).length} 个子分类`,
+        }),
       );
-    }
-  }
+
+      if (Object.keys(catData).length > 0) {
+        newTabCategories[entry.id] = catData;
+        logger.info(
+          `入口 "${entry.id}" 加载到 ${Object.keys(catData).length} 个子分类`,
+        );
+      }
+    }),
+  );
 
   tabCategories.value = newTabCategories;
 };
@@ -2609,8 +2628,12 @@ const loadTabApps = async (entryId: string) => {
   loadingTabs.value = new Set(loadingTabs.value).add(entryId);
 
   const arch = window.apm_store.arch || "amd64";
-  const modes: Array<"spark" | "apm"> =
+  const allModes: Array<"spark" | "apm"> =
     storeFilter.value === "both" ? ["spark", "apm"] : [storeFilter.value];
+  // 只查询该入口实际存在的来源仓库，避免对不存在目录的 404 重试
+  const modes = entry.origins?.length
+    ? entry.origins.filter((o) => allModes.includes(o))
+    : allModes;
   const folderName = entry.value || entry.id;
   const subCats = tabCategories.value[entryId];
 
@@ -2803,13 +2826,16 @@ onMounted(async () => {
 
   await loadTabCategories();
 
-  // 分类目录加载后，并行加载主页数据和所有应用列表
-  // 使用非阻塞方式加载，让UI先展示出来
+  // 先启动侧边栏入口预加载，让其请求优先进入网络队列
+  // 避免被「全部应用」的大量并发请求抢占连接池
+  const sidebarPreloadPromise = preloadSidebarTabApps();
+
   loading.value = true;
   homeLoading.value = true;
 
-  // 启动加载任务，但不等待它们完成
+  // 侧边栏入口预加载先启动，全部应用和主页数据随后并行加载
   Promise.all([
+    sidebarPreloadPromise,
     loadHome(),
     new Promise<void>((resolve) => {
       loadApps(() => {
@@ -2817,8 +2843,6 @@ onMounted(async () => {
         resolve();
       });
     }),
-    // 并行预加载所有侧边栏入口的应用数据
-    preloadSidebarTabApps(),
   ]).then(() => {
     // 所有数据加载完成后的回调（可选）
     logger.info("所有应用数据加载完成");
