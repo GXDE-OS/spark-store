@@ -101,7 +101,7 @@
           <template v-else>
             <AppGrid
               :apps="filteredApps"
-              :loading="loading"
+              :loading="effectiveLoading"
               :scroll-key="activeTab + '-' + selectedCategory"
               :store-filter="storeFilter"
               :show-origin="storeFilter === 'both' && !isHomeListTab"
@@ -449,6 +449,8 @@ const tabCategories: Ref<Record<string, Record<string, CategoryInfo>>> = ref(
   {},
 );
 const tabApps: Ref<Record<string, App[]>> = ref({});
+// 正在加载中的入口 ID 集合，用于显示骨架屏并防止重复加载
+const loadingTabs = ref<Set<string>>(new Set());
 // 首页推荐列表入口对应的各来源 jsonUrl：{ [entryId]: { spark?, apm? } }
 const homeListUrls = ref<Record<string, { spark?: string; apm?: string }>>({});
 const activeTab = ref("home");
@@ -567,6 +569,16 @@ const displayApps = computed(() => {
   if (activeTab.value === "all") return baseApps.value;
   return tabApps.value[activeTab.value] || [];
 });
+
+// 当前的加载状态：全局加载中，或当前入口正在加载中
+const effectiveLoading = computed(
+  () =>
+    loading.value ||
+    (activeTab.value !== "home" &&
+      activeTab.value !== "all" &&
+      loadingTabs.value.has(activeTab.value) &&
+      !tabApps.value[activeTab.value]),
+);
 
 const filteredApps = computed(() => {
   let result = [...displayApps.value];
@@ -1183,9 +1195,14 @@ const loadHomeListEntries = async () => {
 // 加载首页推荐列表的应用数据（复用首页逻辑，合并展示 spark+apm）
 const loadHomeListApps = async (entryId: string) => {
   if (tabApps.value[entryId]) return;
+  // 防止重复加载：如果正在加载中则跳过
+  if (loadingTabs.value.has(entryId)) return;
 
   const urls = homeListUrls.value[entryId];
   if (!urls) return;
+
+  // 标记为加载中
+  loadingTabs.value = new Set(loadingTabs.value).add(entryId);
 
   const arch = window.apm_store.arch || "amd64";
   const loadedApps: App[] = [];
@@ -1246,6 +1263,12 @@ const loadHomeListApps = async (entryId: string) => {
   );
 
   tabApps.value = { ...tabApps.value, [entryId]: loadedApps };
+
+  // 移除加载标记
+  const next = new Set(loadingTabs.value);
+  next.delete(entryId);
+  loadingTabs.value = next;
+
   logger.info(`首页列表 "${entryId}" 加载完成，共 ${loadedApps.length} 个应用`);
 };
 
@@ -2576,9 +2599,14 @@ const loadTabCategories = async () => {
 
 const loadTabApps = async (entryId: string) => {
   if (tabApps.value[entryId]) return;
+  // 防止重复加载：如果正在加载中则跳过
+  if (loadingTabs.value.has(entryId)) return;
 
   const entry = sidebarEntries.value.find((e) => e.id === entryId);
   if (!entry || entry.type !== "category") return;
+
+  // 标记为加载中
+  loadingTabs.value = new Set(loadingTabs.value).add(entryId);
 
   const arch = window.apm_store.arch || "amd64";
   const modes: Array<"spark" | "apm"> =
@@ -2640,6 +2668,12 @@ const loadTabApps = async (entryId: string) => {
   const loadedApps = results.flat();
 
   tabApps.value = { ...tabApps.value, [entryId]: loadedApps };
+
+  // 移除加载标记
+  const next = new Set(loadingTabs.value);
+  next.delete(entryId);
+  loadingTabs.value = next;
+
   logger.info(`入口 "${entryId}" 加载完成，共 ${loadedApps.length} 个应用`);
 };
 
