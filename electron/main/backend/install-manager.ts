@@ -544,9 +544,9 @@ async function runDownloadPhase(task: InstallTask) {
 
       sendStatus("downloading");
 
-      // 下载重试逻辑：共10次，5次3秒，3次5秒，2次10秒
+      // 下载重试逻辑：共10次，指数退避，首次3秒，末次1分钟
       const timeoutList = [
-        3000, 3000, 3000, 3000, 3000, 5000, 5000, 5000, 10000, 10000,
+        3000, 4500, 6500, 9000, 13000, 18000, 26000, 36000, 50000, 60000,
       ];
       let retryCount = 0;
       let downloadSuccess = false;
