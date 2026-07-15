@@ -2,12 +2,24 @@
 
 clean:
 	rm -rf release/
+	rm -f lightningcss-linux-loong64-gnu.tgz
+	rm -f tailwindcss-oxide-linux-loong64-gnu.tgz
 
 build:
 ifeq (${DEB_HOST_ARCH},loong64)
-	npm run build:deb-loong64
+	# Install oxide for loongarch64
+	curl -fsSL https://github.com/loong64/tailwindcss/releases/download/v4.3.2/tailwindcss-oxide-linux-loong64-gnu.tgz -o tailwindcss-oxide-linux-loong64-gnu.tgz
+	mkdir -p $(CURDIR)/node_modules/@tailwindcss/oxide-linux-loong64-gnu
+	tar xf tailwindcss-oxide-linux-loong64-gnu.tgz -C $(CURDIR)/node_modules/@tailwindcss/oxide-linux-loong64-gnu --strip-components 1
+	rm tailwindcss-oxide-linux-loong64-gnu.tgz
+	# Install lightningcss-linux-loong64-gnu for loongarch64
+	curl -fsSL https://github.com/loong64/lightningcss/releases/download/v1.32.0/lightningcss-linux-loong64-gnu-1.32.0.tgz -o lightningcss-linux-loong64-gnu.tgz
+	mkdir -p $(CURDIR)/node_modules/lightningcss-linux-loong64-gnu
+	tar xf lightningcss-linux-loong64-gnu.tgz -C $(CURDIR)/node_modules/lightningcss-linux-loong64-gnu --strip-components 1
+	rm lightningcss-linux-loong64-gnu.tgz
+	npm run build:loong64
 else
-	npm run build:deb
+	npm run build
 endif
 	
 install:
@@ -17,8 +29,8 @@ install:
 	mkdir -p $(DESTDIR)/usr/share/icons/
 	mkdir -p $(DESTDIR)/usr/lib/
 	mkdir -p $(DESTDIR)/usr/bin/
-	cp -rv release/*/linux-unpacked/* $(DESTDIR)/opt/spark-store/bin/
-	cp -rv release/*/linux-unpacked/extras/* $(DESTDIR)/opt/spark-store/extras/
+	cp -rv release/*/linux*-unpacked/* $(DESTDIR)/opt/spark-store/bin/
+	cp -rv release/*/linux*-unpacked/extras/* $(DESTDIR)/opt/spark-store/extras/
 	cp -rv tool/* $(DESTDIR)/opt/durapps/spark-store/bin/
 	cp -rv pkg/usr/share/fish/ $(DESTDIR)/usr/share/
 	cp -rv icons/hicolor/ $(DESTDIR)/usr/share/icons/
