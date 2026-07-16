@@ -48,6 +48,5 @@ install:
 	cp -rv pkg/usr/share/bash-completion/ $(DESTDIR)/usr/share/
 	cp -rv pkg/etc/apt/ $(DESTDIR)/etc/
 	cp -rv pkg/tmp/spark-store-install/ $(DESTDIR)/tmp/
-	cp -rv pkg/lib/systemd/ $(DESTDIR)/lib/
 	cp -rv tool/spark-store.asc $(DESTDIR)/opt/durapps/spark-store/bin/
 	ln -s ../../../spark-store/extras/spark-store $(DESTDIR)/opt/durapps/spark-store/bin/spark-store
