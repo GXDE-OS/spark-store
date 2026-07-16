@@ -641,6 +641,61 @@ export function registerSubmitterHandlers(
     }
   });
 
+  const FALLBACK_CATEGORIES = [
+    "chat",
+    "development",
+    "games",
+    "image_graphics",
+    "music",
+    "network",
+    "office",
+    "others",
+    "reading",
+    "themes",
+    "tools",
+    "video",
+  ];
+
+  async function fetchCategoriesFromCdn(
+    baseUrl: string,
+    arch: string,
+  ): Promise<string[]> {
+    const url = `${baseUrl}/${arch}/categories.json`;
+    logger.info({ url }, "[Submitter] Fetching categories from CDN");
+    try {
+      const response = await fetch(url, {
+        headers: { "User-Agent": getUserAgent() },
+      });
+      if (!response.ok) {
+        logger.warn(
+          { status: response.status, arch },
+          "[Submitter] Failed to fetch categories.json, using fallback",
+        );
+        return FALLBACK_CATEGORIES;
+      }
+      const json = await response.json();
+      if (json && typeof json === "object" && !Array.isArray(json)) {
+        const keys = Object.keys(json);
+        logger.info(
+          { arch, categories: keys, count: keys.length },
+          "[Submitter] Categories loaded from CDN",
+        );
+        return keys.length > 0 ? keys : FALLBACK_CATEGORIES;
+      }
+      logger.warn(
+        { arch },
+        "[Submitter] Unexpected categories.json format, using fallback",
+      );
+      return FALLBACK_CATEGORIES;
+    } catch (err) {
+      logger.warn(
+        { err, arch },
+        "[Submitter] Error fetching categories.json, using fallback",
+      );
+      return FALLBACK_CATEGORIES;
+    }
+  }
+
   ipcMain.handle(
     "search-history-app",
     async (_event, pkgname: string, useMirror = false) => {
@@ -648,34 +703,43 @@ export function registerSubmitterHandlers(
         const baseUrl = useMirror
           ? "https://mirrors.sdu.edu.cn/spark-store"
           : "https://spk-json.spark-app.store";
-        const storeArchs = ["store", "aarch64-store", "loong64-store"];
-        const categories = [
-          "chat",
-          "development",
-          "games",
-          "image_graphics",
-          "music",
-          "network",
-          "office",
-          "others",
-          "reading",
-          "themes",
-          "tools",
-          "video",
+        const storeArchs = [
+          "amd64-store",
+          "arm64-store",
+          "loong64-store",
+          "amd64-apm",
+          "arm64-apm",
+          "loong64-apm",
         ];
         const results: HistoryAppInfo[] = [];
+
+        // 为每个架构目录获取各自的分类列表（不同目录可能有不同分类，如 apm-extensions 只在 *-apm 下有）
+        const archCategoriesMap = new Map<string, string[]>();
+        for (const arch of storeArchs) {
+          const cats = await fetchCategoriesFromCdn(baseUrl, arch);
+          archCategoriesMap.set(arch, cats);
+        }
 
         logger.info(
           "[Submitter] ============== SEARCH HISTORY APP START ==============",
         );
         logger.info(
-          { pkgname, useMirror, baseUrl, storeArchs, categories },
+          {
+            pkgname,
+            useMirror,
+            baseUrl,
+            storeArchs,
+            archCategoryCounts: Array.from(archCategoriesMap.entries()).map(
+              ([a, c]) => ({ arch: a, categoryCount: c.length }),
+            ),
+          },
           "[Submitter] Search parameters",
         );
 
         const allPromises: Promise<void>[] = [];
 
         for (const arch of storeArchs) {
+          const categories = archCategoriesMap.get(arch) || FALLBACK_CATEGORIES;
           for (const category of categories) {
             const url = `${baseUrl}/${arch}/${category}/${pkgname}/app.json`;
             logger.info(
