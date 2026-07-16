@@ -26,11 +26,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite --mode debug | pino-pretty",
-    "build": "vue-tsc --noEmit && vite build --mode production && electron-builder --config electron-builder.yml",
+    "build": "vue-tsc --noEmit && vite build --mode production && electron-builder --config electron-builder.yml --linux dir",
     "build:vite": "vue-tsc --noEmit && vite build --mode production",
     "build:rpm": "vue-tsc --noEmit && vite build --mode production && electron-builder --config electron-builder.yml --linux rpm",
     "build:deb": "vue-tsc --noEmit && vite build --mode production && electron-builder --config electron-builder.yml --linux deb",
-    "build:deb-loong64": "vue-tsc --noEmit && vite build --mode production && env ELECTRON_MIRROR=https://github.com/darkyzhou/electron-loong64/releases/download/ electron_use_remote_checksums=1 electron-builder --config electron-builder.yml --loong64 --linux deb",
+    "build:loong64": "vue-tsc --noEmit && vite build --mode production && env ELECTRON_MIRROR=https://github.com/darkyzhou/electron-loong64/releases/download/ electron_use_remote_checksums=1 electron-builder --config electron-builder.yml --loong64 --linux dir",
     "preview": "vite preview --mode debug",
     "lint": "eslint --ext .ts,.vue src electron",
     "lint:fix": "eslint --ext .ts,.vue src electron --fix",

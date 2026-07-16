@@ -6,7 +6,6 @@ Rules-Requires-Root: no
 Build-Depends:
  debhelper-compat (= 13),
  make,
- npm,
 Standards-Version: 4.7.2
 Homepage: https://www.spark-app.store/
 
