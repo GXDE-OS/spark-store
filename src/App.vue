@@ -2838,16 +2838,11 @@ onMounted(async () => {
 
   await loadTabCategories();
 
-  // 先启动侧边栏入口预加载，让其请求优先进入网络队列
-  // 避免被「全部应用」的大量并发请求抢占连接池
-  const sidebarPreloadPromise = preloadSidebarTabApps();
-
   loading.value = true;
   homeLoading.value = true;
 
-  // 侧边栏入口预加载先启动，全部应用和主页数据随后并行加载
-  Promise.all([
-    sidebarPreloadPromise,
+  // 先加载全部应用，再预加载侧边栏入口
+  await Promise.all([
     loadHome(),
     new Promise<void>((resolve) => {
       loadApps(() => {
@@ -2855,11 +2850,15 @@ onMounted(async () => {
         resolve();
       });
     }),
-  ]).then(() => {
-    // 所有数据加载完成后的回调（可选）
-    logger.info("所有应用数据加载完成");
-    void maybePromptInstalledSync();
+  ]);
+
+  // 全部应用加载完成后再预加载侧边栏入口
+  preloadSidebarTabApps().then(() => {
+    logger.info("侧边栏入口预加载完成");
   });
+
+  void maybePromptInstalledSync();
+  logger.info("所有应用数据加载完成");
 
   // 设置键盘导航
   document.addEventListener("keydown", (e) => {
