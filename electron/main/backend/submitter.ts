@@ -1302,6 +1302,7 @@ export function registerSubmitterHandlers(
       logger.info(
         "[Submitter] ============== STEP 4: SUBMIT APPLICATION ==============",
       );
+      sendUploadProgress("submit", 0, "正在提交投稿信息...");
 
       const debFileStat = fs.statSync(debFilePath);
 
@@ -1311,7 +1312,10 @@ export function registerSubmitterHandlers(
       const pkgVersion = String(dataObj.version || "0.0.0");
       const debPkgName = String(dataObj.pkgname || "unknown");
       const formFileName = `${debPkgName}_${pkgVersion}_${debArch}.deb`;
-      logger.info({ formFileName, debArch }, "[Submitter] Constructed file_name");
+      logger.info(
+        { formFileName, debArch },
+        "[Submitter] Constructed file_name",
+      );
 
       const categoryName = String(dataObj.category || "");
       const categoryId = Number(dataObj.categoryId) || 0;
@@ -1536,6 +1540,7 @@ export function registerSubmitterHandlers(
         { duration: requestDuration },
         "[Submitter] Total duration (ms)",
       );
+      sendUploadProgress("submit", 100, "投稿信息提交完成");
 
       return { success: true, data: result };
     } catch (err) {

@@ -203,8 +203,8 @@
             <p class="text-slate-600 dark:text-slate-400">
               {{ iconPreview ? "点击浏览更换图标" : "点击浏览" }}
             </p>
-            <p v-if="formData.iconPath" class="mt-2 text-sm text-blue-500">
-              {{ formData.iconPath.split("/").pop() }}
+            <p v-if="iconFileName" class="mt-2 text-sm text-blue-500">
+              {{ iconFileName }}
             </p>
           </div>
         </div>
@@ -385,14 +385,106 @@
         </div>
 
         <div
-          v-if="submitSuccess"
-          class="p-4 bg-green-50 border border-green-200 rounded-lg dark:bg-green-900/20 dark:border-green-800"
+          v-if="isSubmitting || isPackaging"
+          class="p-4 bg-blue-50 border border-blue-200 rounded-lg dark:bg-blue-900/20 dark:border-blue-800"
         >
+          <div class="flex items-center gap-3 mb-3">
+            <i
+              class="fas fa-spinner fa-spin text-blue-500 dark:text-blue-400"
+            ></i>
+            <span class="text-blue-700 dark:text-blue-400 font-medium text-sm">
+              {{ isPackaging ? "正在打包..." : uploadStage || "正在提交..." }}
+            </span>
+          </div>
+          <div class="space-y-2">
+            <div
+              class="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2.5"
+            >
+              <div
+                class="h-2.5 rounded-full transition-all duration-300"
+                :class="isPackaging ? 'bg-emerald-500' : 'bg-blue-500'"
+                :style="{ width: uploadProgress + '%' }"
+              ></div>
+            </div>
+            <p class="text-xs text-slate-500 dark:text-slate-400">
+              {{ uploadStageMessage || "准备中..." }}
+            </p>
+            <div
+              v-if="uploadStages.length > 0 && !isPackaging"
+              class="mt-3 space-y-1.5"
+            >
+              <div
+                v-for="stage in uploadStages"
+                :key="stage.stage"
+                class="flex items-center gap-2 text-xs"
+              >
+                <i
+                  v-if="stage.progress >= 100"
+                  class="fas fa-check-circle text-green-500"
+                ></i>
+                <i
+                  v-else-if="stage.progress > 0"
+                  class="fas fa-spinner fa-spin text-blue-500"
+                ></i>
+                <i
+                  v-else
+                  class="far fa-circle text-slate-300 dark:text-slate-600"
+                ></i>
+                <span
+                  :class="
+                    stage.progress >= 100
+                      ? 'text-green-600 dark:text-green-400'
+                      : stage.progress > 0
+                        ? 'text-blue-600 dark:text-blue-400'
+                        : 'text-slate-400 dark:text-slate-500'
+                  "
+                  >{{ stage.label }}</span
+                >
+                <span
+                  v-if="stage.progress > 0 && stage.progress < 100"
+                  class="text-slate-400"
+                  >{{ Math.floor(stage.progress) }}%</span
+                >
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="showSubmitSuccessModal" class="relative">
           <div
-            class="flex items-center gap-2 text-green-700 dark:text-green-400"
+            class="p-6 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 shadow-lg"
           >
-            <i class="fas fa-check-circle"></i>
-            <span>投稿提交成功！我们会尽快审核你的应用。</span>
+            <div class="flex items-center gap-3 mb-4">
+              <div
+                class="w-10 h-10 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center"
+              >
+                <i class="fas fa-check-circle text-green-500 text-xl"></i>
+              </div>
+              <div>
+                <h3 class="font-semibold text-slate-900 dark:text-slate-100">
+                  投稿提交成功！
+                </h3>
+                <p class="text-sm text-slate-500 dark:text-slate-400">
+                  我们会尽快审核你的应用
+                </p>
+              </div>
+            </div>
+            <div class="flex gap-3">
+              <button
+                type="button"
+                class="flex-1 px-4 py-2 rounded-lg bg-blue-500 text-white font-medium hover:bg-blue-600 transition-colors"
+                @click="closeSubmitSuccessModal"
+              >
+                关闭
+              </button>
+              <button
+                type="button"
+                class="flex-1 px-4 py-2 rounded-lg border border-slate-200 bg-white text-slate-700 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+                @click="resetFormAndClose"
+              >
+                继续投递
+              </button>
+            </div>
           </div>
         </div>
 
@@ -611,6 +703,7 @@ watch(
 const isSubmitting = ref(false);
 const submitSuccess = ref(false);
 const submitError = ref("");
+const showSubmitSuccessModal = ref(false);
 const isParsingDeb = ref(false);
 const debParseError = ref("");
 const isSearchingHistory = ref(false);
@@ -618,6 +711,14 @@ const showArchDialog = ref(false);
 const availableArchs = ref<HistoryArchInfo[]>([]);
 const currentDebArch = ref("");
 const iconPreview = ref("");
+const iconFileName = ref("");
+
+const uploadProgress = ref(0);
+const uploadStage = ref("");
+const uploadStageMessage = ref("");
+const uploadStages = ref<{ stage: string; label: string; progress: number }[]>(
+  [],
+);
 
 const isLoadingCategories = ref(false);
 const categoriesLoadError = ref("");
@@ -705,7 +806,10 @@ const loadCategoriesList = async (): Promise<void> => {
           data.data.length > 0
         ) {
           categoriesList.value = data.data.map(
-            (item: { id: number; name: string; type?: string }, index: number) => ({
+            (
+              item: { id: number; name: string; type?: string },
+              index: number,
+            ) => ({
               id: typeof item.id === "number" ? item.id : index + 1,
               name: item.name || "",
               value: item.type || String(item.id),
@@ -718,7 +822,10 @@ const loadCategoriesList = async (): Promise<void> => {
           );
         } else if (data.code === 0 && Array.isArray(data)) {
           categoriesList.value = data.map(
-            (item: { id: number; name: string; type?: string }, index: number) => ({
+            (
+              item: { id: number; name: string; type?: string },
+              index: number,
+            ) => ({
               id: typeof item.id === "number" ? item.id : index + 1,
               name: item.name || "",
               value: item.type || String(item.id),
@@ -1166,6 +1273,7 @@ const selectArch = async (arch: HistoryArchInfo) => {
   if (arch.icon) {
     formData.iconPath = `${baseUrl}/icon.png`;
     iconPreview.value = formData.iconPath;
+    iconFileName.value = "icon.png";
     console.log("[Submitter] Icon URL:", formData.iconPath);
     console.log("[Submitter] Icon preview set:", iconPreview.value);
   }
@@ -1192,6 +1300,7 @@ const handleIconFileSelect = (event: Event) => {
   const target = event.target as HTMLInputElement;
   const file = target.files?.[0];
   if (file) {
+    iconFileName.value = file.name;
     const reader = new FileReader();
     reader.onload = (e) => {
       const dataUrl = e.target?.result as string;
@@ -1211,6 +1320,7 @@ const handleIconDrop = (event: DragEvent) => {
       file.name.endsWith(".jpg") ||
       file.name.endsWith(".jpeg"))
   ) {
+    iconFileName.value = file.name;
     const reader = new FileReader();
     reader.onload = (e) => {
       const dataUrl = e.target?.result as string;
@@ -1275,6 +1385,22 @@ const resetForm = () => {
   packageSuccess.value = false;
   packageError.value = "";
   packageResult.value = null;
+  iconFileName.value = "";
+  iconPreview.value = "";
+  uploadProgress.value = 0;
+  uploadStage.value = "";
+  uploadStageMessage.value = "";
+  uploadStages.value = [];
+};
+
+const closeSubmitSuccessModal = () => {
+  showSubmitSuccessModal.value = false;
+  resetForm();
+};
+
+const resetFormAndClose = () => {
+  showSubmitSuccessModal.value = false;
+  resetForm();
 };
 
 const submitForm = async () => {
@@ -1283,6 +1409,45 @@ const submitForm = async () => {
   isSubmitting.value = true;
   submitSuccess.value = false;
   submitError.value = "";
+
+  uploadProgress.value = 0;
+  uploadStage.value = "准备提交...";
+  uploadStageMessage.value = "正在准备...";
+  uploadStages.value = [
+    { stage: "icon", label: "上传图标", progress: 0 },
+    { stage: "screenshots", label: "上传截图", progress: 0 },
+    { stage: "deb", label: "上传安装包", progress: 0 },
+    { stage: "submit", label: "提交信息", progress: 0 },
+  ];
+
+  const progressListener = (
+    _event: unknown,
+    data: { step: string; progress: number; message: string },
+  ) => {
+    let stageIndex: number;
+    if (data.step.startsWith("screenshot")) {
+      stageIndex = uploadStages.value.findIndex(
+        (s) => s.stage === "screenshots",
+      );
+    } else {
+      stageIndex = uploadStages.value.findIndex((s) => s.stage === data.step);
+    }
+    if (stageIndex !== -1) {
+      uploadStages.value[stageIndex].progress = Math.max(
+        uploadStages.value[stageIndex].progress,
+        data.progress,
+      );
+    }
+    if (data.progress >= 100 && !data.step.startsWith("screenshot")) {
+      uploadProgress.value = data.progress;
+    } else {
+      uploadProgress.value = Math.max(uploadProgress.value, data.progress);
+    }
+    uploadStage.value = data.message;
+    uploadStageMessage.value = data.message;
+  };
+
+  window.ipcRenderer.on("submit-upload-progress", progressListener);
 
   try {
     const submitData = {
@@ -1318,14 +1483,19 @@ const submitForm = async () => {
     const result = await window.ipcRenderer.invoke("submit-app", submitData);
 
     if (result?.success) {
+      uploadStages.value.forEach((s) => (s.progress = 100));
+      uploadProgress.value = 100;
+      uploadStage.value = "提交完成";
+      uploadStageMessage.value = "投稿提交成功！";
       submitSuccess.value = true;
-      resetForm();
+      showSubmitSuccessModal.value = true;
     } else {
       submitError.value = result?.message || "提交失败";
     }
   } catch (error) {
     submitError.value = (error as Error)?.message || "提交失败";
   } finally {
+    window.ipcRenderer.off("submit-upload-progress", progressListener);
     isSubmitting.value = false;
   }
 };
@@ -1342,6 +1512,35 @@ const packageApp = async (storeArch: string) => {
   packageSuccess.value = false;
   packageError.value = "";
   packageResult.value = null;
+
+  uploadProgress.value = 0;
+  uploadStage.value = "准备打包...";
+  uploadStageMessage.value = "正在准备...";
+  uploadStages.value = [
+    { stage: "init", label: "创建临时目录", progress: 0 },
+    { stage: "icon", label: "处理图标", progress: 0 },
+    { stage: "screenshots", label: "处理截图", progress: 0 },
+    { stage: "deb", label: "复制安装包", progress: 0 },
+    { stage: "json", label: "生成配置文件", progress: 0 },
+    { stage: "tar", label: "打包压缩", progress: 0 },
+  ];
+
+  const progressListener = (
+    _event: unknown,
+    data: { step: string; progress: number; message: string },
+  ) => {
+    const stageIndex = uploadStages.value.findIndex(
+      (s) => s.stage === data.step,
+    );
+    if (stageIndex !== -1) {
+      uploadStages.value[stageIndex].progress = data.progress;
+    }
+    uploadProgress.value = data.progress;
+    uploadStage.value = data.step;
+    uploadStageMessage.value = data.message;
+  };
+
+  window.ipcRenderer.on("package-progress", progressListener);
 
   try {
     const packageData = {
@@ -1372,6 +1571,9 @@ const packageApp = async (storeArch: string) => {
     const result = await window.ipcRenderer.invoke("package-app", packageData);
 
     if (result?.success) {
+      uploadStages.value.forEach((s) => (s.progress = 100));
+      uploadProgress.value = 100;
+      uploadStageMessage.value = "打包完成！";
       packageSuccess.value = true;
       packageResult.value = result.data;
     } else {
@@ -1380,6 +1582,7 @@ const packageApp = async (storeArch: string) => {
   } catch (error) {
     packageError.value = (error as Error)?.message || "打包失败";
   } finally {
+    window.ipcRenderer.off("package-progress", progressListener);
     isPackaging.value = false;
   }
 };
