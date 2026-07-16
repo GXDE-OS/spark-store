@@ -45,7 +45,7 @@
         />
       </aside>
 
-      <main class="h-full min-h-0 flex-1">
+      <main class="h-full min-h-0 flex-1 overflow-y-auto">
         <div
           class="sticky top-10 z-30 border-b border-slate-200/70 bg-slate-50 px-4 py-4 lg:px-10 dark:border-slate-800/70 dark:bg-slate-950"
         >
@@ -1095,6 +1095,9 @@ const loadHome = async () => {
     const modes: Array<"spark" | "apm"> =
       storeFilter.value === "both" ? ["spark", "apm"] : [storeFilter.value];
 
+    // 按名称去重，spark 优先：同名链接 spark 覆盖 apm
+    const seenNames = new Set<string>();
+
     for (const mode of modes) {
       const finalArch = mode === "spark" ? `${arch}-store` : `${arch}-apm`;
       const base = `${APM_STORE_BASE_URL}/${finalArch}/home`;
@@ -1104,11 +1107,12 @@ const loadHome = async () => {
         const res = await fetch(`${base}/homelinks.json`);
         if (res.ok) {
           const links = await res.json();
-          const taggedLinks = links.map((l: HomeLink) => ({
-            ...l,
-            origin: mode,
-          }));
-          homeLinks.value.push(...taggedLinks);
+          for (const l of links) {
+            const name = l.Name || l.name || "";
+            if (seenNames.has(name)) continue; // 已由更高优先级来源（spark）占据
+            seenNames.add(name);
+            homeLinks.value.push({ ...l, origin: mode });
+          }
         }
       } catch (e) {
         console.warn(`Failed to load ${mode} homelinks.json`, e);
@@ -1205,7 +1209,8 @@ const loadHomeListApps = async (entryId: string) => {
   loadingTabs.value = new Set(loadingTabs.value).add(entryId);
 
   const arch = window.apm_store.arch || "amd64";
-  const loadedApps: App[] = [];
+  // 按 pkgname 去重，spark 优先（spark 在 modes 数组最前面，先占据 key）
+  const appMap = new Map<string, App>();
 
   // 同时加载各来源的推荐列表应用
   await Promise.all(
@@ -1220,7 +1225,10 @@ const loadHomeListApps = async (entryId: string) => {
           (await fetchWithRetry<Record<string, string>[]>(path)) || [];
         // 直接使用列表数据构建 App 对象，避免为每个应用单独请求 app.json（N+1 问题）
         // 应用详情会在用户点击时通过 fetchAppFromStore 按需获取
-        const apps = rawApps.map((a) => {
+        for (const a of rawApps) {
+          const pkgname = a.Pkgname || a.pkgname || "";
+          if (!pkgname || appMap.has(pkgname)) continue; // 已由更高优先级来源占据
+
           const category = a.Category || a.category || "unknown";
 
           let img_urls: string[] = [];
@@ -1235,9 +1243,9 @@ const loadHomeListApps = async (entryId: string) => {
             img_urls = rawImgUrls;
           }
 
-          return {
-            name: a.Name || a.name || a.Pkgname || a.pkgname || "",
-            pkgname: a.Pkgname || a.pkgname || "",
+          appMap.set(pkgname, {
+            name: a.Name || a.name || pkgname,
+            pkgname,
             version: a.Version || "",
             filename: a.Filename || a.filename || "",
             torrent_address: a.Torrent_address || "",
@@ -1253,23 +1261,22 @@ const loadHomeListApps = async (entryId: string) => {
             category,
             origin: mode,
             currentStatus: "not-installed" as const,
-          } as App;
-        });
-        loadedApps.push(...apps);
+          } as App);
+        }
       } catch (e) {
         logger.warn(`加载首页列表 ${entryId} (${mode}) 失败: ${e}`);
       }
     }),
   );
 
-  tabApps.value = { ...tabApps.value, [entryId]: loadedApps };
+  tabApps.value = { ...tabApps.value, [entryId]: [...appMap.values()] };
 
   // 移除加载标记
   const next = new Set(loadingTabs.value);
   next.delete(entryId);
   loadingTabs.value = next;
 
-  logger.info(`首页列表 "${entryId}" 加载完成，共 ${loadedApps.length} 个应用`);
+  logger.info(`首页列表 "${entryId}" 加载完成，共 ${appMap.size} 个应用`);
 };
 
 // 并行预加载所有侧边栏入口的应用数据，避免点击时才加载导致缓慢
