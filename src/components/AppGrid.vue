@@ -17,18 +17,20 @@
     </p>
   </div>
 
-  <!-- 应用数量较少时，使用普通网格 -->
+  <!-- 应用数量较少时，使用普通网格（带滚动） -->
   <div
     v-else-if="!loading && apps.length <= 50"
-    class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4"
+    class="non-virtual-scroller"
   >
-    <AppCard
-      v-for="(app, index) in apps"
-      :key="index"
-      :app="app"
-      :show-origin="effectiveShowOrigin"
-      @open-detail="$emit('open-detail', app)"
-    />
+    <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+      <AppCard
+        v-for="(app, index) in apps"
+        :key="index"
+        :app="app"
+        :show-origin="effectiveShowOrigin"
+        @open-detail="$emit('open-detail', app)"
+      />
+    </div>
   </div>
 
   <!-- 应用数量较多时，使用虚拟滚动 -->
@@ -178,6 +180,11 @@ const gridRows = computed(() => {
   overflow-y: auto;
   padding: 0; /* 移除内边距 */
   margin: -24px -16px; /* 抵消父容器的 px-4 py-6 */
+}
+
+.non-virtual-scroller {
+  height: calc(100vh - 140px);
+  overflow-y: auto;
 }
 
 @media (min-width: 1024px) {
