@@ -29,6 +29,9 @@ install:
 	mkdir -p $(DESTDIR)/usr/share/icons/
 	mkdir -p $(DESTDIR)/usr/lib/
 	mkdir -p $(DESTDIR)/usr/bin/
+	mkdir -p $(DESTDIR)/etc/apt/
+	mkdir -p $(DESTDIR)/lib/systemd/
+	mkdir -p $(DESTDIR)/tmp/
 	cp -rv release/*/linux*-unpacked/* $(DESTDIR)/opt/spark-store/bin/
 	cp -rv release/*/linux*-unpacked/extras/* $(DESTDIR)/opt/spark-store/extras/
 	cp -rv tool/* $(DESTDIR)/opt/durapps/spark-store/bin/
@@ -39,5 +42,12 @@ install:
 	cp -rv pkg/usr/share/applications/ $(DESTDIR)/usr/share/
 	cp -rv pkg/usr/share/polkit-1 $(DESTDIR)/usr/share/
 	cp -rv pkg/usr/share/aptss $(DESTDIR)/usr/share/
+	cp -rv pkg/usr/share/ssinstall/ $(DESTDIR)/usr/share/
+	cp -rv pkg/usr/share/ssinstall-local/ $(DESTDIR)/usr/share/
+	cp -rv pkg/usr/share/dsg/ $(DESTDIR)/usr/share/
+	cp -rv pkg/usr/share/bash-completion/ $(DESTDIR)/usr/share/
+	cp -rv pkg/etc/apt/ $(DESTDIR)/etc/
+	cp -rv pkg/tmp/spark-store-install/ $(DESTDIR)/tmp/
+	cp -rv pkg/lib/systemd/ $(DESTDIR)/lib/
 	cp -rv tool/spark-store.asc $(DESTDIR)/opt/durapps/spark-store/bin/
 	ln -s ../../../spark-store/extras/spark-store $(DESTDIR)/opt/durapps/spark-store/bin/spark-store

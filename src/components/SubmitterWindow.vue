@@ -559,7 +559,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed } from "vue";
+import { ref, reactive, computed, watch } from "vue";
 
 interface HistoryArchInfo {
   id: number;
@@ -595,8 +595,18 @@ const formData = reactive({
   description: "",
   tags: "",
   category: "",
+  categoryId: 0,
   remark: "",
 });
+
+// 当 category 变化时，从 categoriesList 中同步 categoryId
+watch(
+  () => formData.category,
+  (val) => {
+    const found = categoriesList.value.find((c) => c.value === val);
+    formData.categoryId = found?.id ?? 0;
+  },
+);
 
 const isSubmitting = ref(false);
 const submitSuccess = ref(false);
@@ -634,23 +644,6 @@ interface Category {
   value: string;
 }
 
-// 服务器分类 id → 英文标识符映射（与后端 submitter.ts 的 categoryNameToIdMap 反向）
-// 历史记录中 category 字段存储的就是这些英文标识符
-const categoryIdToValueMap: Record<number, string> = {
-  1: "games",
-  2: "music",
-  3: "network",
-  4: "office",
-  5: "others",
-  6: "image_graphics",
-  7: "development",
-  8: "reading",
-  9: "chat",
-  10: "themes",
-  11: "tools",
-  12: "video",
-};
-
 interface Tag {
   name: string;
   value: string;
@@ -667,7 +660,8 @@ const isFormValid = computed(() => {
     formData.pkgname.trim() &&
     formData.version.trim() &&
     formData.category.trim() &&
-    formData.debFilePath
+    formData.debFilePath &&
+    formData.remark.trim()
   );
 });
 
@@ -711,12 +705,10 @@ const loadCategoriesList = async (): Promise<void> => {
           data.data.length > 0
         ) {
           categoriesList.value = data.data.map(
-            (item: { id: number; name: string }, index: number) => ({
+            (item: { id: number; name: string; type?: string }, index: number) => ({
               id: typeof item.id === "number" ? item.id : index + 1,
-              // API 只返回中文 name，value 通过 id 反向映射为英文标识符
-              // 英文标识符与历史记录中的 category 字段一致，用于匹配
               name: item.name || "",
-              value: categoryIdToValueMap[item.id] || item.name || "",
+              value: item.type || String(item.id),
             }),
           );
           categoriesLoadError.value = "";
@@ -726,10 +718,10 @@ const loadCategoriesList = async (): Promise<void> => {
           );
         } else if (data.code === 0 && Array.isArray(data)) {
           categoriesList.value = data.map(
-            (item: { id: number; name: string }, index: number) => ({
+            (item: { id: number; name: string; type?: string }, index: number) => ({
               id: typeof item.id === "number" ? item.id : index + 1,
               name: item.name || "",
-              value: categoryIdToValueMap[item.id] || item.name || "",
+              value: item.type || String(item.id),
             }),
           );
           categoriesLoadError.value = "";
@@ -1198,12 +1190,13 @@ const selectIconFile = () => {
 
 const handleIconFileSelect = (event: Event) => {
   const target = event.target as HTMLInputElement;
-  const file = target.files?.[0] as File & { path?: string };
+  const file = target.files?.[0];
   if (file) {
-    formData.iconPath = file.path || file.name;
     const reader = new FileReader();
     reader.onload = (e) => {
-      iconPreview.value = e.target?.result as string;
+      const dataUrl = e.target?.result as string;
+      formData.iconPath = dataUrl;
+      iconPreview.value = dataUrl;
     };
     reader.readAsDataURL(file);
   }
@@ -1211,17 +1204,18 @@ const handleIconFileSelect = (event: Event) => {
 
 const handleIconDrop = (event: DragEvent) => {
   event.preventDefault();
-  const file = event.dataTransfer?.files?.[0] as File & { path?: string };
+  const file = event.dataTransfer?.files?.[0];
   if (
     file &&
     (file.name.endsWith(".png") ||
       file.name.endsWith(".jpg") ||
       file.name.endsWith(".jpeg"))
   ) {
-    formData.iconPath = file.path || file.name;
     const reader = new FileReader();
     reader.onload = (e) => {
-      iconPreview.value = e.target?.result as string;
+      const dataUrl = e.target?.result as string;
+      formData.iconPath = dataUrl;
+      iconPreview.value = dataUrl;
     };
     reader.readAsDataURL(file);
   }
@@ -1273,6 +1267,7 @@ const resetForm = () => {
   formData.description = "";
   formData.tags = "";
   formData.category = "";
+  formData.categoryId = 0;
   formData.remark = "";
   submitSuccess.value = false;
   submitError.value = "";
@@ -1304,7 +1299,9 @@ const submitForm = async () => {
       description: formData.description,
       tags: formData.tags,
       category: formData.category,
+      categoryId: formData.categoryId,
       remark: formData.remark,
+      arch: currentDebArch.value,
     };
 
     console.log("[Submitter] ============== SUBMIT FORM ==============");
@@ -1361,6 +1358,7 @@ const packageApp = async (storeArch: string) => {
       description: formData.description,
       tags: formData.tags,
       category: formData.category,
+      categoryId: formData.categoryId,
       remark: formData.remark,
       storeArch,
     };

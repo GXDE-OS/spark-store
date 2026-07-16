@@ -45,25 +45,6 @@ interface OssUploadMetadata {
   };
 }
 
-const categoryNameToIdMap: Record<string, number> = {
-  network: 3,
-  chat: 9,
-  music: 2,
-  video: 12,
-  image_graphics: 6,
-  games: 1,
-  office: 4,
-  reading: 8,
-  development: 7,
-  tools: 11,
-  themes: 10,
-  others: 5,
-};
-
-function getCategoryIdByName(categoryName: string): number {
-  return categoryNameToIdMap[categoryName];
-}
-
 function generateUUID(): string {
   const hexChars = "0123456789abcdef";
   let uuid = "";
@@ -1083,7 +1064,33 @@ export function registerSubmitterHandlers(
         );
         let iconFilePath = iconPath;
 
-        if (iconPath.startsWith("http://") || iconPath.startsWith("https://")) {
+        if (iconPath.startsWith("data:")) {
+          logger.info("[Submitter] Icon is a Base64 data URL, decoding");
+          const base64Data = iconPath.split(",")[1];
+          if (!base64Data) {
+            return { success: false, message: "图标数据格式错误" };
+          }
+          const tempDir = fs.mkdtempSync(
+            path.join(os.tmpdir(), "spark-store-submitter-"),
+          );
+          iconFilePath = path.join(tempDir, "icon.png");
+          try {
+            fs.writeFileSync(iconFilePath, Buffer.from(base64Data, "base64"));
+            logger.info(
+              { iconFilePath },
+              "[Submitter] Icon decoded from data URL",
+            );
+          } catch (err) {
+            logger.error({ err }, "[Submitter] Failed to decode icon data URL");
+            return {
+              success: false,
+              message: `图标解码失败: ${(err as Error).message}`,
+            };
+          }
+        } else if (
+          iconPath.startsWith("http://") ||
+          iconPath.startsWith("https://")
+        ) {
           logger.info(
             { iconPath },
             "[Submitter] Icon is a remote URL, downloading first",
@@ -1140,7 +1147,8 @@ export function registerSubmitterHandlers(
 
           if (
             iconPath.startsWith("http://") ||
-            iconPath.startsWith("https://")
+            iconPath.startsWith("https://") ||
+            iconPath.startsWith("data:")
           ) {
             fs.unlinkSync(iconFilePath);
             fs.rmdirSync(path.dirname(iconFilePath));
@@ -1297,8 +1305,16 @@ export function registerSubmitterHandlers(
 
       const debFileStat = fs.statSync(debFilePath);
 
+      // 参考老 Qt 投稿器：根据 deb 元数据构造 file_name: {pkgname}_{version}_{arch}.deb
+      // arch 由前端解析 deb 时获取并传入，无需再次调用 dpkg-deb
+      const debArch = String(dataObj.arch || "amd64");
+      const pkgVersion = String(dataObj.version || "0.0.0");
+      const debPkgName = String(dataObj.pkgname || "unknown");
+      const formFileName = `${debPkgName}_${pkgVersion}_${debArch}.deb`;
+      logger.info({ formFileName, debArch }, "[Submitter] Constructed file_name");
+
       const categoryName = String(dataObj.category || "");
-      const categoryId = getCategoryIdByName(categoryName);
+      const categoryId = Number(dataObj.categoryId) || 0;
       logger.info(
         { categoryName, categoryId },
         "[Submitter] Category name and ID",
@@ -1313,55 +1329,80 @@ export function registerSubmitterHandlers(
         : [];
       logger.info({ tagsString, tagsArray }, "[Submitter] Tags conversion");
 
-      const submitData = {
-        application_name: String(dataObj.pkgname || ""),
+      const remark =
+        ((dataObj.remark as string) || "") +
+        " - (来自于投稿器_v" +
+        getAppVersion() +
+        ")";
+
+      const submitData: Record<string, unknown> = {
+        application_name: debPkgName,
         application_name_zh: String(dataObj.name || ""),
         contributor: String(dataObj.contributor || ""),
         icons: iconUrl,
         size: debFileStat.size,
-        file_name: path.basename(debFilePath).replace(/\s+/g, "_plus_"),
+        file_name: formFileName,
         website: String(dataObj.website || ""),
-        version: String(dataObj.version || ""),
+        version: pkgVersion,
         more: String(dataObj.description || ""),
         type_id: categoryId,
         author: String(dataObj.author || ""),
-        remark:
-          ((dataObj.remark as string) || "") +
-          " - (来自于投稿器_v" +
-          getAppVersion() +
-          ")",
+        remark,
         img_urls: screenshotUrls,
         deb_url: debUrl,
         mail: String(dataObj.mail || dataObj.contributor || ""),
         tags: tagsArray,
+        architecture: debArch,
       };
 
       logger.info(
         "[Submitter] ============== VALIDATING SUBMISSION DATA ==============",
       );
-      const requiredFields = [
-        "application_name",
-        "application_name_zh",
-        "contributor",
-        "icons",
-        "size",
-        "file_name",
-        "version",
-        "type_id",
-        "author",
-        "deb_url",
+      // 对齐老 Qt 投稿器 isReadySubmit() 的完整校验
+      const checks: Array<{ field: keyof typeof submitData; label: string }> = [
+        { field: "application_name", label: "包名" },
+        { field: "application_name_zh", label: "应用名称" },
+        { field: "contributor", label: "贡献者" },
+        { field: "icons", label: "图标URL" },
+        { field: "size", label: "文件大小" },
+        { field: "file_name", label: "文件名" },
+        { field: "website", label: "官网地址" },
+        { field: "version", label: "版本号" },
+        { field: "more", label: "应用描述" },
+        { field: "type_id", label: "分类ID" },
+        { field: "author", label: "作者" },
+        { field: "remark", label: "测试情况" },
+        { field: "deb_url", label: "安装包URL" },
+        { field: "mail", label: "联系邮箱" },
       ];
-      const missingFields = requiredFields.filter(
-        (field) => !submitData[field as keyof typeof submitData],
-      );
+      const missingFields: string[] = [];
+      for (const { field, label } of checks) {
+        const val = submitData[field];
+        if (val === undefined || val === null || val === "" || val === 0) {
+          missingFields.push(`${label}(${field})`);
+        }
+      }
+      if (screenshotUrls.length === 0) {
+        missingFields.push("截图(img_urls)");
+      }
+      if (tagsArray.length === 0) {
+        missingFields.push("标签(tags)");
+      }
       if (missingFields.length > 0) {
         logger.error({ missingFields }, "[Submitter] Missing required fields");
+        return {
+          success: false,
+          message: `缺少必填字段: ${missingFields.join(", ")}`,
+        };
       }
 
       logger.info(
         "[Submitter] ============== PREPARING SUBMISSION REQUEST ==============",
       );
       logger.info({ submitData }, "[Submitter] Final submission data");
+      logger.info(
+        `[Submitter] ============== FULL SUBMIT JSON ==============\n${JSON.stringify(submitData, null, 2)}`,
+      );
 
       const submitterApiUrl =
         "https://upload.deepinos.org.cn/api/index/upload_application";
@@ -1469,6 +1510,22 @@ export function registerSubmitterHandlers(
           "[Submitter] Failed to parse success response as JSON",
         );
         result = responseText;
+      }
+
+      // 检查响应体中是否有业务错误码（部分 API HTTP 200 但业务失败）
+      if (result && typeof result === "object" && !Array.isArray(result)) {
+        const respObj = result as Record<string, unknown>;
+        if (respObj.code !== undefined && respObj.code !== 0) {
+          logger.error(
+            { respCode: respObj.code, respMsg: respObj.msg },
+            "[Submitter] API returned business error",
+          );
+          return {
+            success: false,
+            message: String(respObj.msg || respObj.message || "提交失败"),
+            apiResponse: result,
+          };
+        }
       }
 
       logger.info(
