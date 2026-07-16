@@ -698,11 +698,18 @@ export function registerSubmitterHandlers(
 
   ipcMain.handle(
     "search-history-app",
-    async (_event, pkgname: string, useMirror = false) => {
+    async (_event, pkgname: string, baseUrl?: string) => {
       try {
-        const baseUrl = useMirror
-          ? "https://mirrors.sdu.edu.cn/spark-store"
-          : "https://spk-json.spark-app.store";
+        let resolvedBaseUrl = baseUrl || "https://erotica.spark-app.store";
+        // 开发模式下来自 Vite 代理的路径（如 /local_amd64-store），
+        // 主进程的 fetch() 无法解析相对 URL，需要转为实际地址
+        if (resolvedBaseUrl.startsWith("/")) {
+          logger.info(
+            { devPath: resolvedBaseUrl },
+            "[Submitter] Dev proxy path detected, resolving to production URL",
+          );
+          resolvedBaseUrl = "https://erotica.spark-app.store";
+        }
         const storeArchs = [
           "amd64-store",
           "arm64-store",
@@ -716,7 +723,7 @@ export function registerSubmitterHandlers(
         // 为每个架构目录获取各自的分类列表（不同目录可能有不同分类，如 apm-extensions 只在 *-apm 下有）
         const archCategoriesMap = new Map<string, string[]>();
         for (const arch of storeArchs) {
-          const cats = await fetchCategoriesFromCdn(baseUrl, arch);
+          const cats = await fetchCategoriesFromCdn(resolvedBaseUrl, arch);
           archCategoriesMap.set(arch, cats);
         }
 
@@ -726,8 +733,7 @@ export function registerSubmitterHandlers(
         logger.info(
           {
             pkgname,
-            useMirror,
-            baseUrl,
+            baseUrl: resolvedBaseUrl,
             storeArchs,
             archCategoryCounts: Array.from(archCategoriesMap.entries()).map(
               ([a, c]) => ({ arch: a, categoryCount: c.length }),
@@ -741,7 +747,7 @@ export function registerSubmitterHandlers(
         for (const arch of storeArchs) {
           const categories = archCategoriesMap.get(arch) || FALLBACK_CATEGORIES;
           for (const category of categories) {
-            const url = `${baseUrl}/${arch}/${category}/${pkgname}/app.json`;
+            const url = `${resolvedBaseUrl}/${arch}/${category}/${pkgname}/app.json`;
             logger.info(
               { arch, category, url },
               "[Submitter] Starting search request",
@@ -780,7 +786,7 @@ export function registerSubmitterHandlers(
                       "[Submitter] Found matching item",
                     );
 
-                    let iconUrl = json.icons || json.icon || "";
+                    const iconUrl = json.icons || json.icon || "";
                     let imgs = json.imgUrls || json.imgs || json.img_urls || [];
 
                     if (typeof imgs === "string") {
@@ -805,27 +811,6 @@ export function registerSubmitterHandlers(
                       }
                     }
 
-                    if (iconUrl && typeof iconUrl === "string") {
-                      if (useMirror) {
-                        iconUrl = iconUrl.replace(
-                          "spk-json.spark-app.store",
-                          "mirrors.sdu.edu.cn/spark-store",
-                        );
-                      }
-                    }
-
-                    if (Array.isArray(imgs)) {
-                      imgs = imgs.map((img: string) => {
-                        if (useMirror && typeof img === "string") {
-                          return img.replace(
-                            "spk-json.spark-app.store",
-                            "mirrors.sdu.edu.cn/spark-store",
-                          );
-                        }
-                        return img;
-                      });
-                    }
-
                     results.push({
                       id: json.id || json.Id || 0,
                       name: json.name || json.Name || "",
@@ -847,11 +832,24 @@ export function registerSubmitterHandlers(
                       "[Submitter] Added to results",
                     );
                   }
+                } else {
+                  logger.warn(
+                    {
+                      arch,
+                      category,
+                      url,
+                      status: response.status,
+                      statusText: response.statusText,
+                    },
+                    "[Submitter] Non-ok response",
+                  );
                 }
               })
               .catch((error) => {
+                const errMsg =
+                  error instanceof Error ? error.message : String(error);
                 logger.warn(
-                  { arch, category, error },
+                  { arch, category, url, error: errMsg },
                   "[Submitter] Request failed or exception caught",
                 );
               });
@@ -1275,6 +1273,35 @@ export function registerSubmitterHandlers(
               );
               continue;
             }
+          } else if (screenshot.startsWith("data:")) {
+            logger.info(
+              "[Submitter] Screenshot is a Base64 data URL, decoding",
+            );
+            const base64Data = screenshot.split(",")[1];
+            if (!base64Data) {
+              logger.warn("[Submitter] Invalid screenshot data URL, skipping");
+              continue;
+            }
+            const tempDir = fs.mkdtempSync(
+              path.join(os.tmpdir(), "spark-store-submitter-"),
+            );
+            screenshotFilePath = path.join(tempDir, `screen_${i + 1}.png`);
+            try {
+              fs.writeFileSync(
+                screenshotFilePath,
+                Buffer.from(base64Data, "base64"),
+              );
+              logger.info(
+                { screenshotFilePath },
+                "[Submitter] Screenshot decoded from data URL",
+              );
+            } catch (err) {
+              logger.error(
+                { err },
+                "[Submitter] Failed to decode screenshot data URL",
+              );
+              continue;
+            }
           }
 
           if (fs.existsSync(screenshotFilePath)) {
@@ -1313,7 +1340,8 @@ export function registerSubmitterHandlers(
 
             if (
               screenshot.startsWith("http://") ||
-              screenshot.startsWith("https://")
+              screenshot.startsWith("https://") ||
+              screenshot.startsWith("data:")
             ) {
               fs.unlinkSync(screenshotFilePath);
               fs.rmdirSync(path.dirname(screenshotFilePath));

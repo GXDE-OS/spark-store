@@ -384,6 +384,55 @@
           </button>
         </div>
 
+        <!-- 表单校验提示 -->
+        <div
+          v-if="!isFormValid && hasUserStartedFilling"
+          class="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg dark:bg-amber-900/20 dark:border-amber-800"
+        >
+          <p
+            class="text-sm font-medium text-amber-700 dark:text-amber-400 mb-1.5"
+          >
+            请完善以下信息：
+          </p>
+          <ul class="text-xs text-amber-600 dark:text-amber-500 space-y-0.5">
+            <li v-if="!formData.name.trim()">
+              <i class="fas fa-times-circle mr-1"></i> 应用名称
+            </li>
+            <li v-if="!formData.pkgname.trim()">
+              <i class="fas fa-times-circle mr-1"></i> 包名
+            </li>
+            <li v-if="!formData.version.trim()">
+              <i class="fas fa-times-circle mr-1"></i> 版本号
+            </li>
+            <li v-if="!formData.category.trim()">
+              <i class="fas fa-times-circle mr-1"></i> 分类
+            </li>
+            <li v-if="!formData.debFilePath">
+              <i class="fas fa-times-circle mr-1"></i> 安装包
+            </li>
+            <li v-if="!formData.remark.trim()">
+              <i class="fas fa-times-circle mr-1"></i> 测试情况
+            </li>
+            <li v-if="!formData.website.trim()">
+              <i class="fas fa-times-circle mr-1"></i> 官网地址
+            </li>
+            <li
+              v-if="
+                formData.website.trim() && !isValidUrl(formData.website.trim())
+              "
+            >
+              <i class="fas fa-times-circle mr-1"></i> 官网地址格式不正确（需以
+              http:// 或 https:// 开头）
+            </li>
+            <li v-if="!formData.tags.trim()">
+              <i class="fas fa-times-circle mr-1"></i> 标签
+            </li>
+            <li v-if="formData.screenshots.length === 0">
+              <i class="fas fa-times-circle mr-1"></i> 至少上传一张截图
+            </li>
+          </ul>
+        </div>
+
         <div
           v-if="isSubmitting || isPackaging"
           class="p-4 bg-blue-50 border border-blue-200 rounded-lg dark:bg-blue-900/20 dark:border-blue-800"
@@ -652,6 +701,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, watch } from "vue";
+import { APM_STORE_BASE_URL } from "@/global/storeConfig";
 
 interface HistoryArchInfo {
   id: number;
@@ -755,14 +805,55 @@ const tagsList = ref<Tag[]>([]);
 const selectedTags = ref<Tag[]>([]);
 const selectedTagValue = ref("");
 
+const isValidUrl = (url: string): boolean => {
+  if (!url.trim()) return false;
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === "http:" || parsed.protocol === "https:";
+  } catch {
+    return false;
+  }
+};
+
 const isFormValid = computed(() => {
-  return (
+  const hasRequiredFields =
     formData.name.trim() &&
     formData.pkgname.trim() &&
     formData.version.trim() &&
     formData.category.trim() &&
     formData.debFilePath &&
-    formData.remark.trim()
+    formData.remark.trim() &&
+    formData.website.trim() &&
+    formData.tags.trim();
+
+  if (!hasRequiredFields) return false;
+
+  // 官网：必须为有效的 http/https URL
+  if (!isValidUrl(formData.website.trim())) {
+    return false;
+  }
+
+  // 截图：至少一张，且每张都是有效的 data URL 或 http/https URL
+  if (formData.screenshots.length === 0) return false;
+  for (const screenshot of formData.screenshots) {
+    if (
+      !screenshot.startsWith("data:") &&
+      !screenshot.startsWith("http://") &&
+      !screenshot.startsWith("https://")
+    ) {
+      return false;
+    }
+  }
+
+  return true;
+});
+
+const hasUserStartedFilling = computed(() => {
+  return (
+    formData.name.trim() ||
+    formData.pkgname.trim() ||
+    formData.debFilePath ||
+    formData.screenshots.length > 0
   );
 });
 
@@ -952,8 +1043,6 @@ const selectDebFile = async () => {
   }
 };
 
-const useMirror = ref(true);
-
 const searchHistoryApp = async () => {
   console.log(
     "[Submitter] ============== SEARCHING HISTORY INFO ==============",
@@ -962,7 +1051,6 @@ const searchHistoryApp = async () => {
     "[Submitter] pkgname is not empty, searching history with:",
     formData.pkgname,
   );
-  console.log("[Submitter] Using mirror:", useMirror.value);
 
   console.log(
     "[Submitter] Calling IPC: search-history-app with pkgname:",
@@ -971,7 +1059,7 @@ const searchHistoryApp = async () => {
   const historyResult = await window.ipcRenderer.invoke(
     "search-history-app",
     formData.pkgname,
-    useMirror.value,
+    APM_STORE_BASE_URL,
   );
   console.log(
     "[Submitter] Received history search response:",
@@ -1079,6 +1167,9 @@ const searchHistoryApp = async () => {
         historyResult?.message,
       );
     }
+    // 未找到历史记录时清空旧数据，避免上一个应用的残留
+    availableArchs.value = [];
+    showArchDialog.value = false;
   }
 };
 
@@ -1261,9 +1352,12 @@ const selectArch = async (arch: HistoryArchInfo) => {
     console.log("[Submitter] Tags loaded from history:", selectedTags.value);
   }
 
-  const baseUrl = useMirror.value
-    ? `https://mirrors.sdu.edu.cn/spark-store/${arch.store}/${arch.category}/${arch.pkgname}`
-    : `https://spk-json.spark-app.store/${arch.store}/${arch.category}/${arch.pkgname}`;
+  // 开发模式下来自 Vite 代理的路径（如 /local_amd64-store），
+  // 后端 fetch/fs 无法处理，需要解析为实际 CDN 地址
+  const resolvedBaseUrl = APM_STORE_BASE_URL.startsWith("/")
+    ? "https://erotica.spark-app.store"
+    : APM_STORE_BASE_URL;
+  const baseUrl = `${resolvedBaseUrl}/${arch.store}/${arch.category}/${arch.pkgname}`;
 
   console.log(
     "[Submitter] Building icon and screenshot URLs with baseUrl:",
@@ -1391,6 +1485,12 @@ const resetForm = () => {
   uploadStage.value = "";
   uploadStageMessage.value = "";
   uploadStages.value = [];
+  selectedTags.value = [];
+  selectedTagValue.value = "";
+  availableArchs.value = [];
+  showArchDialog.value = false;
+  currentDebArch.value = "";
+  isSearchingHistory.value = false;
 };
 
 const closeSubmitSuccessModal = () => {
