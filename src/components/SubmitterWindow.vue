@@ -214,7 +214,14 @@
             class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2"
             >截图（最多5张）</label
           >
-          <div class="grid grid-cols-5 gap-3">
+          <p class="mb-2 text-xs text-slate-500 dark:text-slate-400">
+            可直接 Ctrl+V 粘贴截图
+          </p>
+          <div
+            tabindex="0"
+            class="grid grid-cols-5 gap-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            @paste="handleScreenshotPaste"
+          >
             <div
               v-for="(screenshot, index) in formData.screenshots"
               :key="index"
@@ -1429,28 +1436,42 @@ const addScreenshot = () => {
   screenshotInput.value?.click();
 };
 
+const importScreenshots = (files: File[]) => {
+  for (const file of files) {
+    if (formData.screenshots.length >= 5) break;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (
+        formData.screenshots.length < 5 &&
+        typeof reader.result === "string"
+      ) {
+        formData.screenshots.push(reader.result);
+      }
+    };
+    reader.readAsDataURL(file);
+  }
+};
+
 const handleScreenshotSelect = (event: Event) => {
   const target = event.target as HTMLInputElement;
-  const files = target.files;
-  if (files) {
-    for (let i = 0; i < files.length && formData.screenshots.length < 5; i++) {
-      const file = files[i];
-      if (
-        file.name.endsWith(".png") ||
-        file.name.endsWith(".jpg") ||
-        file.name.endsWith(".jpeg")
-      ) {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          if (formData.screenshots.length < 5) {
-            formData.screenshots.push(e.target?.result as string);
-          }
-        };
-        reader.readAsDataURL(file);
-      }
-    }
-  }
+  const files = Array.from(target.files ?? []).filter((file) =>
+    /\.(png|jpe?g)$/i.test(file.name),
+  );
+  importScreenshots(files);
   target.value = "";
+};
+
+const handleScreenshotPaste = (event: ClipboardEvent) => {
+  const files = Array.from(event.clipboardData?.items ?? [])
+    .filter((item) => item.type.startsWith("image/"))
+    .map((item) => item.getAsFile())
+    .filter((file): file is File => file !== null);
+
+  if (files.length > 0) {
+    event.preventDefault();
+    importScreenshots(files);
+  }
 };
 
 const removeScreenshot = (index: number) => {
