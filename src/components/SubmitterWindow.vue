@@ -17,7 +17,7 @@
         <div class="flex items-center gap-2">
           <button
             type="button"
-            class="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-slate-800"
+            class="submitter-close-button inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-slate-800"
             @click="openSubmissionQueue"
           >
             <i class="fas fa-list"></i>
@@ -148,6 +148,19 @@
         <div>
           <label
             class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2"
+            >官网地址</label
+          >
+          <input
+            v-model="formData.website"
+            type="url"
+            placeholder="https://example.com"
+            class="w-full px-4 py-2.5 rounded-lg border border-slate-200 bg-white dark:bg-slate-800 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          />
+        </div>
+
+        <div>
+          <label
+            class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2"
             >贡献者</label
           >
           <input
@@ -167,19 +180,6 @@
             v-model="formData.mail"
             type="email"
             placeholder="your@email.com"
-            class="w-full px-4 py-2.5 rounded-lg border border-slate-200 bg-white dark:bg-slate-800 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          />
-        </div>
-
-        <div>
-          <label
-            class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2"
-            >官网地址</label
-          >
-          <input
-            v-model="formData.website"
-            type="url"
-            placeholder="https://example.com"
             class="w-full px-4 py-2.5 rounded-lg border border-slate-200 bg-white dark:bg-slate-800 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
         </div>
@@ -225,12 +225,16 @@
             >截图（最多5张）</label
           >
           <p class="mb-2 text-xs text-slate-500 dark:text-slate-400">
-            可直接 Ctrl+V 粘贴截图
+            可点击添加、拖放或直接 Ctrl+V 粘贴 PNG 截图
           </p>
           <div
             tabindex="0"
-            class="grid grid-cols-5 gap-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            class="grid grid-cols-5 gap-3 rounded-lg border-2 border-dashed border-transparent p-2 transition-colors hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
             @paste="handleScreenshotPaste"
+            @drop="handleScreenshotDrop"
+            @dragover.prevent
+            @dragenter.prevent
+            @dragleave.prevent
           >
             <div
               v-for="(screenshot, index) in formData.screenshots"
@@ -257,11 +261,14 @@
           <input
             ref="screenshotInput"
             type="file"
-            accept=".png,.jpg,.jpeg"
+            accept=".png"
             multiple
             class="hidden"
             @change="handleScreenshotSelect"
           />
+          <p v-if="mediaError" class="mt-2 text-sm text-red-600 dark:text-red-400">
+            {{ mediaError }}
+          </p>
         </div>
 
         <div>
@@ -546,7 +553,7 @@
               <button
                 type="button"
                 class="flex-1 px-4 py-2 rounded-lg border border-slate-200 bg-white text-slate-700 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
-                @click="resetFormAndClose"
+                @click="continueSubmission"
               >
                 继续投递
               </button>
@@ -630,8 +637,20 @@
               class="w-full p-4 rounded-lg border-2 border-slate-200 dark:border-slate-700 hover:border-emerald-500 transition-colors text-left"
               @click="selectPackArch(arch)"
             >
-              <div class="font-medium text-slate-900 dark:text-slate-100">
-                {{ getArchDisplayName(arch.store) }}
+              <div class="flex items-center gap-2">
+                <span
+                  class="rounded-full px-2 py-0.5 text-xs font-medium"
+                  :class="
+                    isSparkHistoryStore(arch.store)
+                      ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
+                      : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'
+                  "
+                >
+                  {{ isSparkHistoryStore(arch.store) ? "Spark" : "APM" }}
+                </span>
+                <span class="font-medium text-slate-900 dark:text-slate-100">
+                  {{ getArchDisplayName(arch.store) }}
+                </span>
               </div>
               <div class="text-sm text-slate-500 dark:text-slate-400 mt-1">
                 输出: {{ formData.pkgname }}-{{ arch.store }}.tar.gz
@@ -686,14 +705,23 @@
 
           <div class="space-y-3 mb-6">
             <button
-              v-for="arch in availableArchs"
+              v-for="arch in sortedArchs"
               :key="arch.store"
               type="button"
-              class="w-full p-4 rounded-lg border-2 border-slate-200 dark:border-slate-700 hover:border-blue-500 transition-colors text-left"
+              class="w-full p-4 rounded-lg border-2 transition-colors text-left"
+              :class="archOriginBorderClass(arch.store)"
               @click="selectArch(arch)"
             >
-              <div class="font-medium text-slate-900 dark:text-slate-100">
-                {{ getArchDisplayName(arch.store) }}
+              <div class="flex items-center gap-2">
+                <span class="font-medium text-slate-900 dark:text-slate-100">
+                  {{ getArchDisplayName(arch.store) }}
+                </span>
+                <span
+                  class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium"
+                  :class="getOriginBadgeClass(arch.store)"
+                >
+                  {{ getOriginLabel(arch.store) }}
+                </span>
               </div>
               <div class="text-sm text-slate-500 dark:text-slate-400 mt-1">
                 版本: {{ arch.version }} | 分类: {{ arch.category }}
@@ -777,6 +805,7 @@ const isSearchingHistory = ref(false);
 const showArchDialog = ref(false);
 const availableArchs = ref<HistoryArchInfo[]>([]);
 const currentDebArch = ref("");
+const mediaError = ref("");
 const iconPreview = ref("");
 const iconFileName = ref("");
 
@@ -874,13 +903,69 @@ const hasUserStartedFilling = computed(() => {
   );
 });
 
-const getArchDisplayName = (store: string): string => {
-  const archMap: Record<string, string> = {
-    store: "AMD64 (x86_64)",
-    "aarch64-store": "ARM64 (aarch64)",
-    "loong64-store": "LoongArch64",
+const getHistoryArch = (
+  store: string,
+): "amd64" | "arm64" | "loong64" | "other" => {
+  if (store === "store" || store.startsWith("amd64-")) return "amd64";
+  if (store === "aarch64-store" || store.startsWith("arm64-")) return "arm64";
+  if (store === "loong64-store" || store.startsWith("loong64-")) return "loong64";
+  return "other";
+};
+
+const isSparkHistoryStore = (store: string): boolean => {
+  // 兼容新格式（amd64-store / arm64-store / loong64-store / amd64-apm ...）
+  // 与旧格式（store / aarch64-store / loong64-store）
+  return store === "store" || store.endsWith("-store");
+};
+
+const sortHistoryArchs = (archs: HistoryArchInfo[]): HistoryArchInfo[] => {
+  const archOrder: Record<ReturnType<typeof getHistoryArch>, number> = {
+    amd64: 0,
+    arm64: 1,
+    loong64: 2,
+    other: 3,
   };
-  return archMap[store] || store;
+
+  return [...archs].sort((a, b) => {
+    const sourceOrder =
+      Number(isSparkHistoryStore(b.store)) -
+      Number(isSparkHistoryStore(a.store));
+    if (sourceOrder !== 0) return sourceOrder;
+    return (
+      archOrder[getHistoryArch(a.store)] - archOrder[getHistoryArch(b.store)]
+    );
+  });
+};
+
+const getArchDisplayName = (store: string): string => {
+  const arch = getHistoryArch(store);
+  const archMap: Record<typeof arch, string> = {
+    amd64: "AMD64 (x86_64)",
+    arm64: "ARM64 (aarch64)",
+    loong64: "LoongArch64",
+    other: store,
+  };
+  return archMap[arch];
+};
+
+const sortedArchs = computed(() => sortHistoryArchs(availableArchs.value));
+
+const getOriginLabel = (store: string): string => {
+  return isSparkHistoryStore(store) ? "Spark" : "APM";
+};
+
+const getOriginBadgeClass = (store: string): string => {
+  if (isSparkHistoryStore(store)) {
+    return "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400";
+  }
+  return "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400";
+};
+
+const archOriginBorderClass = (store: string): string => {
+  if (isSparkHistoryStore(store)) {
+    return "border-slate-200 dark:border-slate-700 hover:border-blue-500";
+  }
+  return "border-slate-200 dark:border-slate-700 hover:border-amber-400";
 };
 
 const loadCategoriesPromise = ref<Promise<void> | null>(null);
@@ -1105,15 +1190,7 @@ const searchHistoryApp = async () => {
     console.log("[Submitter] availableArchs before:", availableArchs.value);
     console.log("[Submitter] showArchDialog before:", showArchDialog.value);
 
-    // 按 amd64 → arm64 → loong64 顺序排序
-    const archOrder: Record<string, number> = {
-      store: 0,
-      "aarch64-store": 1,
-      "loong64-store": 2,
-    };
-    availableArchs.value = [...historyResult.data].sort(
-      (a, b) => (archOrder[a.store] ?? 99) - (archOrder[b.store] ?? 99),
-    );
+    availableArchs.value = sortHistoryArchs(historyResult.data as HistoryArchInfo[]);
     console.log("[Submitter] availableArchs after:", availableArchs.value);
     console.log(
       "[Submitter] availableArchs length:",
@@ -1126,7 +1203,7 @@ const searchHistoryApp = async () => {
     }
 
     // 从第一条历史记录预填名称和分类
-    const firstArch = historyResult.data[0];
+    const firstArch = availableArchs.value[0];
     if (firstArch) {
       formData.name = firstArch.name || formData.name;
       formData.category = firstArch.category || formData.category;
@@ -1197,6 +1274,15 @@ const searchHistoryApp = async () => {
 const parseDebFileAndSearchHistory = async (debPath: string) => {
   isParsingDeb.value = true;
   debParseError.value = "";
+  availableArchs.value = [];
+  showArchDialog.value = false;
+  formData.pkgname = "";
+  formData.version = "";
+  formData.author = "";
+  formData.contributor = "";
+  formData.website = "";
+  formData.description = "";
+  currentDebArch.value = "";
 
   try {
     console.log(
@@ -1308,13 +1394,18 @@ const handleDrop = async (event: DragEvent) => {
     if (file.name.endsWith(".deb")) {
       console.log("[Submitter] File is a deb package");
 
-      const textUriList = event.dataTransfer?.getData("text/uri-list");
-      console.log("[Submitter] text/uri-list:", textUriList);
-
-      const textPlain = event.dataTransfer?.getData("text/plain");
-      console.log("[Submitter] text/plain:", textPlain);
-
-      const filePath = file.path || textUriList || textPlain;
+      // 在 contextIsolation 环境下，File.path 不可用
+      // 使用 Electron 的 webUtils.getPathForFile() 获取真实文件系统路径
+      let filePath: string;
+      try {
+        filePath = window.electronUtils.getPathForFile(file);
+        console.log("[Submitter] File path from electronUtils:", filePath);
+      } catch {
+        console.warn("[Submitter] electronUtils.getPathForFile failed, trying fallback");
+        const textUriList = event.dataTransfer?.getData("text/uri-list");
+        const textPlain = event.dataTransfer?.getData("text/plain");
+        filePath = textUriList || textPlain || "";
+      }
       console.log("[Submitter] Final filePath:", filePath);
 
       if (filePath) {
@@ -1411,38 +1502,47 @@ const selectIconFile = () => {
   iconFileInput.value?.click();
 };
 
+const isPngFile = (file: File): boolean => {
+  return (
+    file.type === "image/png" ||
+    (file.type === "" && /\.png$/i.test(file.name))
+  );
+};
+
+const readIconFile = (file: File): void => {
+  iconFileName.value = file.name;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const dataUrl = e.target?.result as string;
+    formData.iconPath = dataUrl;
+    iconPreview.value = dataUrl;
+  };
+  reader.readAsDataURL(file);
+};
+
 const handleIconFileSelect = (event: Event) => {
   const target = event.target as HTMLInputElement;
   const file = target.files?.[0];
   if (file) {
-    iconFileName.value = file.name;
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const dataUrl = e.target?.result as string;
-      formData.iconPath = dataUrl;
-      iconPreview.value = dataUrl;
-    };
-    reader.readAsDataURL(file);
+    if (isPngFile(file)) {
+      mediaError.value = "";
+      readIconFile(file);
+    } else {
+      mediaError.value = "应用图标仅支持 PNG 格式。";
+    }
   }
+  target.value = "";
 };
 
 const handleIconDrop = (event: DragEvent) => {
   event.preventDefault();
   const file = event.dataTransfer?.files?.[0];
-  if (
-    file &&
-    (file.name.endsWith(".png") ||
-      file.name.endsWith(".jpg") ||
-      file.name.endsWith(".jpeg"))
-  ) {
-    iconFileName.value = file.name;
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const dataUrl = e.target?.result as string;
-      formData.iconPath = dataUrl;
-      iconPreview.value = dataUrl;
-    };
-    reader.readAsDataURL(file);
+  if (!file) return;
+  if (isPngFile(file)) {
+    mediaError.value = "";
+    readIconFile(file);
+  } else {
+    mediaError.value = "应用图标仅支持 PNG 格式。";
   }
 };
 
@@ -1451,7 +1551,14 @@ const addScreenshot = () => {
 };
 
 const importScreenshots = (files: File[]) => {
-  for (const file of files) {
+  const pngFiles = files.filter(isPngFile);
+  if (pngFiles.length !== files.length) {
+    mediaError.value = "截图仅支持 PNG 格式。";
+  } else if (pngFiles.length > 0) {
+    mediaError.value = "";
+  }
+
+  for (const file of pngFiles) {
     if (formData.screenshots.length >= 5) break;
 
     const reader = new FileReader();
@@ -1469,16 +1576,18 @@ const importScreenshots = (files: File[]) => {
 
 const handleScreenshotSelect = (event: Event) => {
   const target = event.target as HTMLInputElement;
-  const files = Array.from(target.files ?? []).filter((file) =>
-    /\.(png|jpe?g)$/i.test(file.name),
-  );
-  importScreenshots(files);
+  importScreenshots(Array.from(target.files ?? []));
   target.value = "";
+};
+
+const handleScreenshotDrop = (event: DragEvent) => {
+  event.preventDefault();
+  importScreenshots(Array.from(event.dataTransfer?.files ?? []));
 };
 
 const handleScreenshotPaste = (event: ClipboardEvent) => {
   const files = Array.from(event.clipboardData?.items ?? [])
-    .filter((item) => item.type.startsWith("image/"))
+    .filter((item) => item.kind === "file")
     .map((item) => item.getAsFile())
     .filter((file): file is File => file !== null);
 
@@ -1511,6 +1620,7 @@ const resetForm = () => {
   submitSuccess.value = false;
   submitError.value = "";
   debParseError.value = "";
+  mediaError.value = "";
   packageSuccess.value = false;
   packageError.value = "";
   packageResult.value = null;
@@ -1528,14 +1638,29 @@ const resetForm = () => {
   isSearchingHistory.value = false;
 };
 
-const closeSubmitSuccessModal = () => {
+const clearSubmitTransientState = (): void => {
   showSubmitSuccessModal.value = false;
-  resetForm();
+  submitSuccess.value = false;
+  isSubmitting.value = false;
+  uploadProgress.value = 0;
+  uploadStage.value = "";
+  uploadStageMessage.value = "";
+  uploadStages.value = [];
 };
 
-const resetFormAndClose = () => {
-  showSubmitSuccessModal.value = false;
-  resetForm();
+const closeSubmitSuccessModal = () => {
+  clearSubmitTransientState();
+};
+
+const continueSubmission = () => {
+  const shouldClear = window.confirm(
+    "是否清空当前表单内容后继续投递？选择“取消”将保留已填写内容。",
+  );
+  if (shouldClear) {
+    resetForm();
+  } else {
+    clearSubmitTransientState();
+  }
 };
 
 const submitForm = async () => {

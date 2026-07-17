@@ -1,4 +1,9 @@
-import { ipcRenderer, contextBridge, type IpcRendererEvent } from "electron";
+import {
+  ipcRenderer,
+  contextBridge,
+  webUtils,
+  type IpcRendererEvent,
+} from "electron";
 
 type StoreFilter = "spark" | "apm" | "both";
 
@@ -95,6 +100,10 @@ contextBridge.exposeInMainWorld("apm_store", {
       return arch;
     }
   })(),
+});
+
+contextBridge.exposeInMainWorld("electronUtils", {
+  getPathForFile: (file: File): string => webUtils.getPathForFile(file),
 });
 
 contextBridge.exposeInMainWorld("windowControls", {

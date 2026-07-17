@@ -22,6 +22,9 @@ declare global {
     };
     windowControls: WindowControlBridge;
     updateCenter: UpdateCenterBridge;
+    electronUtils: {
+      getPathForFile: (file: File) => string;
+    };
   }
 }
 
