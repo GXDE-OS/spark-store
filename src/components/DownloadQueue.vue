@@ -1,6 +1,12 @@
 <template>
   <div
-    class="fixed inset-x-4 bottom-4 z-40 rounded-3xl border border-slate-200/70 bg-white shadow-2xl dark:border-slate-800/70 dark:bg-slate-900 sm:left-auto sm:right-6 sm:w-96"
+    ref="queueRef"
+    class="fixed inset-x-4 bottom-4 z-40 rounded-3xl border border-slate-200/70 bg-white shadow-2xl transition-all duration-200 dark:border-slate-800/70 dark:bg-slate-900 sm:left-auto sm:right-6 sm:w-96"
+    :class="
+      isHidden
+        ? 'pointer-events-none translate-y-[calc(100%+1rem)] opacity-0'
+        : 'translate-y-0 opacity-100'
+    "
   >
     <div
       class="flex items-center justify-between px-5 py-4"
@@ -130,7 +136,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from "vue";
+import { computed, onMounted, onUnmounted, ref } from "vue";
 import type { DownloadItem } from "../global/typedefinition";
 
 const props = defineProps<{
@@ -147,6 +153,30 @@ const emit = defineEmits<{
 }>();
 
 const isExpanded = ref(false);
+const isHidden = ref(false);
+const queueRef = ref<HTMLElement | null>(null);
+
+const onWheel = (event: WheelEvent) => {
+  if (queueRef.value?.contains(event.target as Node) || event.deltaY === 0) {
+    return;
+  }
+
+  if (event.deltaY > 0) {
+    isExpanded.value = false;
+    isHidden.value = true;
+    return;
+  }
+
+  isHidden.value = false;
+};
+
+onMounted(() => {
+  document.addEventListener("wheel", onWheel, { passive: true, capture: true });
+});
+
+onUnmounted(() => {
+  document.removeEventListener("wheel", onWheel, { capture: true });
+});
 
 const completedDownloads = computed(() => {
   return props.downloads.filter((d) => d.status === "completed").length;

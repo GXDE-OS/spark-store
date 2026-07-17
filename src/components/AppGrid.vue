@@ -18,10 +18,7 @@
   </div>
 
   <!-- 应用数量较少时，使用普通网格（带滚动） -->
-  <div
-    v-else-if="!loading && apps.length <= 50"
-    class="non-virtual-scroller"
-  >
+  <div v-else-if="!loading && apps.length <= 50" class="non-virtual-scroller">
     <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
       <AppCard
         v-for="(app, index) in apps"
@@ -176,14 +173,14 @@ const gridRows = computed(() => {
 
 <style scoped>
 .scroller {
-  height: calc(100vh - 140px); /* 调整高度 */
+  height: 100%;
   overflow-y: auto;
   padding: 0; /* 移除内边距 */
   margin: -24px -16px; /* 抵消父容器的 px-4 py-6 */
 }
 
 .non-virtual-scroller {
-  height: calc(100vh - 140px);
+  height: 100%;
   overflow-y: auto;
 }
 

@@ -45,9 +45,9 @@
         />
       </aside>
 
-      <main class="h-full min-h-0 flex-1">
+      <main class="flex h-full min-h-0 flex-1 flex-col">
         <div
-          class="sticky top-10 z-30 border-b border-slate-200/70 bg-slate-50 px-4 py-4 lg:px-10 dark:border-slate-800/70 dark:bg-slate-950"
+          class="sticky top-10 z-30 shrink-0 border-b border-slate-200/70 bg-slate-50 px-4 py-4 lg:px-10 dark:border-slate-800/70 dark:bg-slate-950"
         >
           <AppHeader
             :search-query="searchQuery"
@@ -67,12 +67,13 @@
             activeTab !== 'home' &&
             Object.keys(displayCategories).length > 0
           "
+          class="shrink-0"
           :categories="displayCategories"
           :selected-category="selectedCategory"
           :category-counts="categoryCounts"
           @select-category="selectSubCategory"
         />
-        <div class="px-4 py-6 lg:px-10">
+        <div class="flex min-h-0 flex-1 flex-col px-4 py-6 lg:px-10">
           <FavoriteFolderManager
             v-if="currentView === 'favorites'"
             :folders="favoriteFolders"
@@ -87,9 +88,7 @@
             @open-detail="openDetail"
           />
           <template v-else-if="activeTab === 'home'">
-            <div
-              class="max-h-[calc(100vh-8rem)] overflow-y-auto pr-2 scrollbar-nowidth"
-            >
+            <div class="h-full overflow-y-auto pr-2 scrollbar-nowidth">
               <HomeView
                 :links="homeLinks"
                 :loading="homeLoading"
@@ -99,14 +98,16 @@
             </div>
           </template>
           <template v-else>
-            <AppGrid
-              :apps="filteredApps"
-              :loading="effectiveLoading"
-              :scroll-key="activeTab + '-' + selectedCategory"
-              :store-filter="storeFilter"
-              :show-origin="storeFilter === 'both' && !isHomeListTab"
-              @open-detail="handleAppCardOpenDetail"
-            />
+            <div class="min-h-0 flex-1">
+              <AppGrid
+                :apps="filteredApps"
+                :loading="effectiveLoading"
+                :scroll-key="activeTab + '-' + selectedCategory"
+                :store-filter="storeFilter"
+                :show-origin="storeFilter === 'both' && !isHomeListTab"
+                @open-detail="handleAppCardOpenDetail"
+              />
+            </div>
           </template>
         </div>
       </main>
