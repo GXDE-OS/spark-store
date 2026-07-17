@@ -972,6 +972,24 @@ export function registerSubmitterHandlers(
     }
   });
 
+  ipcMain.handle("get-git-name", async () => {
+    try {
+      const { exec } = await import("node:child_process");
+      const util = await import("util");
+      const execAsync = util.promisify(exec);
+      const { stdout } = await execAsync("git config user.name");
+      const name = stdout.trim();
+      logger.info({ name }, "[Submitter] Git name retrieved");
+      return { success: true, data: name || "" };
+    } catch (err) {
+      logger.warn(
+        { err },
+        "[Submitter] Failed to get git name, not a git repo or git not installed",
+      );
+      return { success: false, data: "" };
+    }
+  });
+
   ipcMain.handle("get-tags-list", async () => {
     try {
       const apiUrl = "https://upload.deepinos.org.cn/api/index/get_tags_list";

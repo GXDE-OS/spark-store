@@ -1728,15 +1728,43 @@ const closeWindow = () => {
 
 import { onMounted, nextTick } from "vue";
 
-const getGitEmail = async () => {
+const getGitInfo = async () => {
   try {
-    const result = await window.ipcRenderer.invoke("get-git-email");
-    if (result?.success && result.data) {
-      formData.mail = result.data;
-      console.log("[Submitter] Git email auto-filled:", result.data);
+    const [nameResult, emailResult] = await Promise.all([
+      window.ipcRenderer.invoke("get-git-name"),
+      window.ipcRenderer.invoke("get-git-email"),
+    ]);
+
+    let gitName = "";
+    let gitEmail = "";
+
+    if (nameResult?.success && nameResult.data) {
+      gitName = nameResult.data;
+      console.log("[Submitter] Git name auto-filled:", gitName);
+    }
+
+    if (emailResult?.success && emailResult.data) {
+      gitEmail = emailResult.data;
+      console.log("[Submitter] Git email auto-filled:", gitEmail);
+    }
+
+    // 将 git name 和 email 合并填入 contributor 字段，格式: Name <email>
+    if (gitName || gitEmail) {
+      if (gitName && gitEmail) {
+        formData.contributor = `${gitName} <${gitEmail}>`;
+      } else if (gitName) {
+        formData.contributor = gitName;
+      } else if (gitEmail) {
+        formData.contributor = gitEmail;
+      }
+    }
+
+    // 单独填入邮箱
+    if (gitEmail) {
+      formData.mail = gitEmail;
     }
   } catch (err) {
-    console.warn("[Submitter] Failed to get git email:", err);
+    console.warn("[Submitter] Failed to get git info:", err);
   }
 };
 
@@ -1744,8 +1772,8 @@ onMounted(async () => {
   console.log("[Submitter] Component mounted, loading categories and tags");
   // 先等待分类列表加载完成，避免后续竞态
   await Promise.all([loadCategoriesList(), loadTagsList()]);
-  // 尝试从 git 配置读取邮箱
-  await getGitEmail();
+  // 尝试从 git 配置读取 name 和 email，填入 contributor 和 mail
+  await getGitInfo();
 });
 </script>
 
