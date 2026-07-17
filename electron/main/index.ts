@@ -256,8 +256,22 @@ const requestApplicationExit = (): void => {
   app.quit();
 };
 
+const showAndFocusMainWindow = (): void => {
+  if (!win || win.isDestroyed()) {
+    createWindow();
+    return;
+  }
+
+  if (win.isMinimized()) {
+    win.restore();
+  }
+  win.show();
+  win.setSkipTaskbar(false);
+  win.focus();
+};
+
 async function createWindow() {
-  win = new BrowserWindow({
+  const mainWindow = new BrowserWindow({
     title: "星火应用商店",
     width: 1366,
     height: 768,
@@ -274,30 +288,40 @@ async function createWindow() {
       // contextIsolation: false,
     },
   });
+  win = mainWindow;
 
   if (VITE_DEV_SERVER_URL) {
     // #298
-    win.loadURL(VITE_DEV_SERVER_URL);
+    mainWindow.loadURL(VITE_DEV_SERVER_URL);
     // Open devTool if the app is not packaged
-    win.webContents.openDevTools({ mode: "detach" });
+    mainWindow.webContents.openDevTools({ mode: "detach" });
   } else {
-    win.loadFile(indexHtml);
+    mainWindow.loadFile(indexHtml);
   }
 
   // Test actively push message to the Electron-Renderer
-  win.webContents.on("did-finish-load", () => {
-    win?.webContents.send("main-process-message", new Date().toLocaleString());
+  mainWindow.webContents.on("did-finish-load", () => {
+    mainWindow.webContents.send(
+      "main-process-message",
+      new Date().toLocaleString(),
+    );
     logger.info("Renderer process is ready.");
   });
 
   // Make all links open with the browser, not with the application
-  win.webContents.setWindowOpenHandler(({ url }) => {
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     if (url.startsWith("https:")) shell.openExternal(url);
     return { action: "deny" };
   });
   // win.webContents.on('will-navigate', (event, url) => { }) #344
 
-  win.on("close", (event) => {
+  mainWindow.on("closed", () => {
+    if (win === mainWindow) {
+      win = null;
+    }
+  });
+
+  mainWindow.on("close", (event) => {
     if (allowAppExit) {
       return;
     }
@@ -476,20 +500,11 @@ app.on("window-all-closed", () => {
 });
 
 app.on("second-instance", () => {
-  if (win) {
-    // Focus on the main window if the user tried to open another
-    if (win.isMinimized()) win.restore();
-    win.focus();
-  }
+  showAndFocusMainWindow();
 });
 
 app.on("activate", () => {
-  const allWindows = BrowserWindow.getAllWindows();
-  if (allWindows.length) {
-    allWindows[0].focus();
-  } else {
-    createWindow();
-  }
+  showAndFocusMainWindow();
 });
 
 app.on("will-quit", () => {
@@ -542,7 +557,7 @@ app.whenReady().then(() => {
     {
       label: "显示主界面",
       click: () => {
-        win.show();
+        showAndFocusMainWindow();
       },
     },
     {
@@ -557,12 +572,11 @@ app.whenReady().then(() => {
   // 双击触发
   tray.on("click", () => {
     // 双击通知区图标实现应用的显示或隐藏
-    if (win.isVisible()) {
+    if (win && !win.isDestroyed() && win.isVisible()) {
       win.hide();
       win.setSkipTaskbar(true);
     } else {
-      win.show();
-      win.setSkipTaskbar(false);
+      showAndFocusMainWindow();
     }
   });
 });

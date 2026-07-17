@@ -3,7 +3,7 @@
     class="h-screen overflow-y-auto bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100"
   >
     <div
-      class="sticky top-0 z-30 border-b border-slate-200/70 bg-white px-4 py-3 dark:border-slate-800/70 dark:bg-slate-900"
+      class="submitter-titlebar sticky top-0 z-30 border-b border-slate-200/70 bg-white px-4 py-3 dark:border-slate-800/70 dark:bg-slate-900"
     >
       <div class="flex items-center justify-between">
         <div class="flex items-center gap-3">
@@ -16,7 +16,7 @@
         </div>
         <button
           type="button"
-          class="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+          class="submitter-close-button inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
           @click="closeWindow"
         >
           <i class="fas fa-times"></i>
@@ -1734,3 +1734,13 @@ onMounted(async () => {
   await getGitEmail();
 });
 </script>
+
+<style scoped>
+.submitter-titlebar {
+  -webkit-app-region: drag;
+}
+
+.submitter-close-button {
+  -webkit-app-region: no-drag;
+}
+</style>
