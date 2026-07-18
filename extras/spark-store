@@ -29,11 +29,14 @@ if grep -q "ID=aosc" /etc/os-release; then
     ARGS="$ARGS --no-spark"
 fi
 
-# 检查龙芯架构，添加 --disable-gpu
+# 检查龙GPU，添加 --disable-gpu
 ARCH=$(uname -m)
 if [ "$ARCH" = "loongarch64" ] || [ "$ARCH" = "loong64" ]; then
-    echo "检测到龙芯架构 ($ARCH)"
-    ARGS="$ARGS --disable-gpu"
+    is_loonggpu=$(lspci -s $(basename $(readlink $(grep -l connected /sys/class/drm/card*/*/status 2>/dev/null | head -1 | grep -o 'card[0-9]*' | xargs -I{} echo /sys/class/drm/{}/device))) | grep -qi loongson && echo "Found" || echo "NotFound")
+    if [ "$is_loonggpu" = "Found" ]; then
+        echo "检测到龙GPU"
+        ARGS="$ARGS --disable-gpu"
+    fi
 fi
 
 # 注意：已移除原先针对 arm64 + wayland 添加 --disable-gpu 的逻辑，
