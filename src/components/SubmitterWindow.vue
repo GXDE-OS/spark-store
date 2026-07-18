@@ -266,7 +266,10 @@
             class="hidden"
             @change="handleScreenshotSelect"
           />
-          <p v-if="mediaError" class="mt-2 text-sm text-red-600 dark:text-red-400">
+          <p
+            v-if="mediaError"
+            class="mt-2 text-sm text-red-600 dark:text-red-400"
+          >
             {{ mediaError }}
           </p>
         </div>
@@ -653,7 +656,9 @@
                 </span>
               </div>
               <div class="text-sm text-slate-500 dark:text-slate-400 mt-1">
-                输出: {{ formData.pkgname }}-{{ arch.store }}.tar.gz
+                输出: {{ formData.pkgname.toLowerCase() }}-{{
+                  arch.store
+                }}.tar.gz
               </div>
             </button>
           </div>
@@ -908,7 +913,8 @@ const getHistoryArch = (
 ): "amd64" | "arm64" | "loong64" | "other" => {
   if (store === "store" || store.startsWith("amd64-")) return "amd64";
   if (store === "aarch64-store" || store.startsWith("arm64-")) return "arm64";
-  if (store === "loong64-store" || store.startsWith("loong64-")) return "loong64";
+  if (store === "loong64-store" || store.startsWith("loong64-"))
+    return "loong64";
   return "other";
 };
 
@@ -1138,7 +1144,11 @@ const updateFormTags = () => {
 };
 
 const openSubmissionQueue = (): void => {
-  window.open("https://upload.spark-app.store/", "_blank", "noopener,noreferrer");
+  window.open(
+    "https://upload.spark-app.store/",
+    "_blank",
+    "noopener,noreferrer",
+  );
 };
 
 const selectDebFile = async () => {
@@ -1190,7 +1200,9 @@ const searchHistoryApp = async () => {
     console.log("[Submitter] availableArchs before:", availableArchs.value);
     console.log("[Submitter] showArchDialog before:", showArchDialog.value);
 
-    availableArchs.value = sortHistoryArchs(historyResult.data as HistoryArchInfo[]);
+    availableArchs.value = sortHistoryArchs(
+      historyResult.data as HistoryArchInfo[],
+    );
     console.log("[Submitter] availableArchs after:", availableArchs.value);
     console.log(
       "[Submitter] availableArchs length:",
@@ -1401,7 +1413,9 @@ const handleDrop = async (event: DragEvent) => {
         filePath = window.electronUtils.getPathForFile(file);
         console.log("[Submitter] File path from electronUtils:", filePath);
       } catch {
-        console.warn("[Submitter] electronUtils.getPathForFile failed, trying fallback");
+        console.warn(
+          "[Submitter] electronUtils.getPathForFile failed, trying fallback",
+        );
         const textUriList = event.dataTransfer?.getData("text/uri-list");
         const textPlain = event.dataTransfer?.getData("text/plain");
         filePath = textUriList || textPlain || "";
@@ -1504,8 +1518,7 @@ const selectIconFile = () => {
 
 const isPngFile = (file: File): boolean => {
   return (
-    file.type === "image/png" ||
-    (file.type === "" && /\.png$/i.test(file.name))
+    file.type === "image/png" || (file.type === "" && /\.png$/i.test(file.name))
   );
 };
 

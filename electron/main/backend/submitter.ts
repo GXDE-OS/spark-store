@@ -1420,8 +1420,9 @@ export function registerSubmitterHandlers(
       // arch 由前端解析 deb 时获取并传入，无需再次调用 dpkg-deb
       const debArch = String(dataObj.arch || "amd64");
       const pkgVersion = String(dataObj.version || "0.0.0");
-      const debPkgName = String(dataObj.pkgname || "unknown");
-      const formFileName = `${debPkgName}_${pkgVersion}_${debArch}.deb`;
+      const debPkgName = String(dataObj.pkgname || "unknown").toLowerCase();
+      const formFileName =
+        `${debPkgName}_${pkgVersion}_${debArch}.deb`.toLowerCase();
       logger.info(
         { formFileName, debArch },
         "[Submitter] Constructed file_name",
@@ -1689,7 +1690,7 @@ export function registerSubmitterHandlers(
       }
 
       const dataObj = formData as Record<string, unknown>;
-      const pkgname = String(dataObj.pkgname || "");
+      const pkgname = String(dataObj.pkgname || "").toLowerCase();
       const packageName = String(dataObj.name || "");
       const packageVersion = String(dataObj.version || "");
       const packageCategory = String(dataObj.category || "");
@@ -1880,7 +1881,8 @@ export function registerSubmitterHandlers(
         "[Submitter] Deb metadata parsed",
       );
 
-      const packDebFileName = `${debPkgName}_${debVersion}_${debArch}.deb`;
+      const packDebFileName =
+        `${debPkgName}_${debVersion}_${debArch}.deb`.toLowerCase();
       logger.info(
         {
           from: debFilePath,
@@ -1931,7 +1933,7 @@ export function registerSubmitterHandlers(
       sendPackageProgress("tar", 85, "正在打包 tar.gz...");
       logger.info("[Submitter] Starting tar...");
 
-      const tarFileName = `${pkgname}-${storeArch}.tar.gz`;
+      const tarFileName = `${pkgname.toLowerCase()}-${storeArch.toLowerCase()}.tar.gz`;
       const tarOutputPath = path.join(baseTempDir, tarFileName);
       try {
         await execAsync(
