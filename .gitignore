@@ -55,3 +55,13 @@ test-results.json
 
 # VSCode CMake Extension
 build/*
+
+# Debian build intermediates
+debian/*.log
+debian/*.substvars
+debian/*.debhelper
+debian/debhelper-build-stamp
+debian/files
+debian/tmp/
+debian/.debhelper/
+debian/spark-store/
