@@ -30,6 +30,7 @@
       // },
       "runtimeArgs": [
         "--remote-debugging-port=9229",
+        "--no-sandbox",
         "."
       ],
       "envFile": "${workspaceFolder}/.vscode/.debug.env",

@@ -4,8 +4,8 @@
     class="fixed inset-x-4 bottom-4 z-40 rounded-3xl border border-slate-200/70 bg-white shadow-2xl transition-all duration-200 dark:border-slate-800/70 dark:bg-slate-900 sm:left-auto sm:right-6 sm:w-96"
     :class="
       isHidden
-        ? 'pointer-events-none translate-y-[calc(100%+1rem)] opacity-0'
-        : 'translate-y-0 opacity-100'
+        ? 'translate-y-[calc(100%-3.5rem)]'
+        : 'translate-y-0'
     "
   >
     <div
@@ -183,6 +183,11 @@ const completedDownloads = computed(() => {
 });
 
 const toggleExpand = () => {
+  if (isHidden.value) {
+    isHidden.value = false;
+    isExpanded.value = true;
+    return;
+  }
   isExpanded.value = !isExpanded.value;
 };
 
