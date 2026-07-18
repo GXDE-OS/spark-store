@@ -1958,7 +1958,9 @@ export function registerSubmitterHandlers(
       sendPackageProgress("done", 100, "打包完成！");
 
       logger.info({ baseTempDir }, "[Submitter] Opening folder");
-      await shell.openPath(baseTempDir);
+      shell.openPath(baseTempDir).catch((err) => {
+        logger.warn({ err }, "[Submitter] Failed to open folder");
+      });
 
       const duration = Date.now() - startTime;
       logger.info(
