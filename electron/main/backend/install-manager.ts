@@ -42,6 +42,7 @@ type InstallTask = {
   metalinkUrl?: string;
   filename?: string;
   origin: "spark" | "apm";
+  upgradeOnly?: boolean;
   cancelled?: boolean;
   phase: "queued-download" | "downloading" | "queued-install" | "installing";
 };
@@ -268,7 +269,8 @@ ipcMain.on("queue-install", async (event, download_json) => {
     typeof download_json === "string"
       ? JSON.parse(download_json)
       : download_json;
-  const { id, pkgname, metalinkUrl, filename, origin } = download || {};
+  const { id, pkgname, metalinkUrl, filename, origin, upgradeOnly } =
+    download || {};
 
   if (!id || !pkgname) {
     logger.warn("passed arguments missing id or pkgname");
@@ -376,6 +378,7 @@ ipcMain.on("queue-install", async (event, download_json) => {
     metalinkUrl,
     filename,
     origin: origin || "apm",
+    upgradeOnly: Boolean(upgradeOnly),
     phase: metalinkUrl ? "queued-download" : "queued-install",
   };
   tasks.set(id, task);
@@ -769,9 +772,9 @@ async function runInstallPhase(task: InstallTask) {
     if (success) {
       logger.info(msgObj);
 
-      // 安装成功后，如果是APM安装的，就调用createApmDesktopShortcut
-      // 这个函数负责处理桌面快捷方式，它自己会读取设置并且决定要不要创建
-      if (task.origin === "apm" && task.pkgname) {
+      // 安装成功后，如果是APM新安装任务，就调用createApmDesktopShortcut
+      // 升级任务不创建桌面快捷方式；这个函数自己会读取设置并决定要不要创建
+      if (task.origin === "apm" && task.pkgname && !task.upgradeOnly) {
         try {
           await createApmDesktopShortcut(task.pkgname, sendLog);
         } catch (err) {
