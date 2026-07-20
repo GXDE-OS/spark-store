@@ -47,4 +47,4 @@ install:
 	cp -rv pkg/usr/share/dsg/ $(DESTDIR)/usr/share/
 	cp -rv pkg/usr/share/bash-completion/ $(DESTDIR)/usr/share/
 	cp -rv tool/spark-store.asc $(DESTDIR)/opt/durapps/spark-store/bin/
-	ln -s ../../../spark-store/extras/spark-store $(DESTDIR)/opt/durapps/spark-store/bin/spark-store
+#	ln -s ../../../spark-store/extras/spark-store $(DESTDIR)/opt/durapps/spark-store/bin/spark-store
