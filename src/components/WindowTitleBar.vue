@@ -3,7 +3,11 @@
     class="window-titlebar sticky top-0 z-20 flex h-10 shrink-0 items-center justify-between border-b border-slate-200/70 bg-white px-3 text-slate-700 dark:border-slate-800/70 dark:bg-slate-950 dark:text-slate-200"
   >
     <div class="flex min-w-0 items-center gap-2">
-      <span class="h-3 w-3 rounded-full bg-[#2b7fff]"></span>
+      <img
+        src="../assets/imgs/spark-store.svg"
+        class="h-5 w-5 flex-shrink-0"
+        alt="星火应用商店"
+      />
       <span class="truncate text-sm font-semibold">星火应用商店</span>
     </div>
 

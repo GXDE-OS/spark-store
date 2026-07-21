@@ -72,6 +72,13 @@ if (!app.requestSingleInstanceLock()) {
 import "./backend/install-manager.js";
 import "./handle-url-scheme.js";
 
+// 关闭 Linux 的覆盖式（overlay）滚动条，强制使用经典滚动条，
+// 否则 GTK overlay 滚动条会忽略渲染进程的 ::-webkit-scrollbar 颜色，
+// 导致暗色模式下滚动条始终是原生灰色。必须在 app ready 前设置。
+if (process.platform === "linux") {
+  app.commandLine.appendSwitch("disable-features", "OverlayScrollbar");
+}
+
 const logger = pino({ name: "index.ts" });
 const FLARUM_TOKEN_URL = "https://bbs.spark-app.store/api/token";
 

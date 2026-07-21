@@ -1,9 +1,9 @@
 <template>
   <div
-    class="h-screen overflow-y-auto bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100"
+    class="flex h-screen flex-col overflow-hidden rounded-3xl shadow-2xl bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100"
   >
     <div
-      class="submitter-titlebar sticky top-0 z-30 border-b border-slate-200/70 bg-white px-4 py-3 dark:border-slate-800/70 dark:bg-slate-900"
+      class="submitter-titlebar shrink-0 z-30 border-b border-slate-200/70 bg-white px-4 py-3 dark:border-slate-800/70 dark:bg-slate-900"
     >
       <div class="flex items-center justify-between">
         <div class="flex items-center gap-3">
@@ -34,7 +34,8 @@
       </div>
     </div>
 
-    <div class="p-6 max-w-2xl mx-auto">
+    <div class="flex-1 overflow-y-auto mr-4 mb-4">
+      <div class="p-6 max-w-2xl mx-auto">
       <div class="space-y-6">
         <div>
           <label
@@ -746,6 +747,7 @@
         </div>
       </div>
     </Teleport>
+    </div>
   </div>
 </template>
 
@@ -1908,6 +1910,9 @@ const getGitInfo = async () => {
 
 onMounted(async () => {
   console.log("[Submitter] Component mounted, loading categories and tags");
+  // 透明窗口：让 body/html 背景透明，圆角才能透出，否则四角是方角
+  document.documentElement.style.backgroundColor = "transparent";
+  document.body.style.backgroundColor = "transparent";
   // 先等待分类列表加载完成，避免后续竞态
   await Promise.all([loadCategoriesList(), loadTagsList()]);
   // 尝试从 git 配置读取 name 和 email，填入 contributor 和 mail

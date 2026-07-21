@@ -22,6 +22,14 @@
 @variant dark (&:where(.dark, .dark *));
 
 @layer base {
+  html {
+    color-scheme: light;
+  }
+
+  html.dark {
+    color-scheme: dark;
+  }
+
   body {
     font-family: var(--font-sans);
     background-color: var(--color-surface-light);
@@ -41,6 +49,40 @@
 }
 
 @layer utilities {
+  /* 必须先声明 ::-webkit-scrollbar 并禁用 overlay 滚动条，才能使自定义颜色生效 */
+  *::-webkit-scrollbar {
+    width: 0.75rem;
+    height: 0.75rem;
+  }
+
+  /* 亮色滚动条：与暗色保持相同几何（透明边距），确保亮/暗滚动块大小一致 */
+  html ::-webkit-scrollbar-thumb {
+    background-color: #94a3b8;
+    border-radius: 9999px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+
+  html ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  /* 暗色滚动条：挂在 html.dark 上（root），与主界面 surface 同色 (#0b1220)，加极淡描边以便可抓取。
+     注意：必须用 html.dark 而非 .dark *，因为经典滚动条只作用于滚动容器自身，
+     .dark * 在亮色模式不命中会导致回退到原生宽度，亮/暗宽度不一致。 */
+  html.dark ::-webkit-scrollbar-thumb {
+    background-color: #15203b;
+    border-radius: 9999px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.15);
+  }
+
+  html.dark ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  /* 弱化滚动条 */
   .scrollbar-muted {
     scrollbar-width: thin;
     scrollbar-color: #94a3b8 transparent;
@@ -59,6 +101,15 @@
     border-radius: 9999px;
   }
 
+  html.dark .scrollbar-muted {
+    scrollbar-color: #0b1220 transparent;
+  }
+
+  html.dark .scrollbar-muted::-webkit-scrollbar-thumb {
+    background-color: #0b1220;
+  }
+
+  /* 完全隐藏滚动条 */
   .scrollbar-nowidth {
     scrollbar-width: none;
   }

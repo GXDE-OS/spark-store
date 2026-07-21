@@ -100,7 +100,7 @@
         </div>
 
         <div
-          class="flex-1 overflow-y-auto overscroll-contain scrollbar-nowidth scrollbar-thumb-slate-200 dark:scrollbar-thumb-slate-700 p-6 space-y-4"
+          class="flex-1 overflow-y-auto overscroll-contain p-6 space-y-4 mr-4 mb-4"
         >
           <div
             v-if="syncMessage"

@@ -205,7 +205,6 @@ const gridRows = computed(() => {
   flex: 1;
   box-sizing: border-box;
   overflow-x: hidden;
-  overflow-y: auto;
 }
 
 :deep(.vue-recycle-scroller__item-view) {

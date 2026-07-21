@@ -61,11 +61,13 @@
 
     <label class="block relative">
       <span class="sr-only">搜索更新</span>
+      <i
+        class="fas fa-search pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
+      ></i>
       <input
         :value="searchQuery"
-        type="search"
         placeholder="搜索应用或包名"
-        class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-brand/60 focus:bg-white dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:focus:bg-slate-900"
+        class="w-full rounded-2xl border border-slate-200/70 bg-white/80 py-3 pl-12 pr-20 text-sm text-slate-700 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-brand/50 focus:ring-4 focus:ring-brand/10 dark:border-slate-800/70 dark:bg-slate-900/60 dark:text-slate-200"
         @input="handleInput"
       />
       <button

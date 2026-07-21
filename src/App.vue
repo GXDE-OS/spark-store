@@ -73,7 +73,7 @@
           :category-counts="categoryCounts"
           @select-category="selectSubCategory"
         />
-        <div class="flex min-h-0 flex-1 flex-col px-4 py-6 lg:px-10">
+        <div class="flex min-h-0 flex-1 flex-col overflow-hidden px-4 py-6 lg:px-10">
           <FavoriteFolderManager
             v-if="currentView === 'favorites'"
             :folders="favoriteFolders"
