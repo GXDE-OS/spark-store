@@ -1866,7 +1866,7 @@ const closeWindow = () => {
   window.ipcRenderer.send("close-submitter-window");
 };
 
-import { onMounted, nextTick } from "vue";
+import { onMounted, onUnmounted, nextTick } from "vue";
 
 const getGitInfo = async () => {
   try {
@@ -1910,9 +1910,16 @@ const getGitInfo = async () => {
 
 onMounted(async () => {
   console.log("[Submitter] Component mounted, loading categories and tags");
-  // 透明窗口：让 body/html 背景透明，圆角才能透出，否则四角是方角
+  // 透明窗口：让 body/html 背景透明，圆角才能透出，否则四角是方角。
+  // 保存原始值，在 onUnmounted 中恢复，避免副作用泄漏到其它视图。
+  const prevHtmlBg = document.documentElement.style.backgroundColor;
+  const prevBodyBg = document.body.style.backgroundColor;
   document.documentElement.style.backgroundColor = "transparent";
   document.body.style.backgroundColor = "transparent";
+  onUnmounted(() => {
+    document.documentElement.style.backgroundColor = prevHtmlBg;
+    document.body.style.backgroundColor = prevBodyBg;
+  });
   // 先等待分类列表加载完成，避免后续竞态
   await Promise.all([loadCategoriesList(), loadTagsList()]);
   // 尝试从 git 配置读取 name 和 email，填入 contributor 和 mail
