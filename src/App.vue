@@ -613,7 +613,7 @@ const categoryCounts = computed(() => {
     return { ...tabCounts, all: allCounts.all };
   }
 
-  const counts: Record<string, number> = { all: apps.value.length };
+  const counts: Record<string, number> = { all: baseApps.value.length };
   sourceApps.forEach((app) => {
     if (!counts[app.category]) counts[app.category] = 0;
     counts[app.category]++;
