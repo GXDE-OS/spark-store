@@ -51,6 +51,7 @@
             <button
               v-if="app.sparkApp"
               type="button"
+              title="原生安装，高手自定义"
               class="px-3 py-1 text-xs font-medium uppercase tracking-wider transition-colors"
               :class="
                 viewingOrigin === 'spark'
@@ -64,6 +65,7 @@
             <button
               v-if="app.apmApp"
               type="button"
+              title="兼容安装，省心不折腾"
               class="px-3 py-1 text-xs font-medium uppercase tracking-wider transition-colors"
               :class="
                 viewingOrigin === 'apm'
