@@ -448,6 +448,7 @@ export function registerSubmitterHandlers(
         width: 800,
         height: 900,
         frame: false,
+        transparent: true,
         show: false,
         autoHideMenuBar: true,
         icon: path.join(process.env.VITE_PUBLIC!, "favicon.ico"),

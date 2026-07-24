@@ -13,6 +13,9 @@
   --color-card-light: #ffffff;
   --color-card-dark: #151c2c;
 
+  --color-scrollbar-thumb-light: #94a3b8;
+  --color-scrollbar-thumb-dark: #15203b;
+
   --shadow-glass: 0 10px 30px rgba(15,23,42,0.08);
   --shadow-glassDark: 0 20px 45px rgba(0,0,0,0.45);
 
@@ -22,6 +25,14 @@
 @variant dark (&:where(.dark, .dark *));
 
 @layer base {
+  html {
+    color-scheme: light;
+  }
+
+  html.dark {
+    color-scheme: dark;
+  }
+
   body {
     font-family: var(--font-sans);
     background-color: var(--color-surface-light);
@@ -38,12 +49,50 @@
   #app {
     min-height: 100vh;
   }
+
+  /* 全局滚动条基础几何：置于 base，使 utilities 中的 .scrollbar-muted/.scrollbar-nowidth 可覆盖 */
+  *::-webkit-scrollbar {
+    width: 0.75rem;
+    height: 0.75rem;
+  }
+
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  /* 亮色滚动条：与暗色保持相同几何（透明边距），确保亮/暗滚动块大小一致 */
+  html ::-webkit-scrollbar-thumb {
+    background-color: var(--color-scrollbar-thumb-light);
+    border-radius: 9999px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+
+  html ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  /* 暗色滚动条：挂在 html.dark 上（root），比 surface 略亮以保留可辨识反差 (#15203b)，
+     注意：必须用 html.dark 而非 .dark *，因为经典滚动条只作用于滚动容器自身，
+     .dark * 在亮色模式不命中会导致回退到原生宽度，亮/暗宽度不一致。 */
+  html.dark ::-webkit-scrollbar-thumb {
+    background-color: var(--color-scrollbar-thumb-dark);
+    border-radius: 9999px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.15);
+  }
+
+  html.dark ::-webkit-scrollbar-track {
+    background: transparent;
+  }
 }
 
 @layer utilities {
+  /* 弱化滚动条 */
   .scrollbar-muted {
     scrollbar-width: thin;
-    scrollbar-color: #94a3b8 transparent;
+    scrollbar-color: var(--color-scrollbar-thumb-light) transparent;
   }
 
   .scrollbar-muted::-webkit-scrollbar {
@@ -55,10 +104,19 @@
   }
 
   .scrollbar-muted::-webkit-scrollbar-thumb {
-    background-color: #94a3b8;
+    background-color: var(--color-scrollbar-thumb-light);
     border-radius: 9999px;
   }
 
+  html.dark .scrollbar-muted {
+    scrollbar-color: var(--color-surface-dark) transparent;
+  }
+
+  html.dark .scrollbar-muted::-webkit-scrollbar-thumb {
+    background-color: var(--color-surface-dark);
+  }
+
+  /* 完全隐藏滚动条 */
   .scrollbar-nowidth {
     scrollbar-width: none;
   }

@@ -73,7 +73,7 @@
           :category-counts="categoryCounts"
           @select-category="selectSubCategory"
         />
-        <div class="flex min-h-0 flex-1 flex-col px-4 py-6 lg:px-10">
+        <div class="flex min-h-0 flex-1 flex-col overflow-hidden px-4 py-6 lg:px-10">
           <FavoriteFolderManager
             v-if="currentView === 'favorites'"
             :folders="favoriteFolders"
@@ -613,7 +613,7 @@ const categoryCounts = computed(() => {
     return { ...tabCounts, all: allCounts.all };
   }
 
-  const counts: Record<string, number> = { all: apps.value.length };
+  const counts: Record<string, number> = { all: baseApps.value.length };
   sourceApps.forEach((app) => {
     if (!counts[app.category]) counts[app.category] = 0;
     counts[app.category]++;
