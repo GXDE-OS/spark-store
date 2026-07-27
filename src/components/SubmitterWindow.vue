@@ -868,6 +868,23 @@ const isValidUrl = (url: string): boolean => {
   }
 };
 
+const getContributorFromGit = async (): Promise<string> => {
+  try {
+    const nameResult = await window.ipcRenderer.invoke("get-git-name");
+    const emailResult = await window.ipcRenderer.invoke("get-git-email");
+
+    const name = nameResult?.success ? nameResult.data : "";
+    const email = emailResult?.success ? emailResult.data : "";
+
+    if (name && email) {
+      return `${name} <${email}>`;
+    }
+  } catch (error) {
+    console.warn("[Submitter] Failed to get git config:", error);
+  }
+  return "";
+};
+
 const isFormValid = computed(() => {
   const hasRequiredFields =
     formData.name.trim() &&
@@ -1345,6 +1362,12 @@ const parseDebFileAndSearchHistory = async (debPath: string) => {
         JSON.stringify(formData, null, 2),
       );
 
+      const gitContributor = await getContributorFromGit();
+      if (gitContributor) {
+        formData.contributor = gitContributor;
+        console.log("[Submitter] Contributor updated from git:", gitContributor);
+      }
+
       if (formData.pkgname) {
         isSearchingHistory.value = true;
         try {
@@ -1460,7 +1483,9 @@ const selectArch = async (arch: HistoryArchInfo) => {
 
   formData.name = arch.name || formData.name;
   formData.author = arch.author || formData.author;
-  formData.contributor = arch.contributor || formData.contributor;
+  if (!formData.contributor) {
+    formData.contributor = arch.contributor || "";
+  }
   formData.website = arch.website || formData.website;
   formData.category = arch.category || formData.category;
   formData.description = arch.more || formData.description;
