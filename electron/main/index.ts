@@ -7,6 +7,7 @@ import {
   shell,
   Tray,
   nativeTheme,
+  screen,
   session,
 } from "electron";
 import { fileURLToPath } from "node:url";
@@ -136,7 +137,9 @@ logger.info("User Agent: " + getUserAgent());
 /** 根据启动参数 --no-apm / --no-spark 决定只展示的来源 */
 function getStoreFilterFromArgv(): "spark" | "apm" | "both" {
   if (process.arch === "loong64") {
-    // Currently loong64 only have spark support
+    // Currently loong64 only have spark support,
+    // 但用户显式传入 --no-spark 时应允许回退到 apm
+    if (process.argv.includes("--no-spark")) return "apm";
     return "spark";
   } else {
     const argv = process.argv;
@@ -152,6 +155,12 @@ function getStoreFilterFromArgv(): "spark" | "apm" | "both" {
 ipcMain.handle("get-store-filter", (): "spark" | "apm" | "both" =>
   getStoreFilterFromArgv(),
 );
+
+// 渲染端在窗口尺寸变化时（包括无边框窗口鼠标拉边角）经此保存当前窗口尺寸
+ipcMain.handle("save-window-bounds", (): boolean => {
+  if (win && !win.isDestroyed()) scheduleSaveBounds(win);
+  return true;
+});
 
 ipcMain.handle("get-app-version", (): string => getAppVersion());
 ipcMain.handle("get-system-info", (): { distro: string } => getSystemInfo());
@@ -277,11 +286,103 @@ const showAndFocusMainWindow = (): void => {
   win.focus();
 };
 
+// 窗口尺寸持久化：保存/恢复上一次调整后的窗口大小，避免每次打开都使用默认尺寸
+const DEFAULT_WINDOW_SIZE = { width: 1366, height: 768 };
+const MIN_WINDOW_SIZE = { width: 800, height: 500 };
+
+interface WindowState {
+  width?: number;
+  height?: number;
+  x?: number;
+  y?: number;
+  maximized?: boolean;
+}
+
+function getWindowStatePath(): string {
+  // 延迟到调用时再取 userData，避免在 app ready 之前调用 app.getPath 出错
+  return path.join(app.getPath("userData"), "window-state.json");
+}
+
+// 校验保存的窗口位置是否至少部分落在某个显示器可见区域内，避免窗口跑到屏幕外
+function isVisible(bounds: WindowState): boolean {
+  if (
+    bounds.width === undefined ||
+    bounds.height === undefined ||
+    bounds.x === undefined ||
+    bounds.y === undefined
+  ) {
+    return false;
+  }
+  const displays = screen.getAllDisplays();
+  return displays.some((display) => {
+    const { x, y, width, height } = display.workArea;
+    const horizontally =
+      bounds.x < x + width && bounds.x + bounds.width > x;
+    const vertically =
+      bounds.y < y + height && bounds.y + bounds.height > y;
+    return horizontally && vertically;
+  });
+}
+
+function loadWindowState(): WindowState {
+  try {
+    const file = getWindowStatePath();
+    if (fs.existsSync(file)) {
+      const parsed = JSON.parse(
+        fs.readFileSync(file, "utf-8"),
+      ) as WindowState;
+      if (
+        parsed.width !== undefined &&
+        parsed.height !== undefined &&
+        parsed.width >= MIN_WINDOW_SIZE.width &&
+        parsed.height >= MIN_WINDOW_SIZE.height &&
+        isVisible(parsed)
+      ) {
+        return parsed;
+      }
+      logger.warn({ parsed }, "已保存的窗口状态无效，使用默认尺寸");
+    }
+  } catch (err) {
+    logger.warn({ err }, "读取窗口状态失败，使用默认尺寸");
+  }
+  return {};
+}
+
+function saveWindowState(state: WindowState): void {
+  try {
+    fs.writeFileSync(getWindowStatePath(), JSON.stringify(state));
+    logger.info({ state }, "已保存窗口状态");
+  } catch (err) {
+    logger.warn({ err }, "保存窗口状态失败");
+  }
+}
+
+let saveBoundsTimer: NodeJS.Timeout | null = null;
+function scheduleSaveBounds(winInstance: BrowserWindow): void {
+  if (saveBoundsTimer) clearTimeout(saveBoundsTimer);
+  saveBoundsTimer = setTimeout(() => {
+    if (winInstance.isDestroyed()) return;
+    const { width, height, x, y } = winInstance.getBounds();
+    saveWindowState({
+      width,
+      height,
+      x,
+      y,
+      maximized: winInstance.isMaximized(),
+    });
+  }, 400);
+}
+
 async function createWindow() {
+  const saved = loadWindowState();
   const mainWindow = new BrowserWindow({
     title: "星火应用商店",
-    width: 1366,
-    height: 768,
+    width: saved.width ?? DEFAULT_WINDOW_SIZE.width,
+    height: saved.height ?? DEFAULT_WINDOW_SIZE.height,
+    x: saved.x,
+    y: saved.y,
+    minWidth: MIN_WINDOW_SIZE.width,
+    minHeight: MIN_WINDOW_SIZE.height,
     frame: false,
     autoHideMenuBar: true,
     icon: path.join(process.env.VITE_PUBLIC, "favicon.ico"),
@@ -296,6 +397,18 @@ async function createWindow() {
     },
   });
   win = mainWindow;
+
+  // 恢复上一次的最大化状态
+  if (saved.maximized) {
+    mainWindow.maximize();
+  }
+  logger.info({ saved }, "已恢复窗口状态");
+
+  // 窗口大小/位置/最大化变化后防抖保存，下次启动时恢复
+  // 位置/最大化变化由主进程事件保存；尺寸变化由渲染端 DOM resize 经 IPC 兜底保存
+  mainWindow.on("moved", () => scheduleSaveBounds(mainWindow));
+  mainWindow.on("maximize", () => scheduleSaveBounds(mainWindow));
+  mainWindow.on("unmaximize", () => scheduleSaveBounds(mainWindow));
 
   if (VITE_DEV_SERVER_URL) {
     // #298
@@ -330,6 +443,15 @@ async function createWindow() {
 
   mainWindow.on("close", (event) => {
     if (allowAppExit) {
+      // 真正退出前同步保存最终窗口尺寸（防抖可能尚未触发）
+      const { width, height, x, y } = mainWindow.getBounds();
+      saveWindowState({
+        width,
+        height,
+        x,
+        y,
+        maximized: mainWindow.isMaximized(),
+      });
       return;
     }
 

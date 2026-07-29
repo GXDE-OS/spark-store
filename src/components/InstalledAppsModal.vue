@@ -14,71 +14,142 @@
       @wheel="onOverlayWheel"
     >
       <div
-        class="flex w-full max-w-4xl max-h-[85vh] flex-col rounded-3xl border border-white/10 bg-white/95 shadow-2xl dark:border-slate-800 dark:bg-slate-900"
+        class="flex w-full max-w-4xl max-h-[85vh] flex-col overflow-hidden rounded-3xl border border-white/10 bg-white/95 shadow-2xl dark:border-slate-800 dark:bg-slate-900"
       >
         <div
           class="flex items-start justify-between border-b border-slate-200/70 p-6 dark:border-slate-800/70"
         >
-          <div>
+          <div class="flex flex-col gap-2">
             <p class="text-2xl font-semibold text-slate-900 dark:text-white">
               已安装应用
             </p>
             <p class="text-sm text-slate-500 dark:text-slate-400">
               管理本机安装的应用程序
             </p>
+            <div
+              v-if="!loading && !error"
+              class="mt-2 flex flex-wrap items-center gap-3"
+            >
+              <div
+                class="inline-flex flex-wrap items-stretch overflow-hidden rounded-2xl border border-slate-200/70 bg-slate-50/60 text-sm shadow-sm dark:border-slate-700/60 dark:bg-slate-800/40"
+              >
+              <!-- APM -->
+              <div
+                class="group flex cursor-pointer items-center gap-2.5 px-3.5 py-2 transition hover:bg-amber-50/80 dark:hover:bg-amber-500/10"
+                :class="
+                  filterOrigin === 'apm'
+                    ? 'bg-amber-100 ring-2 ring-amber-400/50 dark:bg-amber-500/20'
+                    : ''
+                "
+                title="仅显示 APM 应用"
+                role="button"
+                @click="filterOrigin = 'apm'"
+              >
+                <span
+                  class="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-amber-400 to-orange-500 text-white shadow-sm shadow-amber-500/30"
+                >
+                  <i class="fas fa-box-open text-[12px]"></i>
+                </span>
+                <div class="flex flex-col leading-tight">
+                  <span
+                    class="text-[15px] font-bold tabular-nums text-amber-700 dark:text-amber-300"
+                    >{{ apmCount }}</span
+                  >
+                  <span
+                    class="text-[10px] font-medium uppercase tracking-wider text-amber-600/80 dark:text-amber-400/80"
+                    >APM</span
+                  >
+                </div>
+              </div>
+              <!-- 分隔线 -->
+              <span
+                class="self-stretch w-px bg-slate-200/80 dark:bg-slate-700/80"
+              ></span>
+              <!-- Spark -->
+              <div
+                class="group flex cursor-pointer items-center gap-2.5 px-3.5 py-2 transition hover:bg-sky-50/80 dark:hover:bg-sky-500/10"
+                :class="
+                  filterOrigin === 'spark'
+                    ? 'bg-sky-100 ring-2 ring-sky-400/50 dark:bg-sky-500/20'
+                    : ''
+                "
+                title="仅显示 Spark 应用"
+                role="button"
+                @click="filterOrigin = 'spark'"
+              >
+                <span
+                  class="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-sky-400 to-blue-500 text-white shadow-sm shadow-sky-500/30"
+                >
+                  <i class="fas fa-bolt text-[12px]"></i>
+                </span>
+                <div class="flex flex-col leading-tight">
+                  <span
+                    class="text-[15px] font-bold tabular-nums text-sky-700 dark:text-sky-300"
+                    >{{ sparkCount }}</span
+                  >
+                  <span
+                    class="text-[10px] font-medium uppercase tracking-wider text-sky-600/80 dark:text-sky-400/80"
+                    >Spark</span
+                  >
+                </div>
+              </div>
+              <!-- 分隔线 -->
+              <span
+                class="self-stretch w-px bg-slate-200/80 dark:bg-slate-700/80"
+              ></span>
+              <!-- 总数 -->
+              <div
+                class="flex cursor-pointer items-center gap-2.5 px-3.5 py-2"
+                :class="
+                  filterOrigin === 'all'
+                    ? 'bg-slate-100 ring-2 ring-slate-400/40 dark:bg-slate-700/40'
+                    : ''
+                "
+                title="显示全部已安装应用"
+                role="button"
+                @click="filterOrigin = 'all'"
+              >
+                <span
+                  class="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-slate-500 to-slate-700 text-white shadow-sm dark:from-slate-400 dark:to-slate-600"
+                >
+                  <i class="fas fa-cubes text-[12px]"></i>
+                </span>
+                <div class="flex flex-col leading-tight">
+                  <span
+                    class="text-[15px] font-bold tabular-nums text-slate-900 dark:text-white"
+                    >{{ totalCount }}</span
+                  >
+                  <span
+                    class="text-[10px] font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400"
+                    >总数</span
+                  >
+                </div>
+              </div>
+              </div>
+              <!-- 搜索框 -->
+              <div class="relative flex-1 min-w-[200px]">
+                <i
+                  class="fas fa-search pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-400"
+                ></i>
+                <input
+                  v-model="searchQuery"
+                  type="text"
+                  placeholder="搜索已安装应用…"
+                  class="w-full rounded-2xl border border-slate-200/70 bg-slate-50/60 py-2 pl-9 pr-9 text-sm text-slate-700 placeholder-slate-400 transition focus:border-brand/60 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand/20 dark:border-slate-700 dark:bg-slate-800/40 dark:text-slate-200 dark:placeholder-slate-500 dark:focus:bg-slate-800"
+                />
+                <button
+                  v-if="searchQuery"
+                  type="button"
+                  class="absolute right-2 top-1/2 inline-flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-200/60 hover:text-slate-700 dark:hover:bg-slate-700 dark:hover:text-white"
+                  aria-label="清除搜索"
+                  @click="searchQuery = ''"
+                >
+                  <i class="fas fa-xmark text-xs"></i>
+                </button>
+              </div>
+            </div>
           </div>
           <div class="flex items-center gap-3">
-            <!-- 云端同步功能暂时关闭
-            <button
-              type="button"
-              class="inline-flex items-center gap-2 rounded-2xl border border-brand/30 px-4 py-2 text-sm font-semibold text-brand transition hover:bg-brand/10 disabled:opacity-40"
-              :disabled="syncing"
-              @click="handleSyncClick"
-            >
-              <i class="fas fa-cloud-arrow-up"></i>
-              {{ syncing ? "同步中" : "同步到账号" }}
-            </button>
-            <button
-              type="button"
-              class="inline-flex items-center gap-2 rounded-2xl border border-slate-200/70 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
-              @click="handleRestoreClick"
-            >
-              <i class="fas fa-cloud-arrow-down"></i>
-              从账号恢复
-            </button>
-            -->
-            <div
-              v-if="showOriginSwitcher"
-              class="flex items-center rounded-2xl border border-slate-200/70 p-1 dark:border-slate-800/70"
-            >
-              <button
-                v-if="apmEnabled"
-                type="button"
-                class="rounded-xl px-4 py-1.5 text-sm font-semibold transition"
-                :class="
-                  activeOrigin === 'apm'
-                    ? 'bg-brand/10 text-brand dark:bg-brand/15'
-                    : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
-                "
-                :disabled="!apmAvailable"
-                @click="$emit('switch-origin', 'apm')"
-              >
-                APM 软件
-              </button>
-              <button
-                v-if="sparkEnabled"
-                type="button"
-                class="rounded-xl px-4 py-1.5 text-sm font-semibold transition"
-                :class="
-                  activeOrigin === 'spark'
-                    ? 'bg-brand/10 text-brand dark:bg-brand/15'
-                    : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
-                "
-                @click="$emit('switch-origin', 'spark')"
-              >
-                Spark 软件
-              </button>
-            </div>
             <button
               type="button"
               class="inline-flex items-center gap-2 rounded-2xl border border-slate-200/70 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 disabled:opacity-40 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
@@ -100,7 +171,7 @@
         </div>
 
         <div
-          class="flex-1 overflow-y-auto overscroll-contain p-6 space-y-4 mr-4 mb-4"
+          class="flex-1 overflow-y-auto overscroll-contain p-6 space-y-4 mb-6"
         >
           <div
             v-if="syncMessage"
@@ -121,14 +192,36 @@
             {{ error }}
           </div>
           <div
+            v-else-if="warning"
+            class="rounded-2xl border border-amber-200/70 bg-amber-50/60 px-4 py-3 text-sm text-amber-700 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-300"
+          >
+            <i class="fas fa-triangle-exclamation mr-1.5"></i>
+            {{ warning }}
+          </div>
+          <div
             v-else-if="apps.length === 0"
             class="rounded-2xl border border-slate-200/70 px-4 py-10 text-center text-slate-500 dark:border-slate-800/70 dark:text-slate-400"
           >
             暂无已安装应用
           </div>
+          <div
+            v-else-if="filteredApps.length === 0"
+            class="rounded-2xl border border-slate-200/70 px-4 py-10 text-center text-slate-500 dark:border-slate-800/70 dark:text-slate-400"
+          >
+            <i class="fas fa-search mr-1.5 text-slate-400"></i>
+            <template v-if="searchQuery">
+              未找到匹配“<span class="font-semibold text-slate-700 dark:text-slate-300">{{ searchQuery }}</span>”的已安装应用
+            </template>
+            <template v-else-if="filterOrigin === 'apm'">
+              暂无已安装的 APM 应用
+            </template>
+            <template v-else-if="filterOrigin === 'spark'">
+              暂无已安装的 Spark 应用
+            </template>
+          </div>
           <div v-else class="space-y-3">
             <div
-              v-for="app in apps"
+              v-for="app in filteredApps"
               :key="app.pkgname"
               class="flex flex-col gap-3 rounded-2xl border border-slate-200/70 bg-white/90 p-4 shadow-sm dark:border-slate-800/70 dark:bg-slate-900/70 sm:flex-row sm:items-center sm:justify-between"
             >
@@ -155,6 +248,22 @@
                     >
                       {{ app.name }}
                     </p>
+                    <span
+                      v-if="app.origin === 'apm'"
+                      data-testid="origin-tag-apm"
+                      class="rounded-md bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-700 dark:bg-amber-500/20 dark:text-amber-400"
+                      title="APM 软件"
+                    >
+                      APM
+                    </span>
+                    <span
+                      v-else-if="app.origin === 'spark'"
+                      data-testid="origin-tag-spark"
+                      class="rounded-md bg-sky-100 px-2 py-0.5 text-[11px] font-semibold text-sky-700 dark:bg-sky-500/20 dark:text-sky-400"
+                      title="Spark 软件"
+                    >
+                      Spark
+                    </span>
                     <span
                       v-if="app.isDependency"
                       class="rounded-md bg-rose-100 px-2 py-0.5 text-[11px] font-semibold text-rose-600 dark:bg-rose-500/20 dark:text-rose-400"
@@ -212,14 +321,32 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive } from "vue";
+import { computed, reactive, ref } from "vue";
 import { App } from "../global/typedefinition";
 import { APM_STORE_BASE_URL } from "../global/storeConfig";
 
 const iconErrors = reactive<Record<string, boolean>>({});
 
+// 仅允许从这些常见图标目录读取本地图标，避免通过 app.icons 读取任意本地文件
+const ALLOWED_LOCAL_ICON_PREFIXES = [
+  "/usr/share/",
+  "/usr/lib/",
+  "/usr/local/share/",
+  "/opt/",
+  "/var/lib/apm/",
+  "/var/lib/",
+];
+
 const getIconUrl = (app: App) => {
-  if (app.icons && app.icons.startsWith("/")) return `file://${app.icons}`;
+  // 本地图标：仅允许以白名单目录开头、且不含路径遍历("..")的绝对路径
+  if (
+    app.icons &&
+    app.icons.startsWith("/") &&
+    !app.icons.includes("..") &&
+    ALLOWED_LOCAL_ICON_PREFIXES.some((prefix) => app.icons!.startsWith(prefix))
+  ) {
+    return `file://${app.icons}`;
+  }
   if (!app.category || app.category === "unknown") return "";
   const arch = window.apm_store.arch || "amd64";
   const finalArch = app.origin === "spark" ? `${arch}-store` : `${arch}-apm`;
@@ -241,21 +368,60 @@ const props = defineProps<{
   apps: App[];
   loading: boolean;
   error: string;
-  activeOrigin: "apm" | "spark";
-  storeFilter: "spark" | "apm" | "both";
-  sparkAvailable: boolean;
-  apmAvailable: boolean;
+  warning: string;
   loggedIn: boolean;
   syncing: boolean;
   syncMessage: string;
 }>();
+
+const apmCount = computed(
+  () => props.apps.filter((a) => a.origin === "apm").length,
+);
+const sparkCount = computed(
+  () => props.apps.filter((a) => a.origin === "spark").length,
+);
+const totalCount = computed(() => props.apps.length);
+
+// 来源筛选：默认全部；点击统计徽章可在 all/apm/spark 间切换
+const filterOrigin = ref<"all" | "apm" | "spark">("all");
+
+// 搜索关键词（按名称/包名不区分大小写过滤已安装应用）
+const searchQuery = ref("");
+const filteredApps = computed(() => {
+  // 1. 先按搜索关键词过滤
+  const q = searchQuery.value.trim().toLowerCase();
+  let list = props.apps;
+  if (q) {
+    list = list.filter(
+      (a) =>
+        a.name.toLowerCase().includes(q) ||
+        a.pkgname.toLowerCase().includes(q),
+    );
+  }
+
+  // 2. 再按来源筛选（默认 all = 不过滤）
+  if (filterOrigin.value === "apm") {
+    list = list.filter((a) => a.origin === "apm");
+  } else if (filterOrigin.value === "spark") {
+    list = list.filter((a) => a.origin === "spark");
+  }
+
+  // 3. 排序：APM 应用始终排在前面（默认全部视图也遵守此规则）
+  // 返回新数组，避免修改原始 props.apps
+  return [...list].sort((a, b) => {
+    const aApm = a.origin === "apm" ? 0 : 1;
+    const bApm = b.origin === "apm" ? 0 : 1;
+    if (aApm !== bApm) return aApm - bApm;
+    // 同类内保持原有的字母序，体验更一致
+    return a.pkgname.localeCompare(b.pkgname);
+  });
+});
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const emit = defineEmits<{
   (e: "close"): void;
   (e: "refresh"): void;
   (e: "uninstall", app: App): void;
-  (e: "switch-origin", origin: "apm" | "spark"): void;
   (e: "open-app", app: App): void;
   (e: "open-detail", app: App): void;
   (e: "sync-to-account"): void;
@@ -287,16 +453,4 @@ const onOverlayWheel = (e: WheelEvent) => {
   if (target.closest(".overflow-y-auto, .overflow-auto")) return;
   e.preventDefault();
 };
-
-const sparkEnabled = computed(() => {
-  return props.storeFilter !== "apm" && props.sparkAvailable;
-});
-
-const apmEnabled = computed(() => {
-  return props.storeFilter !== "spark" && props.apmAvailable;
-});
-
-const showOriginSwitcher = computed(() => {
-  return sparkEnabled.value && apmEnabled.value;
-});
 </script>

@@ -73,7 +73,9 @@
           :category-counts="categoryCounts"
           @select-category="selectSubCategory"
         />
-        <div class="flex min-h-0 flex-1 flex-col overflow-hidden px-4 py-6 lg:px-10">
+        <div
+          class="flex min-h-0 flex-1 flex-col overflow-hidden px-4 py-6 lg:px-10"
+        >
           <FavoriteFolderManager
             v-if="currentView === 'favorites'"
             :folders="favoriteFolders"
@@ -172,10 +174,7 @@
       :apps="installedApps"
       :loading="installedLoading"
       :error="installedError"
-      :active-origin="activeInstalledOrigin"
-      :store-filter="storeFilter"
-      :spark-available="sparkAvailable"
-      :apm-available="apmAvailable"
+      :warning="installedWarning"
       :logged-in="isLoggedIn"
       :syncing="syncLoading"
       :sync-message="syncStatusMessage"
@@ -184,7 +183,6 @@
       @open-app="openDownloadedApp($event.pkgname, $event.origin)"
       @open-detail="openDetail"
       @uninstall="uninstallInstalledApp"
-      @switch-origin="handleSwitchOrigin"
       @sync-to-account="syncInstalledAppsToAccount"
       @restore-from-account="openRestoreFromAccount"
       @request-login="requireLogin('云端同步需要登录星火账号。')"
@@ -287,7 +285,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from "vue";
-import axios from "axios";
+import axios, { AxiosError } from "axios";
 import pino from "pino";
 import AppSidebar from "./components/AppSidebar.vue";
 import AppHeader from "./components/AppHeader.vue";
@@ -362,10 +360,9 @@ import {
   setAuthSession,
 } from "./global/authState";
 import {
-  getAllowedInstalledOrigin,
   getEffectiveStoreFilter,
-  getDefaultInstalledOrigin,
   isOriginEnabled,
+  isOriginUsable,
 } from "./modules/storeFilter";
 import { createUpdateCenterStore } from "./modules/updateCenter";
 import {
@@ -424,12 +421,59 @@ const fetchWithRetry = async <T,>(
     const response = await axiosInstance.get<T>(url);
     return response.data;
   } catch (error) {
-    if (retries > 0) {
+    const axiosError = error as AxiosError;
+    const status = axiosError.response?.status;
+    // 仅对网络错误（无响应）、服务端 5xx 错误或超时进行重试；
+    // 4xx（如 404/400）属于明确的客户端错误，直接抛出以避免无谓重试。
+    const isNetworkError = status === undefined;
+    const isServerError = typeof status === "number" && status >= 500;
+    const isTimeout =
+      axiosError.code === "ECONNABORTED" || axiosError.code === "ETIMEDOUT";
+
+    if (retries > 0 && (isNetworkError || isServerError || isTimeout)) {
       await new Promise((resolve) => setTimeout(resolve, delay));
       return fetchWithRetry(url, retries - 1, delay * 2);
     }
     throw error;
   }
+};
+
+// 渲染进程从 IPC 拿到的 result.apps 实际类型为 any（ipcRenderer.invoke 返回 Promise<any>），
+// 直接断言成 InstalledAppInfo[] 会绕过运行时类型检查。后端字段缺失时会引发运行时错误。
+// 此守卫仅校验本项目实际使用的关键字段，后端字段缺失时跳过即可，避免整批失败。
+const isInstalledAppInfo = (value: unknown): value is InstalledAppInfo => {
+  if (typeof value !== "object" || value === null) return false;
+  const v = value as Partial<InstalledAppInfo>;
+  return (
+    typeof v.pkgname === "string" &&
+    typeof v.name === "string" &&
+    typeof v.version === "string" &&
+    typeof v.arch === "string" &&
+    (v.origin === "spark" || v.origin === "apm") &&
+    typeof v.flags === "string" &&
+    typeof v.isDependency === "boolean" &&
+    // icon 在类型中为可选字段（string | undefined），需显式校验其类型，
+    // 避免非字符串值进入下游 app.icon || "" 触发隐式转换异常
+    (typeof v.icon === "string" || v.icon === undefined)
+  );
+};
+
+// 单来源已安装查询超时时间：某个来源（如 APM）响应极慢或挂起时，
+// 不应阻塞其它来源整体返回，超时后该来源标记为失败并走 warning/error 流程。
+const LIST_INSTALLED_TIMEOUT_MS = 15000;
+
+// 为 Promise 增加超时控制：超时即 reject，配合 Promise.allSettled 让单来源失败不影响其它来源。
+const withTimeout = <T,>(
+  promise: Promise<T>,
+  ms: number,
+  label: string,
+): Promise<T> => {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error(`${label} 超时（${ms}ms）`)), ms),
+    ),
+  ]);
 };
 
 // 响应式状态
@@ -468,10 +512,13 @@ const loading = ref(true);
 const showDownloadDetailModal = ref(false);
 const currentDownload: Ref<DownloadItem | null> = ref(null);
 const showInstalledModal = ref(false);
-const activeInstalledOrigin = ref<"apm" | "spark">("apm");
 const installedApps = ref<App[]>([]);
 const installedLoading = ref(false);
 const installedError = ref("");
+// 部分来源失败（如 Spark/APM 之一不可用）时使用更轻量的 warning 提示，避免与已有列表同时呈现红色致命错误条造成 UX 混淆
+const installedWarning = ref("");
+// refreshInstalledApps 的代次计数器，用于异步竞态防护：新进入一次刷新自增，await 后若代次已变则放弃本轮写入
+const installedRefreshGeneration = ref(0);
 const updateCenterStore = createUpdateCenterStore();
 const showUninstallModal = ref(false);
 const uninstallTargetApp: Ref<App | null> = ref(null);
@@ -1379,130 +1426,202 @@ const confirmMigrationStart = async () => {
 };
 
 const openInstalledModal = () => {
-  const defaultOrigin = getDefaultInstalledOrigin(
-    storeFilter.value,
-    availableSources.value,
-  );
-  if (!defaultOrigin) {
+  if (
+    getEffectiveStoreFilter(storeFilter.value, availableSources.value) === null
+  ) {
     return;
   }
 
   showInstalledModal.value = true;
-  activeInstalledOrigin.value =
-    getAllowedInstalledOrigin(
-      storeFilter.value,
-      activeInstalledOrigin.value,
-      availableSources.value,
-    ) ?? defaultOrigin;
   refreshInstalledApps();
 };
 
 const closeInstalledModal = () => {
   showInstalledModal.value = false;
+  // 关闭模态框时同步清空错误 / 警告，避免下次打开时残留过期状态
+  installedError.value = "";
+  installedWarning.value = "";
 };
 
-const handleSwitchOrigin = (origin: "apm" | "spark") => {
-  activeInstalledOrigin.value =
-    getAllowedInstalledOrigin(
-      storeFilter.value,
-      origin,
-      availableSources.value,
-    ) ?? activeInstalledOrigin.value;
-  refreshInstalledApps();
+// 根据当前启动模式和系统可用性，确定需要查询哪些 origin 的已安装应用
+const resolveInstalledOrigins = (): Array<"spark" | "apm"> => {
+  const origins: Array<"spark" | "apm"> = [];
+  if (isOriginUsable(storeFilter.value, "spark", availableSources.value)) {
+    origins.push("spark");
+  }
+  if (isOriginUsable(storeFilter.value, "apm", availableSources.value)) {
+    origins.push("apm");
+  }
+  return origins;
 };
 
 const refreshInstalledApps = async () => {
+  // 异步竞态防护：进入时若模态框已关闭（极小概率），直接放弃本轮请求
+  if (!showInstalledModal.value) return;
   installedLoading.value = true;
   installedError.value = "";
+  installedWarning.value = "";
+  // 代次计数器：每次进入自增；await 之后若代次已变（新一轮刷新 / 关闭重开），丢弃本轮结果
+  const generation = ++installedRefreshGeneration.value;
   try {
-    const origin = getAllowedInstalledOrigin(
-      storeFilter.value,
-      activeInstalledOrigin.value,
-      availableSources.value,
+    const origins = resolveInstalledOrigins();
+    // Spark 已安装列表依赖商店目录（apps.value）来枚举包名。
+    // 仅当目录中存在可枚举的 Spark 包时才查询 Spark，
+    // 否则空目录会触发"全量扫描整个系统"的陷阱导致列表被全部跳过而误报为空。
+    const sparkPkgnameList = apps.value
+      .filter((a) => a.origin === "spark")
+      .map((a) => a.pkgname);
+    const effectiveOrigins = origins.filter(
+      (o) => o !== "spark" || sparkPkgnameList.length > 0,
     );
-    if (!origin) {
+
+    if (effectiveOrigins.length === 0) {
       installedApps.value = [];
-      installedError.value = "当前系统不可用应用管理功能";
+      // 目录尚未加载完成（但来源可用）时给出过渡提示，待目录加载后会自动重查
+      installedError.value =
+        apps.value.length === 0
+          ? "正在加载应用目录，请稍候…"
+          : "当前系统不可用应用管理功能";
       return;
     }
 
-    activeInstalledOrigin.value = origin;
+    // 并行查询每个 origin 的已安装应用：
+    // 用 allSettled + 每源超时，避免单一来源（如 APM）响应慢/挂起阻塞整体；
+    // 超时或失败的来源在下方循环标记为 failedOrigin，不影响其它来源结果。
+    const results = await Promise.allSettled(
+      effectiveOrigins.map((origin) =>
+        withTimeout(
+          window.ipcRenderer.invoke("list-installed", {
+            origin,
+            pkgnameList: origin === "spark" ? sparkPkgnameList : undefined,
+          }),
+          LIST_INSTALLED_TIMEOUT_MS,
+          `${origin} list-installed`,
+        ),
+      ),
+    );
 
-    if (!isOriginEnabled(storeFilter.value, origin)) {
-      installedApps.value = [];
-      installedError.value = `当前启动模式已禁用 ${origin === "spark" ? "Spark" : "APM"} 软件管理`;
-      return;
-    }
+    // 异步结束后的回调阶段重新校验代次与模态可见性，避免陈旧竞态写入 ref
+    if (generation !== installedRefreshGeneration.value) return;
+    if (!showInstalledModal.value) return;
 
-    // Spark 优化：只检查远端商店目录中的应用，避免全量扫描
-    let pkgnameList: string[] | undefined;
-    if (origin === "spark") {
-      pkgnameList = apps.value
-        .filter((a) => a.origin === "spark")
-        .map((a) => a.pkgname);
-    }
+    const combinedApps: App[] = [];
+    const failedOrigins: string[] = [];
 
-    const result = await window.ipcRenderer.invoke("list-installed", {
-      origin,
-      pkgnameList,
-    });
-    if (!result?.success) {
-      installedApps.value = [];
-      installedError.value = result?.message || "读取已安装应用失败";
-      return;
-    }
-
-    installedApps.value = [];
-    for (const app of result.apps) {
-      // Find matching remote app to enrich data. We look exactly for that origin.
-      let appInfo = apps.value.find(
-        (a) => a.pkgname === app.pkgname && a.origin === origin,
-      );
-
-      if (origin === "spark" && !appInfo) {
-        // Only show Spark packages that exist in the App Store catalogue
+    for (let i = 0; i < effectiveOrigins.length; i++) {
+      const origin = effectiveOrigins[i];
+      const settled = results[i];
+      // allSettled: rejected（超时/异常）或 success=false 都视为该来源失败
+      if (settled.status !== "fulfilled" || !settled.value?.success) {
+        failedOrigins.push(origin);
         continue;
       }
+      const result = settled.value;
 
-      if (appInfo) {
-        appInfo.flags = app.flags;
-        appInfo.arch = app.arch;
-        appInfo.currentStatus = "installed";
-        appInfo.isDependency = app.isDependency;
-      } else {
-        // 如果在当前应用列表中找不到该应用，创建一个最小的 App 对象
-        appInfo = {
-          name: app.name || app.pkgname,
-          pkgname: app.pkgname,
-          version: app.version,
-          category: "unknown",
-          tags: "",
-          more: "",
-          filename: "",
-          torrent_address: "",
-          author: "",
-          contributor: "",
-          website: "",
-          update: "",
-          size: "",
-          img_urls: [],
-          icons: app.icon || "",
-          origin: app.origin || (app.arch?.includes("apm") ? "apm" : "spark"),
-          currentStatus: "installed",
-          arch: app.arch,
-          flags: app.flags,
-          isDependency: app.isDependency,
-        };
+      const appList = Array.isArray(result?.apps) ? result.apps : [];
+      for (const rawApp of appList) {
+        // 运行时类型守卫，避免后端字段缺失造成下游访问 undefined 抛出
+        if (!isInstalledAppInfo(rawApp)) continue;
+        const app = rawApp;
+
+        // Find matching remote app to enrich data. We look exactly for that origin.
+        let appInfo = apps.value.find(
+          (a) => a.pkgname === app.pkgname && a.origin === origin,
+        );
+
+        if (origin === "spark" && !appInfo) {
+          // Only show Spark packages that exist in the App Store catalogue
+          continue;
+        }
+
+        if (appInfo) {
+          appInfo.flags = app.flags;
+          appInfo.arch = app.arch;
+          appInfo.currentStatus = "installed";
+          appInfo.isDependency = app.isDependency;
+        } else {
+          // 如果在当前应用列表中找不到该应用，创建一个最小的 App 对象
+          appInfo = {
+            name: app.name || app.pkgname,
+            pkgname: app.pkgname,
+            version: app.version,
+            category: "unknown",
+            tags: "",
+            more: "",
+            filename: "",
+            torrent_address: "",
+            author: "",
+            contributor: "",
+            website: "",
+            update: "",
+            size: "",
+            img_urls: [],
+            icons: app.icon || "",
+            origin: app.origin || (app.arch?.includes("apm") ? "apm" : "spark"),
+            currentStatus: "installed",
+            arch: app.arch,
+            flags: app.flags,
+            isDependency: app.isDependency,
+          };
+        }
+        combinedApps.push(appInfo);
       }
-      installedApps.value.push(appInfo);
+    }
+
+    installedApps.value = combinedApps;
+
+    // 部分来源失败使用轻量 warning（不与列表同时呈现红色致命错误条），致命/全失败仍用 error
+    if (failedOrigins.length > 0) {
+      const labels = failedOrigins
+        .map((o) => (o === "spark" ? "Spark" : "APM"))
+        .join("、");
+      if (combinedApps.length > 0) {
+        installedWarning.value = `部分来源加载失败（${labels}），已安装列表可能不完整`;
+      } else {
+        installedError.value = `读取${labels}已安装应用失败`;
+      }
     }
   } catch (error: unknown) {
+    if (generation !== installedRefreshGeneration.value) return;
+    if (!showInstalledModal.value) return;
     installedApps.value = [];
     installedError.value = (error as Error)?.message || "读取已安装应用失败";
   } finally {
-    installedLoading.value = false;
+    // 仅最末一代次负责清理 loading，防止陈旧代次提前关闭 loading 影响后续刷新
+    if (generation === installedRefreshGeneration.value) {
+      installedLoading.value = false;
+    }
   }
 };
+
+// 应用目录（apps.value）可能在打开"已安装应用"模态框之后才加载完成。
+// 当目录长度变化、且模态框处于打开状态时，自动重查已安装应用，避免列表一直为空。
+// 注意：上一版仅在 prevLen===0→len>0 触发，会遗漏目录后续更新（例如分类切换触发目录重建）。
+// 现改为 len 任意 >0 的正向变化都允许触发；密集分批推送由下方 300ms 防抖合并最后一次写入。
+// 每次变化都先自增 installedRefreshGeneration：即使上一轮刷新仍在加载中，也会立即失效，
+// 避免用陈旧目录数据覆盖已安装列表（清理不单纯依赖定时器，代次校验兜底）。
+let refreshDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+watch(
+  () => apps.value.length,
+  (len) => {
+    if (!showInstalledModal.value || len <= 0) {
+      return;
+    }
+    installedRefreshGeneration.value++;
+    if (refreshDebounceTimer !== null) {
+      clearTimeout(refreshDebounceTimer);
+    }
+    refreshDebounceTimer = setTimeout(() => {
+      refreshDebounceTimer = null;
+      void refreshInstalledApps();
+    }, 300);
+  },
+);
+onUnmounted(() => {
+  if (refreshDebounceTimer !== null) {
+    clearTimeout(refreshDebounceTimer);
+  }
+});
 
 const mapInstalledAppToCatalogApp = (
   app: InstalledAppInfo,
@@ -1573,8 +1692,11 @@ const refreshFavoriteInstalledApps = async (): Promise<void> => {
       });
       if (!result?.success) return;
 
-      for (const app of result.apps as InstalledAppInfo[]) {
-        const appInfo = mapInstalledAppToCatalogApp(app, origin);
+      const appList = Array.isArray(result?.apps) ? result.apps : [];
+      for (const rawApp of appList) {
+        // 运行时类型守卫：避免后端字段缺失时下游访问 undefined
+        if (!isInstalledAppInfo(rawApp)) continue;
+        const appInfo = mapInstalledAppToCatalogApp(rawApp, origin);
         if (appInfo) refreshedApps.push(appInfo);
       }
     }),
@@ -1916,8 +2038,11 @@ const refreshInstalledSyncCandidates = async (
       });
       if (!result?.success) return;
 
-      for (const app of result.apps as InstalledAppInfo[]) {
-        const appInfo = mapInstalledAppToCatalogApp(app, origin);
+      const appList = Array.isArray(result?.apps) ? result.apps : [];
+      for (const rawApp of appList) {
+        // 运行时类型守卫：避免后端字段缺失时下游访问 undefined
+        if (!isInstalledAppInfo(rawApp)) continue;
+        const appInfo = mapInstalledAppToCatalogApp(rawApp, origin);
         if (appInfo) refreshedApps.push(appInfo);
       }
     }),
@@ -2450,7 +2575,9 @@ const openDownloadedApp = (pkgname: string, origin?: "spark" | "apm") => {
   // openApmStoreUrl(`apmstore://launch?pkg=${encodedPkg}`, {
   //   fallbackText: `打开应用: ${download.pkgname}`
   // });
-  window.ipcRenderer.invoke("launch-app", { pkgname, origin });
+  window.ipcRenderer
+    .invoke("launch-app", { pkgname, origin })
+    .catch((err) => logger.error("启动应用失败 (launch-app):", err));
 };
 
 const loadCategories = async () => {
@@ -2794,6 +2921,15 @@ const handleSearchFocus = () => {
   if (activeTab.value === "home") activeTab.value = "all";
 };
 
+// 窗口尺寸变化（含无边框窗口鼠标拉边角）时，防抖通知主进程保存当前尺寸
+let saveBoundsTimer: number | undefined;
+const handleWindowResize = () => {
+  if (saveBoundsTimer) clearTimeout(saveBoundsTimer);
+  saveBoundsTimer = window.setTimeout(() => {
+    void window.ipcRenderer.invoke("save-window-bounds");
+  }, 400);
+};
+
 // 生命周期钩子
 onMounted(async () => {
   initTheme();
@@ -2805,6 +2941,9 @@ onMounted(async () => {
 
   handleHashChange();
   window.addEventListener("hashchange", handleHashChange);
+
+  // 窗口尺寸变化（含无边框窗口鼠标拉边角）时，防抖通知主进程保存当前尺寸
+  window.addEventListener("resize", handleWindowResize);
 
   try {
     systemInfo.value = await window.ipcRenderer.invoke("get-system-info");
@@ -2826,10 +2965,6 @@ onMounted(async () => {
   if (storeFilter.value !== "spark") {
     apmAvailable.value = await window.ipcRenderer.invoke("check-apm-available");
   }
-
-  activeInstalledOrigin.value =
-    getDefaultInstalledOrigin(storeFilter.value, availableSources.value) ??
-    "spark";
 
   await loadCategories();
 
@@ -2988,6 +3123,7 @@ onUnmounted(() => {
     "install-complete",
     handleInstallCompleteForDownloadRecord,
   );
+  window.removeEventListener("resize", handleWindowResize);
 });
 
 // 观察器

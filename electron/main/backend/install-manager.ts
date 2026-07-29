@@ -997,8 +997,16 @@ ipcMain.handle(
       }> = [];
 
       if (origin === "spark") {
-        // 如果提供了包名列表，只检查这些包的安装状态（优化版）
-        if (pkgnameList && pkgnameList.length > 0) {
+        // 显式传入了包名列表（可能是空数组）：只检查这些包的安装状态（优化版）
+        if (Array.isArray(pkgnameList)) {
+          if (pkgnameList.length === 0) {
+            // 商店目录尚未加载或该来源没有任何可枚举的包时，
+            // 直接返回空列表，避免退化为“全量扫描整个系统”后再被渲染端全部跳过，
+            // 否则会误报“已安装应用为空”。
+            logger.info("Spark 包名列表为空，跳过已安装检查");
+            return { success: true, apps: [] };
+          }
+
           logger.info(
             `使用优化模式检查 ${pkgnameList.length} 个 Spark 包的安装状态`,
           );
@@ -1040,7 +1048,7 @@ ipcMain.handle(
           return { success: true, apps: installedApps };
         }
 
-        // 回退到全量扫描模式（未提供包名列表时）
+        // 回退到全量扫描模式（仅当调用方未传入 pkgnameList 时，例如旧版直接调用）
         logger.info("使用全量扫描模式获取所有 Spark 已安装包");
         const { code, stdout } = await runCommandCapture("dpkg-query", [
           "-W",
@@ -1274,31 +1282,52 @@ ipcMain.handle("uninstall-installed", async (_event, payload: any) => {
   };
 });
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-ipcMain.handle("launch-app", async (_event, payload: any) => {
-  const pkgname = typeof payload === "string" ? payload : payload.pkgname;
-  const origin = typeof payload === "string" ? "spark" : payload.origin;
+interface LaunchAppPayload {
+  pkgname: string;
+  origin?: "spark" | "apm";
+}
 
-  if (!pkgname) {
-    logger.warn("No pkgname provided for launch-app");
-  }
+// 合法包名字符（Debian 包名规范 + Spark 应用包名常见字符），
+// 用于拦截包含特殊字符的非法输入，避免命令注入。
+const PKGNAME_PATTERN = /^[a-zA-Z0-9._+-]+$/;
 
-  let execCommand = "/opt/spark-store/extras/app-launcher";
-  let execParams = ["start", pkgname];
+ipcMain.handle(
+  "launch-app",
+  async (
+    _event,
+    payload: LaunchAppPayload,
+  ): Promise<{ success: boolean; message?: string }> => {
+    const pkgname = typeof payload === "string" ? payload : payload.pkgname;
+    const origin = typeof payload === "string" ? "spark" : payload.origin;
 
-  if (origin === "apm") {
-    execCommand = "apm";
-    execParams = ["launch", pkgname];
-  }
+    if (
+      !pkgname ||
+      typeof pkgname !== "string" ||
+      !PKGNAME_PATTERN.test(pkgname)
+    ) {
+      logger.warn(`Invalid pkgname provided for launch-app: ${pkgname}`);
+      return { success: false, message: "Invalid package name" };
+    }
 
-  logger.info(
-    `Launching app: ${pkgname} with command: ${execCommand} ${execParams.join(" ")}`,
-  );
+    let execCommand = "/opt/spark-store/extras/app-launcher";
+    let execParams = ["start", pkgname];
 
-  spawn(execCommand, execParams, {
-    shell: false,
-    env: process.env,
-    detached: true,
-    stdio: "ignore",
-  }).unref();
-});
+    if (origin === "apm") {
+      execCommand = "apm";
+      execParams = ["launch", pkgname];
+    }
+
+    logger.info(
+      `Launching app: ${pkgname} with command: ${execCommand} ${execParams.join(" ")}`,
+    );
+
+    spawn(execCommand, execParams, {
+      shell: false,
+      env: process.env,
+      detached: true,
+      stdio: "ignore",
+    }).unref();
+
+    return { success: true };
+  },
+);

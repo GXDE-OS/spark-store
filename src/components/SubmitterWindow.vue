@@ -1,6 +1,6 @@
 <template>
   <div
-    class="flex h-screen flex-col overflow-hidden rounded-3xl shadow-2xl bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100"
+    class="flex h-screen flex-col overflow-hidden rounded-3xl bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 ring-1 ring-black/5 dark:ring-white/5 shadow-[inset_0_1px_3px_rgba(0,0,0,0.25)]"
   >
     <div
       class="submitter-titlebar shrink-0 z-30 border-b border-slate-200/70 bg-white px-4 py-3 dark:border-slate-800/70 dark:bg-slate-900"
@@ -34,7 +34,7 @@
       </div>
     </div>
 
-    <div class="flex-1 overflow-y-auto mr-4 mb-4">
+    <div class="flex-1 overflow-y-auto mb-6">
       <div class="p-6 max-w-2xl mx-auto">
       <div class="space-y-6">
         <div>
@@ -608,7 +608,7 @@
         class="fixed inset-0 z-50 flex items-center justify-center p-4"
       >
         <div
-          class="absolute inset-0 bg-black/50"
+          class="absolute inset-0 bg-black/50 rounded-3xl"
           @click="showArchPackDialog = false"
         ></div>
         <div
@@ -684,7 +684,7 @@
         class="fixed inset-0 z-50 flex items-center justify-center p-4"
       >
         <div
-          class="absolute inset-0 bg-black/50"
+          class="absolute inset-0 bg-black/50 rounded-3xl"
           @click="showArchDialog = false"
         ></div>
         <div

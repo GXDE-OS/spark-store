@@ -21,8 +21,8 @@
   <div v-else-if="!loading && apps.length <= 50" class="non-virtual-scroller">
     <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
       <AppCard
-        v-for="(app, index) in apps"
-        :key="index"
+        v-for="app in apps"
+        :key="app.pkgname"
         :app="app"
         :show-origin="effectiveShowOrigin"
         @open-detail="$emit('open-detail', app)"
@@ -182,10 +182,15 @@ const gridRows = computed(() => {
 .non-virtual-scroller {
   height: 100%;
   overflow-y: auto;
+  margin: -24px -16px; /* 抵消父容器的 px-4 py-6 */
 }
 
 @media (min-width: 1024px) {
   .scroller {
+    margin: -24px -40px; /* 抵消父容器的 lg:px-10 */
+  }
+
+  .non-virtual-scroller {
     margin: -24px -40px; /* 抵消父容器的 lg:px-10 */
   }
 }
