@@ -1380,13 +1380,17 @@ const loadHome = async () => {
             if (!url) continue;
             const icon = (l.Icon as string) || (l.icon as string) || "";
             seenNames.add(name);
-            homeLinks.value.push({
-              ...l,
+            // 显式提取已知字段构造，避免通过展开运算符 { ...l } 把远程不可信数据中的未知属性注入响应式状态
+            const safeLink: HomeLink = {
               name,
               url,
               icon,
+              more: (l.more as string) || undefined,
+              imgUrl: (l.imgUrl as string) || undefined,
+              type: (l.type as string) || undefined,
               origin: mode,
-            } as HomeLink);
+            };
+            homeLinks.value.push(safeLink);
           }
         }
       } catch (e) {

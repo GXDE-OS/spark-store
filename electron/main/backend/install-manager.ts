@@ -297,6 +297,16 @@ ipcMain.on("queue-install", async (event, download_json) => {
     return;
   }
 
+  // 包名/文件名白名单校验：防止路径遍历（如 ../../）或非法字符进入下载目录与安装命令构建
+  if (!PKGNAME_PATTERN.test(pkgname)) {
+    logger.warn(`queue-install invalid pkgname: ${pkgname}`);
+    return;
+  }
+  if (filename && !PKGNAME_PATTERN.test(filename)) {
+    logger.warn(`queue-install invalid filename: ${filename}`);
+    return;
+  }
+
   logger.info(`收到下载任务: ${id}, 软件包名称: ${pkgname}, 来源: ${origin}`);
 
   const webContents = event.sender;
