@@ -120,8 +120,8 @@
             </div>
           </a>
         </div>
-        <!-- 致谢说明（F2.3 复用）：置于区域1 其他内容下方 -->
-        <ThanksCard class="mt-4" />
+        <!-- 致谢说明（F2.3 复用）：置于区域1 其他内容下方，当前按需求隐藏（代码保留） -->
+        <ThanksCard v-if="false" class="mt-4" />
       </section>
     </template>
   </div>
