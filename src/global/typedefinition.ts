@@ -115,6 +115,8 @@ export interface App {
   sparkApp?: App; // Optional reference to the spark version
   apmApp?: App; // Optional reference to the apm version
   viewingOrigin?: "spark" | "apm"; // Currently viewed origin inside the app modal
+  origins?: Array<"spark" | "apm">; // 实际安装来源集合（同时以 APM 与 Spark 安装时含两项）
+  downloadCount?: number; // 下载量（用于下载排行，由 download-times.txt 解析）
 }
 
 export interface UpdateAppItem {

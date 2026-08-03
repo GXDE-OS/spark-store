@@ -1,9 +1,15 @@
 <template>
-  <div class="space-y-6">
+  <!--
+    首页视图：仅渲染"区域1 精选（links）"。
+    历史版本曾渲染"区域2 板块（homelist.json）"作为第二个 section，
+    若回滚/合并导致该 section 复活，板块应用会与侧边栏入口"装机必备/社区精品/APM 扩展"内容重复展示（双来源同数据）。
+    现行设计：板块已迁移至侧边栏入口（App.vue `loadHomeListEntries`），首页不再渲染板块，参见 commit 438b9baa。
+  -->
+  <div class="flex h-full min-h-0 flex-col gap-2 overflow-hidden">
     <!-- 初始加载状态 - 只有在完全没有数据时显示 -->
     <div
       v-if="loading && links.length === 0"
-      class="flex flex-col items-center justify-center py-12 text-slate-500 dark:text-slate-400"
+      class="flex flex-1 flex-col items-center justify-center text-slate-500 dark:text-slate-400"
     >
       <i class="fas fa-spinner fa-spin text-2xl mb-3"></i>
       <span class="text-sm">正在加载首页内容…</span>
@@ -17,7 +23,7 @@
     <!-- 无数据时显示欢迎信息 -->
     <div
       v-else-if="links.length === 0"
-      class="flex flex-col items-center justify-center py-20 text-center"
+      class="flex flex-1 flex-col items-center justify-center text-center"
     >
       <img
         v-if="storeFilter === 'apm'"
@@ -47,83 +53,100 @@
       </p>
     </div>
     <!-- 有数据就立即展示，图片逐步加载 -->
-    <div v-else>
-      <!-- 左上角欢迎语 -->
-      <div class="mb-4">
-        <h1 class="text-xl font-bold text-slate-800 dark:text-slate-200">
-          {{
-            storeFilter === "apm"
-              ? "欢迎来到星火应用商店 (Amber PM)"
-              : "欢迎来到星火应用商店"
-          }}
-        </h1>
-        <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">
-          探索丰富的应用，发现更多精彩内容
-        </p>
-      </div>
-
-      <!-- Links 区域 -->
-      <div v-if="links.length > 0" class="grid gap-5 auto-fit-grid">
-        <a
-          v-for="link in links"
-          :key="link.url + link.name"
-          :href="link.type === '_blank' ? undefined : link.url"
-          @click.prevent="onLinkClick(link)"
-          class="group block overflow-hidden rounded-xl transition-transform duration-300 hover:scale-[1.02]"
-          :title="link.more as string"
+    <template v-else>
+      <!-- ============ 区域1 · 精选（两行网格 4×2，静态不滚动） ============ -->
+      <section class="shrink-0">
+        <div class="mb-4">
+          <h1 class="text-sm font-bold text-slate-800 dark:text-slate-200">
+            {{
+              storeFilter === "apm" ? "星火应用商店 (Amber PM)" : "星火应用商店"
+            }}
+          </h1>
+          <p class="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">
+            探索丰富的应用，发现更多精彩内容
+          </p>
+        </div>
+        <div
+          v-if="links.length > 0"
+          class="grid grid-cols-2 gap-4 sm:grid-cols-4"
         >
-          <div
-            class="relative w-full aspect-[850/400] overflow-hidden rounded-xl bg-slate-100 dark:bg-slate-800"
+          <a
+            v-for="link in links"
+            :key="link.url + link.name"
+            :href="link.type === '_blank' ? undefined : link.url"
+            @click.prevent="onLinkClick(link)"
+            class="group block overflow-hidden rounded-lg transition-transform duration-300 hover:scale-[1.02]"
+            :title="link.more as string"
           >
-            <img
-              :src="computedImgUrl(link)"
-              class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-              loading="lazy"
-              @load="onImageLoad(link.url + link.name)"
-              @error="onImageError(link.url + link.name)"
-              :class="{
-                'opacity-0': !imageLoaded[link.url + link.name],
-                'opacity-100 transition-opacity duration-300':
-                  imageLoaded[link.url + link.name],
-              }"
-            />
             <div
-              v-if="!imageLoaded[link.url + link.name]"
-              class="absolute inset-0 flex items-center justify-center"
+              class="relative w-full overflow-hidden rounded-lg bg-slate-100 dark:bg-slate-800"
             >
+              <img
+                :src="computedImgUrl(link)"
+                class="block w-full transition-transform duration-500 group-hover:scale-105"
+                loading="lazy"
+                decoding="async"
+                @load="onImageLoad(link.url + link.name)"
+                @error="onImageError(link.url + link.name)"
+                :class="{
+                  'aspect-[850/260] object-cover':
+                    !imageLoaded[link.url + link.name],
+                  'h-auto': imageLoaded[link.url + link.name],
+                  'opacity-0': !imageLoaded[link.url + link.name],
+                  'opacity-100 transition-opacity duration-300':
+                    imageLoaded[link.url + link.name],
+                }"
+              />
               <div
-                class="h-10 w-10 animate-pulse rounded-full bg-slate-200 dark:bg-slate-700"
-              ></div>
+                v-if="!imageLoaded[link.url + link.name]"
+                class="absolute inset-0 flex items-center justify-center"
+              >
+                <div
+                  class="h-10 w-10 animate-pulse rounded-full bg-slate-200 dark:bg-slate-700"
+                ></div>
+              </div>
             </div>
-          </div>
-          <div class="mt-3 px-1">
-            <div
-              class="text-base font-semibold text-slate-900 dark:text-white group-hover:text-brand dark:group-hover:text-brand transition-colors"
-            >
-              {{ link.name }}
+            <div class="mt-1.5 px-1">
+              <div
+                class="text-[13px] font-semibold text-slate-900 dark:text-white group-hover:text-brand dark:group-hover:text-brand transition-colors"
+              >
+                {{ link.name }}
+              </div>
+              <div
+                class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-1"
+              >
+                {{ link.more }}
+              </div>
             </div>
-            <div
-              class="text-sm text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-1"
-            >
-              {{ link.more }}
-            </div>
-          </div>
-        </a>
-      </div>
-    </div>
+          </a>
+        </div>
+        <!-- 致谢说明（F2.3 复用）：置于区域1 其他内容下方 -->
+        <ThanksCard class="mt-4" />
+      </section>
+    </template>
   </div>
 </template>
 
 <script setup lang="ts">
-import { APM_STORE_BASE_URL } from "../global/storeConfig";
 import { reactive } from "vue";
-import type { HomeLink } from "../global/typedefinition";
+import { APM_STORE_BASE_URL } from "../global/storeConfig";
+import type { HomeLink, App } from "../global/typedefinition";
+import ThanksCard from "./ThanksCard.vue";
 
-defineProps<{
-  links: HomeLink[];
-  loading: boolean;
-  error: string;
-  storeFilter?: "spark" | "apm" | "both";
+withDefaults(
+  defineProps<{
+    links: HomeLink[];
+    loading: boolean;
+    error: string;
+    storeFilter?: "spark" | "apm" | "both";
+  }>(),
+  {
+    storeFilter: "both",
+  },
+);
+
+const emit = defineEmits<{
+  (e: "open-detail", app: App): void;
 }>();
 
 // 图片加载状态跟踪
@@ -152,9 +175,10 @@ const onLinkClick = (link: HomeLink) => {
     window.location.href = link.url;
   }
 };
-</script>
 
-<style scoped></style>
+// 下载量格式化：>= 1万 显示为 "x.x万"
+// (download count now formatted inside AppCard via its downloadCount prop)
+</script>
 
 <style scoped>
 /* Link 卡片网格 - 固定最小宽度 180px */

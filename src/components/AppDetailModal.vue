@@ -161,13 +161,7 @@
                   <button
                     type="button"
                     class="flex-1 inline-flex items-center justify-center gap-2 rounded-xl bg-slate-800 px-4 py-2.5 text-sm font-medium text-white shadow-sm transition hover:bg-slate-700 dark:bg-slate-700 dark:hover:bg-slate-600"
-                    @click="
-                      emit(
-                        'open-app',
-                        displayApp?.pkgname || '',
-                        displayApp?.origin,
-                      )
-                    "
+                    @click="onOpenClick"
                   >
                     <i class="fas fa-external-link-alt text-xs"></i>
                     <span>打开</span>
@@ -392,6 +386,7 @@
     </div>
   </Transition>
 
+
   <!-- 元数据详情弹窗 -->
   <Transition
     enter-active-class="duration-200 ease-out"
@@ -507,6 +502,69 @@
         </div>
       </div>
     </div>
+
+    <!-- 双来源安装：打开时选择 APM 还是 Spark -->
+    <Transition
+      enter-active-class="duration-200 ease-out"
+      enter-from-class="opacity-0 scale-95"
+      enter-to-class="opacity-100 scale-100"
+      leave-active-class="duration-150 ease-in"
+      leave-from-class="opacity-100 scale-100"
+      leave-to-class="opacity-0 scale-95"
+    >
+      <div
+        v-if="openChoiceVisible"
+        class="fixed inset-0 z-[85] flex items-center justify-center bg-slate-900/70 p-4"
+        @click.self="openChoiceVisible = false"
+      >
+        <div
+          class="relative w-full max-w-sm overflow-hidden rounded-3xl border border-white/10 bg-white/95 p-6 shadow-2xl dark:border-slate-800 dark:bg-slate-900"
+        >
+          <div class="mb-5 flex items-start gap-3">
+            <div
+              class="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-sky-100 to-indigo-50 shadow-inner dark:from-sky-900/30 dark:to-indigo-800/20"
+            >
+              <i class="fas fa-external-link-alt text-xl text-sky-500"></i>
+            </div>
+            <div>
+              <h3 class="text-lg font-bold text-slate-900 dark:text-white">
+                打开应用
+              </h3>
+              <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                该应用同时通过 APM 与 Spark 安装，请选择要打开的来源：
+              </p>
+            </div>
+          </div>
+          <div class="flex gap-3">
+            <button
+              type="button"
+              class="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-amber-300/70 px-4 py-2.5 text-sm font-semibold text-amber-700 transition hover:bg-amber-50 dark:border-amber-500/40 dark:text-amber-300 dark:hover:bg-amber-500/10"
+              @click="confirmOpen('apm')"
+            >
+              <i class="fas fa-box-open"></i>
+              打开 APM 版
+            </button>
+            <button
+              type="button"
+              class="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-sky-300/70 px-4 py-2.5 text-sm font-semibold text-sky-700 transition hover:bg-sky-50 dark:border-sky-500/40 dark:text-sky-300 dark:hover:bg-sky-500/10"
+              @click="confirmOpen('spark')"
+            >
+              <i class="fas fa-bolt"></i>
+              打开 Spark 版
+            </button>
+          </div>
+          <div class="mt-4 flex justify-end">
+            <button
+              type="button"
+              class="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
+              @click="openChoiceVisible = false"
+            >
+              取消
+            </button>
+          </div>
+        </div>
+      </div>
+    </Transition>
   </Transition>
 </template>
 
@@ -728,6 +786,28 @@ const handleRemove = () => {
   if (displayApp.value) {
     emit("remove", displayApp.value);
   }
+};
+
+// 双来源安装时，"打开"需先让用户选择打开 APM 还是 Spark 版
+const openChoiceVisible = ref(false);
+const openOrigins = (app: App | null): Array<"spark" | "apm"> =>
+  app?.origins && app.origins.length > 0 ? app.origins : [app?.origin ?? "spark"];
+
+const onOpenClick = () => {
+  const app = displayApp.value;
+  if (!app) return;
+  const origins = openOrigins(app);
+  if (origins.length > 1) {
+    openChoiceVisible.value = true;
+  } else {
+    emit("open-app", app.pkgname, origins[0]);
+  }
+};
+
+const confirmOpen = (origin: "spark" | "apm") => {
+  const app = displayApp.value;
+  if (app) emit("open-app", app.pkgname, origin);
+  openChoiceVisible.value = false;
 };
 
 // 收藏功能暂时关闭

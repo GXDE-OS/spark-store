@@ -58,6 +58,34 @@
           {{ error }}
         </div>
 
+        <!-- 双来源：先让用户选择要卸载的来源 -->
+        <div
+          v-if="installOrigins.length > 1 && !uninstalling && !completed"
+          class="mb-1 flex w-full flex-col items-end gap-2"
+        >
+          <p class="text-sm text-slate-500 dark:text-slate-400">
+            该应用同时通过 APM 与 Spark 安装，请选择要卸载的来源：
+          </p>
+          <div class="flex gap-2">
+            <button
+              type="button"
+              class="inline-flex items-center gap-2 rounded-xl border border-amber-300/70 px-4 py-2 text-sm font-semibold text-amber-700 transition hover:bg-amber-50 dark:border-amber-500/40 dark:text-amber-300 dark:hover:bg-amber-500/10"
+              @click="confirmUninstall('apm')"
+            >
+              <i class="fas fa-box-open"></i>
+              卸载 APM 版
+            </button>
+            <button
+              type="button"
+              class="inline-flex items-center gap-2 rounded-xl border border-sky-300/70 px-4 py-2 text-sm font-semibold text-sky-700 transition hover:bg-sky-50 dark:border-sky-500/40 dark:text-sky-300 dark:hover:bg-sky-500/10"
+              @click="confirmUninstall('spark')"
+            >
+              <i class="fas fa-bolt"></i>
+              卸载 Spark 版
+            </button>
+          </div>
+        </div>
+
         <div class="flex items-center justify-end gap-3">
           <button
             v-if="!uninstalling"
@@ -69,10 +97,10 @@
           </button>
 
           <button
-            v-if="!uninstalling && !completed"
+            v-if="installOrigins.length <= 1 && !uninstalling && !completed"
             type="button"
             class="inline-flex items-center gap-2 rounded-xl bg-rose-500 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-rose-500/30 transition hover:bg-rose-600 hover:-translate-y-0.5"
-            @click="confirmUninstall"
+            @click="confirmUninstall(installOrigins[0])"
           >
             <i class="fas fa-trash"></i>
             确认卸载
@@ -115,6 +143,14 @@ const logEnd = ref<HTMLElement | null>(null);
 const appName = computed(() => props.app?.name || "未知应用");
 const appPkg = computed(() => props.app?.pkgname || "");
 
+// 该应用实际安装的来源集合：优先取自合并后的 origins，回退到单 origin 字段
+const installOrigins = computed<Array<"spark" | "apm">>(() => {
+  if (props.app?.origins && props.app.origins.length > 0) {
+    return props.app.origins;
+  }
+  return [props.app?.origin ?? "spark"];
+});
+
 const handleClose = () => {
   if (uninstalling.value && !completed.value) return; // Prevent closing while uninstalling
   reset();
@@ -134,18 +170,20 @@ const reset = () => {
   error.value = "";
 };
 
-const confirmUninstall = () => {
+const confirmUninstall = (origin: "spark" | "apm") => {
   if (!appPkg.value) {
     error.value = "无效的包名";
     return;
   }
 
   uninstalling.value = true;
-  logs.value = ["正在请求卸载: " + appPkg.value + "..."];
+  const originLabel = origin === "apm" ? "APM" : "Spark";
+  logs.value = [`正在请求卸载(${originLabel}): ${appPkg.value}...`];
 
+  // 按用户选择的来源走对应的卸载方式（spark -> aptss remove；apm -> apm autoremove）
   window.ipcRenderer.send("remove-installed", {
     pkgname: appPkg.value,
-    origin: props.app?.origin || "spark",
+    origin,
   });
 };
 

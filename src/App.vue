@@ -4,7 +4,15 @@
     v-else
     class="flex h-screen flex-col overflow-hidden bg-slate-50 text-slate-900 transition-colors duration-300 dark:bg-slate-950 dark:text-slate-100"
   >
-    <WindowTitleBar />
+    <WindowTitleBar
+      :search-query="searchQuery"
+      @update:search-query="handleSearchInput"
+      @search-focus="handleSearchFocus"
+      @open-install-settings="handleOpenInstallSettings"
+      @open-about="openAboutModal"
+      @toggle-sidebar="isSidebarOpen = !isSidebarOpen"
+      @spk-link="handleSpkLink"
+    />
 
     <div class="flex min-h-0 flex-1 flex-col lg:flex-row">
       <!-- 移动端侧边栏遮罩 -->
@@ -46,21 +54,6 @@
       </aside>
 
       <main class="flex h-full min-h-0 flex-1 flex-col">
-        <div
-          class="sticky top-10 z-30 shrink-0 border-b border-slate-200/70 bg-slate-50 px-4 py-4 lg:px-10 dark:border-slate-800/70 dark:bg-slate-950"
-        >
-          <AppHeader
-            :search-query="searchQuery"
-            :active-tab="activeTab"
-            :apps-count="filteredApps.length"
-            @update-search="handleSearchInput"
-            @search-focus="handleSearchFocus"
-            @open-install-settings="handleOpenInstallSettings"
-            @open-about="openAboutModal"
-            @toggle-sidebar="isSidebarOpen = !isSidebarOpen"
-            @spk-link="handleSpkLink"
-          />
-        </div>
         <CategoryBar
           v-if="
             currentView === 'default' &&
@@ -90,12 +83,35 @@
             @open-detail="openDetail"
           />
           <template v-else-if="activeTab === 'home'">
-            <div class="h-full overflow-y-auto pr-2 scrollbar-nowidth">
+            <div class="h-full min-h-0 overflow-hidden">
               <HomeView
                 :links="homeLinks"
                 :loading="homeLoading"
                 :error="homeError"
                 :store-filter="storeFilter"
+                @open-detail="handleAppCardOpenDetail"
+                @select-section="selectTab"
+              />
+            </div>
+          </template>
+          <template v-else-if="activeTab === 'ranking'">
+            <div class="h-full min-h-0 overflow-hidden">
+              <RankingView
+                :apps="apps"
+                :apm-ranking="apmRanking"
+                :spark-ranking="sparkRanking"
+                :ranking-loading="rankingLoading"
+                :store-filter="storeFilter"
+                @open-detail="handleAppCardOpenDetail"
+              />
+            </div>
+          </template>
+          <template v-else-if="activeTab === 'honor'">
+            <div class="h-full min-h-0 overflow-hidden">
+              <HonorView
+                :apps="apps"
+                :store-filter="storeFilter"
+                @open-detail="handleAppCardOpenDetail"
               />
             </div>
           </template>
@@ -181,7 +197,7 @@
       @close="closeInstalledModal"
       @refresh="refreshInstalledApps"
       @open-app="openDownloadedApp($event.pkgname, $event.origin)"
-      @open-detail="openDetail"
+      @open-detail="openDetailFromInstalled"
       @uninstall="uninstallInstalledApp"
       @sync-to-account="syncInstalledAppsToAccount"
       @restore-from-account="openRestoreFromAccount"
@@ -288,9 +304,10 @@ import { ref, computed, onMounted, onUnmounted, watch, nextTick } from "vue";
 import axios, { AxiosError } from "axios";
 import pino from "pino";
 import AppSidebar from "./components/AppSidebar.vue";
-import AppHeader from "./components/AppHeader.vue";
 import AppGrid from "./components/AppGrid.vue";
 import HomeView from "./components/HomeView.vue";
+import RankingView from "./components/RankingView.vue";
+import HonorView from "./components/HonorView.vue";
 import CategoryBar from "./components/CategoryBar.vue";
 import AppDetailModal from "./components/AppDetailModal.vue";
 import ScreenPreview from "./components/ScreenPreview.vue";
@@ -904,6 +921,11 @@ const fetchAppFromStore = async (
   }
 };
 
+// 已安装应用页查看详情：复用所有应用页的合并详情视图（始终展示 APM/Spark 两种包）
+const openDetailFromInstalled = (app: App) => {
+  openDetail({ ...app, _fromInstalled: true });
+};
+
 const openDetail = async (app: App | Record<string, unknown>) => {
   // 提取 pkgname 和 category（必须存在）
   const pkgname = (app as Record<string, unknown>).pkgname as string;
@@ -912,17 +934,36 @@ const openDetail = async (app: App | Record<string, unknown>) => {
   // 检查是否来自 HomeView 或 DeepLink（需要重新获取完整信息）
   const fromHomeView = (app as Record<string, unknown>)._fromHomeView === true;
   const fromDeepLink = (app as Record<string, unknown>)._fromDeepLink === true;
-  const needFetchFromStore = fromHomeView || fromDeepLink;
+  // 已安装应用页：始终按"所有应用页"的方式双来源拉取并合并展示（不移除另一类型）
+  const fromInstalled = (app as Record<string, unknown>)._fromInstalled === true;
+  const needFetchFromStore = fromHomeView || fromDeepLink || fromInstalled;
   if (!pkgname) {
     console.warn("openDetail: 缺少 pkgname", app);
     return;
   }
 
   // 首先尝试从当前已经处理好（合并/筛选）的 filteredApps 中查找
-  let fullApp = filteredApps.value.find((a) => a.pkgname === pkgname);
-  // 如果没找到，回退到全局 apps 中查找
+  // 优先匹配点击来源 origin（例如排行点击 APM 应用时不应误匹配到 Spark 版）
+  const clickedOrigin = (app as Record<string, unknown>).origin as
+    | "spark"
+    | "apm"
+    | undefined;
+  let fullApp = filteredApps.value.find(
+    (a) =>
+      a.pkgname === pkgname && (!clickedOrigin || a.origin === clickedOrigin),
+  );
+  // 如果没找到，回退到全局 apps 中查找（同样优先 origin）
   if (!fullApp) {
-    fullApp = apps.value.find((a) => a.pkgname === pkgname);
+    fullApp = apps.value.find(
+      (a) =>
+        a.pkgname === pkgname && (!clickedOrigin || a.origin === clickedOrigin),
+    );
+  }
+  // 仍无匹配则退化为仅按 pkgname 匹配（兼容无 origin 的场景，如搜索结果）
+  if (!fullApp) {
+    fullApp =
+      filteredApps.value.find((a) => a.pkgname === pkgname) ||
+      apps.value.find((a) => a.pkgname === pkgname);
   }
 
   let finalApp: App;
@@ -930,27 +971,38 @@ const openDetail = async (app: App | Record<string, unknown>) => {
   // 来自 HomeView 或 DeepLink 的应用需要重新从仓库获取完整信息
   if (needFetchFromStore) {
     // 从 Spark 和 APM 仓库获取完整的应用信息
-    const [sparkApp, apmApp] = await Promise.all([
-      storeFilter.value !== "apm"
+    // 已安装页忽略当前商店单一模式限制，始终尝试拉取两种来源，保证另一类型不被隐藏
+    let [sparkApp, apmApp] = await Promise.all([
+      fromInstalled || storeFilter.value !== "apm"
         ? fetchAppFromStore(pkgname, category, "spark")
         : Promise.resolve(null),
-      storeFilter.value !== "spark"
+      fromInstalled || storeFilter.value !== "spark"
         ? fetchAppFromStore(pkgname, category, "apm")
         : Promise.resolve(null),
     ]);
+
+    // 已安装页：若某来源仓库拉取失败（如分类不匹配），用本地已合并的应用补全，避免丢失另一类型
+    if (fromInstalled && fullApp && fullApp.isMerged) {
+      const merged = fullApp as App;
+      if (!sparkApp && merged.sparkApp) sparkApp = merged.sparkApp;
+      if (!apmApp && merged.apmApp) apmApp = merged.apmApp;
+    }
 
     // 构建合并的应用对象
     if (sparkApp || apmApp) {
       // 如果两个仓库都有这个应用，创建合并对象
       if (sparkApp && apmApp) {
-        // 根据优先级配置决定默认显示哪个版本
-        const defaultOrigin = getHybridDefaultOrigin(sparkApp);
+        // 优先遵从点击来源 origin；无点击来源时再按优先级配置决定默认显示
+        const defaultOrigin =
+          clickedOrigin && (clickedOrigin === "spark" ? sparkApp : apmApp)
+            ? clickedOrigin
+            : getHybridDefaultOrigin(sparkApp);
         finalApp = {
           ...(defaultOrigin === "spark" ? sparkApp : apmApp), // 根据优先级选择主显示
           isMerged: true,
           sparkApp: sparkApp,
           apmApp: apmApp,
-          viewingOrigin: defaultOrigin, // 默认查看优先级高的版本
+          viewingOrigin: defaultOrigin, // 默认查看来源版本
         };
       } else if (sparkApp) {
         finalApp = sparkApp;
@@ -1027,12 +1079,38 @@ const openDetail = async (app: App | Record<string, unknown>) => {
           }) as Promise<boolean>)
         : Promise.resolve(false),
     ]);
-    if (sparkInstalled && !apmInstalled) {
+    // 优先遵从点击来源 origin（未安装时、已安装时都应以用户点击的版本为准）
+    let preferred = (app as Record<string, unknown>).origin as
+      | "spark"
+      | "apm"
+      | undefined;
+    if (fromInstalled) {
+      // 已安装页：依据实际安装来源决定默认展示
+      const installedOrigins = (app as Record<string, unknown>).origins as
+        | Array<"spark" | "apm">
+        | undefined;
+      if (installedOrigins && installedOrigins.length > 0) {
+        if (
+          installedOrigins.includes("spark") &&
+          installedOrigins.includes("apm")
+        ) {
+          // 两种类型都已安装：保持所有应用页的自动显示模式（不强制指定来源）
+          preferred = undefined;
+        } else {
+          // 仅安装一种类型：优先显示已安装的类型（另一类型仍可在来源切换中查看）
+          preferred = installedOrigins[0];
+        }
+      }
+    }
+    if (preferred && (preferred === "spark" ? finalApp.sparkApp : finalApp.apmApp)) {
+      finalApp.viewingOrigin = preferred;
+    } else if (sparkInstalled && !apmInstalled) {
+      // 无点击来源时：仅一个仓库已安装则优先展示已安装版本
       finalApp.viewingOrigin = "spark";
     } else if (apmInstalled && !sparkInstalled) {
       finalApp.viewingOrigin = "apm";
     } else {
-      // 若都安装或都未安装，根据优先级配置决定默认展示
+      // 都安装/都未安装且未指定来源：按优先级配置决定默认展示
       finalApp.viewingOrigin = getHybridDefaultOrigin(
         finalApp.sparkApp || finalApp,
       );
@@ -1133,6 +1211,125 @@ const closeScreenPreview = () => {
 const homeLinks = ref<HomeLink[]>([]);
 const homeLoading = ref(false);
 const homeError = ref("");
+
+// 首页三区域：区域2 板块（已迁移至「全部应用」等分类入口，首页不再展示）
+const apmRanking = ref<App[]>([]);
+const sparkRanking = ref<App[]>([]);
+
+// 区域3 · 下载排行（全站）：从全量应用目录逐应用拉取 download-times.txt，
+// 按 origin 分别排 APM / Spark 两榜。用代次守卫避免竞态。
+// 优化：localStorage 缓存（1 小时 TTL）避免重复请求；并发 48；每个批次完成后立即发布
+// 增量排名，边拉边显；fetchDownloadCount 优先命中缓存。
+let rankingGeneration = 0;
+const rankingLoading = ref(false);
+
+const DOWNLOAD_COUNT_CACHE_KEY = "spark-store:download-counts:v1";
+const DOWNLOAD_COUNT_CACHE_TTL_MS = 60 * 60 * 1000; // 1 小时
+
+interface CachedCount {
+  count: number;
+  ts: number;
+}
+
+const downloadCountCache = new Map<string, CachedCount>();
+
+const cacheKey = (app: App) => `${app.origin}:${app.category}:${app.pkgname}`;
+
+const loadCacheFromStorage = () => {
+  try {
+    const raw = localStorage.getItem(DOWNLOAD_COUNT_CACHE_KEY);
+    if (!raw) return;
+    const data = JSON.parse(raw) as Record<string, CachedCount>;
+    const now = Date.now();
+    for (const [k, v] of Object.entries(data)) {
+      if (now - v.ts < DOWNLOAD_COUNT_CACHE_TTL_MS) {
+        downloadCountCache.set(k, v);
+      }
+    }
+  } catch {
+    // ignore corrupted cache
+  }
+};
+
+const saveCacheToStorage = () => {
+  try {
+    const obj: Record<string, CachedCount> = {};
+    downloadCountCache.forEach((v, k) => {
+      obj[k] = v;
+    });
+    localStorage.setItem(DOWNLOAD_COUNT_CACHE_KEY, JSON.stringify(obj));
+  } catch {
+    // ignore quota errors
+  }
+};
+
+const fetchDownloadCount = async (app: App): Promise<number> => {
+  const key = cacheKey(app);
+  const cached = downloadCountCache.get(key);
+  if (cached) return cached.count;
+  const arch = window.apm_store.arch || "amd64";
+  const finalArch = app.origin === "spark" ? `${arch}-store` : `${arch}-apm`;
+  try {
+    const resp = await fetch(
+      `${APM_STORE_BASE_URL}/${finalArch}/${app.category}/${app.pkgname}/download-times.txt`,
+    );
+    if (!resp.ok) return 0;
+    const text = (await resp.text()).trim();
+    const n = parseInt(text, 10);
+    const count = Number.isFinite(n) ? n : 0;
+    downloadCountCache.set(key, { count, ts: Date.now() });
+    return count;
+  } catch {
+    return 0;
+  }
+};
+
+const publishRanking = (results: App[]) => {
+  apmRanking.value = results
+    .filter((a) => a.origin === "apm")
+    .sort((x, y) => (y.downloadCount || 0) - (x.downloadCount || 0))
+    .slice(0, 10);
+  sparkRanking.value = results
+    .filter((a) => a.origin === "spark")
+    .sort((x, y) => (y.downloadCount || 0) - (x.downloadCount || 0))
+    .slice(0, 10);
+};
+
+const loadRanking = async () => {
+  if (apps.value.length === 0) return;
+  const gen = ++rankingGeneration;
+  rankingLoading.value = true;
+  const all = apps.value.slice();
+  const CONCURRENCY = 64;
+  const results: App[] = [];
+  for (let i = 0; i < all.length; i += CONCURRENCY) {
+    if (gen !== rankingGeneration) {
+      saveCacheToStorage();
+      return;
+    }
+    const batch = all.slice(i, i + CONCURRENCY);
+    const settled = await Promise.all(
+      batch.map(async (app) => ({
+        ...app,
+        downloadCount: await fetchDownloadCount(app),
+      })),
+    );
+    results.push(...settled);
+    // 边拉边发：每批完成后立即发布增量排名
+    if (gen === rankingGeneration) publishRanking(results);
+  }
+  if (gen !== rankingGeneration) {
+    saveCacheToStorage();
+    return;
+  }
+  rankingLoading.value = false;
+  saveCacheToStorage();
+};
+
+// 启动时即加载本地缓存（无需等待 apps），二次启动首屏即可见缓存排行
+loadCacheFromStorage();
+
+// 排行榜在 loadApps 全量完成后（onMounted）触发一次，确保 spark/apm 应用均已就绪
 
 const loadHome = async () => {
   homeLoading.value = true;
@@ -1332,7 +1529,22 @@ const loadHomeListApps = async (entryId: string) => {
   logger.info(`首页列表 "${entryId}" 加载完成，共 ${loadedApps.length} 个应用`);
 };
 
-// 并行预加载所有侧边栏入口的应用数据，避免点击时才加载导致缓慢
+// 仅并行预加载首页 homeList 板块入口（区域2 数据来源，不依赖全量应用）
+const preloadHomeListApps = (): Promise<void> => {
+  const tasks: Promise<void>[] = [];
+  for (const entry of sidebarEntries.value) {
+    if (entry.type === "homeList") {
+      tasks.push(
+        loadHomeListApps(entry.id).catch((e: unknown) =>
+          logger.warn(`预加载首页列表 ${entry.id} 失败: ${e}`),
+        ),
+      );
+    }
+  }
+  return Promise.all(tasks).then(() => undefined);
+};
+
+// 并行预加载其余分类侧边栏入口（用户点击分类时才需要，可延后）
 const preloadSidebarTabApps = (): Promise<void> => {
   const tasks: Promise<void>[] = [];
   for (const entry of sidebarEntries.value) {
@@ -1340,12 +1552,6 @@ const preloadSidebarTabApps = (): Promise<void> => {
       tasks.push(
         loadTabApps(entry.id).catch((e: unknown) =>
           logger.warn(`预加载入口 ${entry.id} 失败: ${e}`),
-        ),
-      );
-    } else if (entry.type === "homeList") {
-      tasks.push(
-        loadHomeListApps(entry.id).catch((e: unknown) =>
-          logger.warn(`预加载首页列表 ${entry.id} 失败: ${e}`),
         ),
       );
     }
@@ -1421,8 +1627,15 @@ const handleStartSelectedUpdates = async () => {
 };
 
 const confirmMigrationStart = async () => {
+  // 确认即关闭对话框（UX：确认动作立即生效），再执行异步迁移启动
   updateCenterStore.showMigrationConfirm.value = false;
-  await updateCenterStore.startSelected();
+  try {
+    await updateCenterStore.startSelected();
+  } catch (error) {
+    logger.error(
+      `启动迁移失败 (startSelected): ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
 };
 
 const openInstalledModal = () => {
@@ -1506,6 +1719,8 @@ const refreshInstalledApps = async () => {
     if (!showInstalledModal.value) return;
 
     const combinedApps: App[] = [];
+    // 同一 pkgname 可能同时以 APM 与 Spark 两种来源安装，这里聚合其来源集合
+    const originsByPkg = new Map<string, Set<"spark" | "apm">>();
     const failedOrigins: string[] = [];
 
     for (let i = 0; i < effectiveOrigins.length; i++) {
@@ -1564,8 +1779,25 @@ const refreshInstalledApps = async () => {
             isDependency: app.isDependency,
           };
         }
-        combinedApps.push(appInfo);
+        // 合并同一 pkgname 在多个来源的安装记录为单条，避免列表出现重复项（相同 pkgname 键冲突）
+        const existingIdx = combinedApps.findIndex(
+          (a) => a.pkgname === appInfo.pkgname,
+        );
+        if (existingIdx === -1) {
+          combinedApps.push(appInfo);
+        }
+        // 记录该 pkgname 当前这一来源，供卸载时判断走 APM 还是 Spark
+        const originSet =
+          originsByPkg.get(appInfo.pkgname) ?? new Set<"spark" | "apm">();
+        originSet.add(origin);
+        originsByPkg.set(appInfo.pkgname, originSet);
       }
+    }
+
+    // 将来源集合回写到每条已安装应用，供卸载时判断应走 APM 还是 Spark
+    for (const app of combinedApps) {
+      const set = originsByPkg.get(app.pkgname);
+      if (set) app.origins = Array.from(set);
     }
 
     installedApps.value = combinedApps;
@@ -2977,18 +3209,19 @@ onMounted(async () => {
   loading.value = true;
   homeLoading.value = true;
 
-  // 先加载全部应用，再预加载侧边栏入口
+  // 区域1(links) 与 区域2 板块(homeList) 并行；全量应用也并行加载
   await Promise.all([
     loadHome(),
-    new Promise<void>((resolve) => {
-      loadApps(() => {
-        loading.value = false;
-        resolve();
-      });
+    preloadHomeListApps(),
+    loadApps(() => {
+      loading.value = false; // 首屏：已有部分应用即可显示，排行稍后刷新
     }),
   ]);
 
-  // 全部应用加载完成后再预加载侧边栏入口
+  // 全量应用加载完成后再刷新排行榜，确保 spark/apm 应用均已就绪
+  loadRanking();
+
+  // 其余分类入口预加载（用户点击分类时才需要，延后）
   preloadSidebarTabApps().then(() => {
     logger.info("侧边栏入口预加载完成");
   });

@@ -71,6 +71,29 @@
         >
       </button>
 
+      <!-- 排行榜 / 荣耀榜：暂时隐藏入口（代码保留，后续按需恢复） -->
+      <button
+        v-if="false"
+        type="button"
+        class="sidebar-tab"
+        :class="{ 'sidebar-tab-active': activeTab === 'ranking' }"
+        @click="selectTab('ranking')"
+      >
+        <span class="sidebar-tab-icon"><i class="fas fa-trophy"></i></span>
+        <span class="sidebar-tab-label">排行榜</span>
+      </button>
+
+      <button
+        v-if="false"
+        type="button"
+        class="sidebar-tab"
+        :class="{ 'sidebar-tab-active': activeTab === 'honor' }"
+        @click="selectTab('honor')"
+      >
+        <span class="sidebar-tab-icon"><i class="fas fa-medal"></i></span>
+        <span class="sidebar-tab-label">荣耀榜</span>
+      </button>
+
       <div
         v-if="sidebarEntries.length > 0"
         class="my-3 border-t border-slate-100 dark:border-slate-800"

@@ -289,6 +289,8 @@ const showAndFocusMainWindow = (): void => {
 // 窗口尺寸持久化：保存/恢复上一次调整后的窗口大小，避免每次打开都使用默认尺寸
 const DEFAULT_WINDOW_SIZE = { width: 1366, height: 768 };
 const MIN_WINDOW_SIZE = { width: 800, height: 500 };
+// 超过该尺寸的窗口（通常为全屏/最大化状态）在恢复时回退到默认尺寸，避免「启动即全屏、还原按钮失效」
+const OVERSIZED_WINDOW_THRESHOLD = { width: 1600, height: 900 };
 
 interface WindowState {
   width?: number;
@@ -375,12 +377,24 @@ function scheduleSaveBounds(winInstance: BrowserWindow): void {
 
 async function createWindow() {
   const saved = loadWindowState();
+  // 恢复时：若上次窗口过大（>1600x900，通常为全屏/最大化），回退到默认尺寸并居中，
+  // 避免「启动即全屏、还原按钮失效」；其余情况保留上次记录的实际尺寸（并居中）。
+  // 放大/还原仍交由标题栏按钮控制。
+  const oversized =
+    (saved.width ?? 0) > OVERSIZED_WINDOW_THRESHOLD.width ||
+    (saved.height ?? 0) > OVERSIZED_WINDOW_THRESHOLD.height;
+  const restoredWidth = oversized
+    ? DEFAULT_WINDOW_SIZE.width
+    : Math.max(saved.width ?? DEFAULT_WINDOW_SIZE.width, MIN_WINDOW_SIZE.width);
+  const restoredHeight = oversized
+    ? DEFAULT_WINDOW_SIZE.height
+    : Math.max(saved.height ?? DEFAULT_WINDOW_SIZE.height, MIN_WINDOW_SIZE.height);
+
   const mainWindow = new BrowserWindow({
     title: "星火应用商店",
-    width: saved.width ?? DEFAULT_WINDOW_SIZE.width,
-    height: saved.height ?? DEFAULT_WINDOW_SIZE.height,
-    x: saved.x,
-    y: saved.y,
+    width: restoredWidth,
+    height: restoredHeight,
+    center: true,
     minWidth: MIN_WINDOW_SIZE.width,
     minHeight: MIN_WINDOW_SIZE.height,
     frame: false,
@@ -398,11 +412,11 @@ async function createWindow() {
   });
   win = mainWindow;
 
-  // 恢复上一次的最大化状态
-  if (saved.maximized) {
-    mainWindow.maximize();
-  }
-  logger.info({ saved }, "已恢复窗口状态");
+  // 不再自动恢复最大化状态（避免无法还原）；启动即居中显示，过大窗口已回退默认尺寸
+  logger.info(
+    { saved, restoredWidth, restoredHeight, oversized },
+    "已恢复窗口状态（过大窗口回退默认尺寸并居中）",
+  );
 
   // 窗口大小/位置/最大化变化后防抖保存，下次启动时恢复
   // 位置/最大化变化由主进程事件保存；尺寸变化由渲染端 DOM resize 经 IPC 兜底保存

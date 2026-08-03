@@ -19,7 +19,9 @@
 
   <!-- 应用数量较少时，使用普通网格（带滚动） -->
   <div v-else-if="!loading && apps.length <= 50" class="non-virtual-scroller">
-    <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+    <div
+      class="grid gap-4 px-4 py-6 sm:grid-cols-2 lg:px-10 xl:grid-cols-3 2xl:grid-cols-4"
+    >
       <AppCard
         v-for="app in apps"
         :key="app.pkgname"

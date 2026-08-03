@@ -695,6 +695,23 @@ npm run build:rpm    # 仅构建 RPM 包
 - `dist/` - 编译的渲染器资源
 - 打包的应用在项目根目录
 
+### 测试打包脚本（开发过程统一使用）
+
+开发 / 自测阶段的打包**一律使用测试脚本 `scripts/test-build.sh`**，不要直接手敲 `dpkg-buildpackage`：
+
+```bash
+./scripts/test-build.sh
+```
+
+脚本行为：
+
+- 自动读取 `debian/changelog` 顶部的 deb 版本号（如 `5.2.1.0`），将**最后一段数字 +1** 并追加 `-test` 修订号（如 `5.2.1.1-test`）。
+- 每次运行版本递增（`5.2.1.1-test` → `5.2.1.2-test` → …），产物形如 `spark-store_5.2.1.X-test_amd64.deb`，与正式发版版本区分。
+- 自动设置 `ELECTRON_MIRROR` 镜像（`https://registry.npmmirror.com/-/binary/electron/`）后执行 `dpkg-buildpackage -us -uc -b`。
+- 仅修改 `debian/changelog`，不改 `package.json`（electron-builder 的 dir 产物版本由 `package.json` 决定，不影响 deb 文件名）。
+
+> 注意：每次运行会改写 `debian/changelog`（未跟踪的工作区改动），测试完成后按需自行还原为正式版本。
+
 ### 构建配置
 
 **electron-builder.yml:**

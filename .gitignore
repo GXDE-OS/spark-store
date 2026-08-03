@@ -65,3 +65,6 @@ debian/files
 debian/tmp/
 debian/.debhelper/
 debian/spark-store/
+
+# AI working memory (跨会话上下文，不进入上游)
+.codebuddy/
