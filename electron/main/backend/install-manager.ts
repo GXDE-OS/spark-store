@@ -12,6 +12,26 @@ import { findExecutable, SUPER_USER_COMMAND_CANDIDATES } from "./superuser";
 
 const logger = pino({ name: "install-manager" });
 
+// 包名白名单：仅允许合法包名字符，杜绝命令注入（spawn 用 shell:false 仍须校验）。
+const PKGNAME_PATTERN = /^[a-zA-Z0-9._+-]+$/;
+
+// 解析并校验应用类 IPC 的 payload（可能是旧版字符串或对象）。
+// 返回规范化后的 { pkgname, origin }，pkgname 非法时返回 null。
+const parseAppPayload = (
+  payload: unknown,
+): { pkgname: string; origin: "spark" | "apm" } | null => {
+  if (typeof payload === "string") {
+    if (!PKGNAME_PATTERN.test(payload)) return null;
+    return { pkgname: payload, origin: "spark" };
+  }
+  if (typeof payload !== "object" || payload === null) return null;
+  const p = payload as Record<string, unknown>;
+  const pkgname = typeof p.pkgname === "string" ? p.pkgname : "";
+  if (!PKGNAME_PATTERN.test(pkgname)) return null;
+  const origin: "spark" | "apm" = p.origin === "apm" ? "apm" : "spark";
+  return { pkgname, origin };
+};
+
 const getStoreFilterFromArgv = (): "spark" | "apm" | "both" => {
   const argv = process.argv;
   const noApm = argv.includes("--no-apm");
@@ -815,15 +835,13 @@ async function runInstallPhase(task: InstallTask) {
   }
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-ipcMain.handle("check-installed", async (_event, payload: any) => {
-  const pkgname = typeof payload === "string" ? payload : payload.pkgname;
-  const origin = typeof payload === "string" ? "spark" : payload.origin;
-
-  if (!pkgname) {
-    logger.warn("check-installed missing pkgname");
+ipcMain.handle("check-installed", async (_event, payload: unknown) => {
+  const parsed = parseAppPayload(payload);
+  if (!parsed) {
+    logger.warn("check-installed invalid payload");
     return false;
   }
+  const { pkgname, origin } = parsed;
 
   logger.info(`检查应用是否已安装: ${pkgname} (来源: ${origin})`);
 
@@ -890,13 +908,12 @@ ipcMain.handle("check-installed", async (_event, payload: any) => {
 
 ipcMain.on("remove-installed", async (_event, payload) => {
   const webContents = _event.sender;
-  const pkgname = typeof payload === "string" ? payload : payload.pkgname;
-  const origin = typeof payload === "string" ? "spark" : payload.origin;
-
-  if (!pkgname) {
-    logger.warn("remove-installed missing pkgname");
+  const parsed = parseAppPayload(payload);
+  if (!parsed) {
+    logger.warn("remove-installed invalid payload");
     return;
   }
+  const { pkgname, origin } = parsed;
   logger.info(`卸载已安装应用: ${pkgname} (来源: ${origin})`);
 
   let execCommand = "";
@@ -1243,14 +1260,18 @@ ipcMain.handle("show-apm-install-dialog", async (event) => {
 });
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-ipcMain.handle("uninstall-installed", async (_event, payload: any) => {
-  const pkgname = typeof payload === "string" ? payload : payload.pkgname;
-  const origin = typeof payload === "string" ? "spark" : payload.origin;
-
-  if (!pkgname) {
-    logger.warn("uninstall-installed missing pkgname");
-    return { success: false, message: "missing pkgname" };
-  }
+ipcMain.handle(
+  "uninstall-installed",
+  async (
+    _event,
+    payload: unknown,
+  ): Promise<{ success: boolean; message?: string }> => {
+    const parsed = parseAppPayload(payload);
+    if (!parsed) {
+      logger.warn("uninstall-installed invalid payload");
+      return { success: false, message: "invalid payload" };
+    }
+    const { pkgname, origin } = parsed;
 
   const superUserCmd = await checkSuperUserCommand();
   const execCommand = superUserCmd || SHELL_CALLER_PATH;
@@ -1287,9 +1308,6 @@ interface LaunchAppPayload {
   origin?: "spark" | "apm";
 }
 
-// 合法包名字符（Debian 包名规范 + Spark 应用包名常见字符），
-// 用于拦截包含特殊字符的非法输入，避免命令注入。
-const PKGNAME_PATTERN = /^[a-zA-Z0-9._+-]+$/;
 
 ipcMain.handle(
   "launch-app",

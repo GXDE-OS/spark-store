@@ -431,13 +431,16 @@ const axiosInstance = axios.create({
 
 const fetchWithRetry = async <T,>(
   url: string,
+  signal?: AbortSignal,
   retries = 3,
   delay = 1000,
 ): Promise<T> => {
   try {
-    const response = await axiosInstance.get<T>(url);
+    const response = await axiosInstance.get<T>(url, { signal });
     return response.data;
   } catch (error) {
+    // 请求被取消（AbortSignal）时直接抛出，不再重试
+    if (signal?.aborted) throw error;
     const axiosError = error as AxiosError;
     const status = axiosError.response?.status;
     // 仅对网络错误（无响应）、服务端 5xx 错误或超时进行重试；
@@ -448,12 +451,17 @@ const fetchWithRetry = async <T,>(
       axiosError.code === "ECONNABORTED" || axiosError.code === "ETIMEDOUT";
 
     if (retries > 0 && (isNetworkError || isServerError || isTimeout)) {
+      // 若已取消则提前退出，避免对已卸载组件发起新请求
+      if (signal?.aborted) throw error;
       await new Promise((resolve) => setTimeout(resolve, delay));
-      return fetchWithRetry(url, retries - 1, delay * 2);
+      return fetchWithRetry(url, signal, retries - 1, delay * 2);
     }
     throw error;
   }
 };
+
+// 根级请求取消控制器：组件卸载时 abort，避免对已卸载组件发起/重试请求
+const rootAbortController = new AbortController();
 
 // 渲染进程从 IPC 拿到的 result.apps 实际类型为 any（ipcRenderer.invoke 返回 Promise<any>），
 // 直接断言成 InstalledAppInfo[] 会绕过运行时类型检查。后端字段缺失时会引发运行时错误。
@@ -926,28 +934,36 @@ const openDetailFromInstalled = (app: App) => {
   openDetail({ ...app, _fromInstalled: true });
 };
 
-const openDetail = async (app: App | Record<string, unknown>) => {
+// openDetail 输入类型：完整 App 或仅含必要字段的轻量对象（含内部来源标记）
+interface OpenDetailInput extends Partial<App> {
+  pkgname?: string;
+  category?: string;
+  _fromHomeView?: boolean;
+  _fromInstalled?: boolean;
+  _fromDeepLink?: boolean;
+  origin?: "spark" | "apm";
+}
+
+const openDetail = async (app: App | OpenDetailInput) => {
   // 提取 pkgname 和 category（必须存在）
-  const pkgname = (app as Record<string, unknown>).pkgname as string;
-  const category =
-    ((app as Record<string, unknown>).category as string) || "unknown";
-  // 检查是否来自 HomeView 或 DeepLink（需要重新获取完整信息）
-  const fromHomeView = (app as Record<string, unknown>)._fromHomeView === true;
-  const fromDeepLink = (app as Record<string, unknown>)._fromDeepLink === true;
-  // 已安装应用页：始终按"所有应用页"的方式双来源拉取并合并展示（不移除另一类型）
-  const fromInstalled = (app as Record<string, unknown>)._fromInstalled === true;
-  const needFetchFromStore = fromHomeView || fromDeepLink || fromInstalled;
+  const pkgname = app?.pkgname;
   if (!pkgname) {
-    console.warn("openDetail: 缺少 pkgname", app);
+    console.warn("openDetail called without pkgname");
     return;
   }
+  const category = app.category || "unknown";
+  // 检查是否来自 HomeView 或 DeepLink（需要重新获取完整信息）
+  // 内部来源标记仅存在于轻量输入对象上，按 OpenDetailInput 读取以兼容联合类型
+  const marker = app as OpenDetailInput;
+  const fromHomeView = marker._fromHomeView === true;
+  const fromDeepLink = marker._fromDeepLink === true;
+  // 已安装应用页：始终按"所有应用页"的方式双来源拉取并合并展示（不移除另一类型）
+  const fromInstalled = marker._fromInstalled === true;
+  const needFetchFromStore = fromHomeView || fromDeepLink || fromInstalled;
 
   // 首先尝试从当前已经处理好（合并/筛选）的 filteredApps 中查找
   // 优先匹配点击来源 origin（例如排行点击 APM 应用时不应误匹配到 Spark 版）
-  const clickedOrigin = (app as Record<string, unknown>).origin as
-    | "spark"
-    | "apm"
-    | undefined;
+  const clickedOrigin = app.origin as "spark" | "apm" | undefined;
   let fullApp = filteredApps.value.find(
     (a) =>
       a.pkgname === pkgname && (!clickedOrigin || a.origin === clickedOrigin),
@@ -1351,12 +1367,25 @@ const loadHome = async () => {
       try {
         const res = await fetch(`${base}/homelinks.json`);
         if (res.ok) {
-          const links = await res.json();
+          const raw = await res.json();
+          // 校验 links 为数组，且每项均为对象（避免后端返回异常结构导致运行时错误）
+          const links = Array.isArray(raw) ? (raw.filter((x) => x && typeof x === "object") as Record<string, unknown>[]) : [];
           for (const l of links) {
-            const name = l.Name || l.name || "";
+            const name = (l.Name as string) || (l.name as string) || "";
+            if (!name) continue; // 跳过空名称，避免空字符串污染 seenNames 与去重逻辑
             if (seenNames.has(name)) continue; // 已由更高优先级来源（spark）占据
+            // 校验 HomeLink 必需字段，缺失则跳过，避免推入不完整对象导致运行时错误
+            const url = (l.Url as string) || (l.url as string) || "";
+            const icon = (l.Icon as string) || (l.icon as string) || "";
+            if (!url || !icon) continue;
             seenNames.add(name);
-            homeLinks.value.push({ ...l, origin: mode });
+            homeLinks.value.push({
+              ...l,
+              name,
+              url,
+              icon,
+              origin: mode,
+            } as HomeLink);
           }
         }
       } catch (e) {
@@ -1507,7 +1536,7 @@ const loadHomeListApps = async (entryId: string) => {
     try {
       const path = `/${finalArch}${jsonUrl}`;
       const rawApps =
-        (await fetchWithRetry<Record<string, string>[]>(path)) || [];
+        (await fetchWithRetry<Record<string, string>[]>(path, rootAbortController.signal)) || [];
       const apps = parseAppList(rawApps, mode);
       for (const app of apps) {
         if (!app.pkgname || seenPkgnames.has(app.pkgname)) continue;
@@ -3027,7 +3056,7 @@ const loadTabApps = async (entryId: string) => {
         const path = `/${finalArch}/${folderName}/${subCat}/applist.json`;
         logger.info(`加载入口子分类: ${entryId}/${subCat} (来源: ${mode})`);
         tasks.push(
-          fetchWithRetry<AppJson[]>(path)
+          fetchWithRetry<AppJson[]>(path, rootAbortController.signal)
             .then((categoryApps) =>
               (categoryApps || []).map((aj) =>
                 normalizeAppJson(aj, subCat, mode),
@@ -3045,7 +3074,7 @@ const loadTabApps = async (entryId: string) => {
       const path = `/${finalArch}/${folderName}/applist.json`;
       logger.info(`加载入口目录: ${entryId} (来源: ${mode})`);
       tasks.push(
-        fetchWithRetry<AppJson[]>(path)
+        fetchWithRetry<AppJson[]>(path, rootAbortController.signal)
           .then((categoryApps) =>
             (categoryApps || []).map((aj) =>
               normalizeAppJson(aj, folderName, mode),
@@ -3097,7 +3126,7 @@ const loadApps = async (onFirstBatch?: () => void) => {
               const path = `/${finalArch}/${category}/applist.json`;
 
               logger.info(`加载分类: ${category} (来源: ${mode})`);
-              const categoryApps = await fetchWithRetry<AppJson[]>(path);
+              const categoryApps = await fetchWithRetry<AppJson[]>(path, rootAbortController.signal);
 
               const normalizedApps = (categoryApps || []).map((appJson) =>
                 normalizeAppJson(appJson, category, mode as "spark" | "apm"),
@@ -3351,6 +3380,7 @@ onMounted(async () => {
 });
 
 onUnmounted(() => {
+  rootAbortController.abort();
   updateCenterStore.unbind();
   window.ipcRenderer.off(
     "install-complete",

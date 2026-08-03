@@ -272,9 +272,10 @@ const requestApplicationExit = (): void => {
   app.quit();
 };
 
-const showAndFocusMainWindow = (): void => {
+const showAndFocusMainWindow = async (): Promise<void> => {
   if (!win || win.isDestroyed()) {
-    createWindow();
+    // 等待窗口创建完成，创建失败时调用方可通过异常感知
+    await createWindow();
     return;
   }
 
@@ -643,11 +644,11 @@ app.on("window-all-closed", () => {
 });
 
 app.on("second-instance", () => {
-  showAndFocusMainWindow();
+  void showAndFocusMainWindow();
 });
 
 app.on("activate", () => {
-  showAndFocusMainWindow();
+  void showAndFocusMainWindow();
 });
 
 app.on("will-quit", () => {
@@ -700,7 +701,7 @@ app.whenReady().then(() => {
     {
       label: "显示主界面",
       click: () => {
-        showAndFocusMainWindow();
+        void showAndFocusMainWindow();
       },
     },
     {
@@ -719,7 +720,7 @@ app.whenReady().then(() => {
       win.hide();
       win.setSkipTaskbar(true);
     } else {
-      showAndFocusMainWindow();
+      void showAndFocusMainWindow();
     }
   });
 });
