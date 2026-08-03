@@ -1374,10 +1374,11 @@ const loadHome = async () => {
             const name = (l.Name as string) || (l.name as string) || "";
             if (!name) continue; // 跳过空名称，避免空字符串污染 seenNames 与去重逻辑
             if (seenNames.has(name)) continue; // 已由更高优先级来源（spark）占据
-            // 校验 HomeLink 必需字段，缺失则跳过，避免推入不完整对象导致运行时错误
+            // 仅校验 url 必需；远程 homelinks.json 不含 icon 字段（图片由 imgUrl 提供），
+            // 故 icon 不作为硬性校验，缺省为空串以兼容 HomeLink 类型。
             const url = (l.Url as string) || (l.url as string) || "";
+            if (!url) continue;
             const icon = (l.Icon as string) || (l.icon as string) || "";
-            if (!url || !icon) continue;
             seenNames.add(name);
             homeLinks.value.push({
               ...l,

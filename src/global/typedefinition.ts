@@ -231,7 +231,8 @@ export interface CategoryInfo {
 export interface HomeLink {
   name: string;
   url: string;
-  icon: string;
+  // 数据源（homelinks.json）并不提供 icon 字段，图片统一由 imgUrl 提供，故设为可选
+  icon?: string;
   more?: string;
   imgUrl?: string;
   type?: string;
