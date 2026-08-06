@@ -897,10 +897,24 @@ const fetchAppFromStore = async (
   try {
     const arch = window.apm_store.arch || "amd64";
     const finalArch = origin === "spark" ? `${arch}-store` : `${arch}-apm`;
-    const appJsonUrl = `${APM_STORE_BASE_URL}/${finalArch}/${category}/${pkgname}/app.json`;
+    // 路径参数需编码，避免特殊字符破坏请求路径或造成路径穿越
+    const appJsonUrl = `${APM_STORE_BASE_URL}/${finalArch}/${encodeURIComponent(
+      category,
+    )}/${encodeURIComponent(pkgname)}/app.json`;
     const response = await fetch(appJsonUrl);
     if (!response.ok) return null;
     const appJson = await response.json();
+    // img_urls 可能为字符串形式的 JSON，解析失败时安全回退为空数组
+    const parsedImgUrls = (() => {
+      if (typeof appJson.img_urls === "string") {
+        try {
+          return JSON.parse(appJson.img_urls) as string[];
+        } catch {
+          return [];
+        }
+      }
+      return (appJson.img_urls as string[]) || [];
+    })();
     return {
       name: appJson.Name || "",
       pkgname: appJson.Pkgname || pkgname,
@@ -914,10 +928,7 @@ const fetchAppFromStore = async (
       size: appJson.Size || "",
       more: appJson.More || "",
       tags: appJson.Tags || "",
-      img_urls:
-        typeof appJson.img_urls === "string"
-          ? (JSON.parse(appJson.img_urls) as string[])
-          : appJson.img_urls || [],
+      img_urls: parsedImgUrls,
       icons: appJson.icons || "",
       category: category,
       origin: origin,
@@ -943,6 +954,31 @@ interface OpenDetailInput extends Partial<App> {
   _fromDeepLink?: boolean;
   origin?: "spark" | "apm";
 }
+
+// 提取远程/本地均无匹配时的回退 App 构造（两处兜底分支共用，避免重复字段映射）
+const createFallbackApp = (
+  raw: Record<string, unknown>,
+  pkgname: string,
+  category: string,
+): App => ({
+  name: (raw.name as string) || "",
+  pkgname,
+  version: (raw.version as string) || "",
+  filename: (raw.filename as string) || "",
+  category,
+  torrent_address: "",
+  author: "",
+  contributor: "",
+  website: "",
+  update: "",
+  size: "",
+  more: (raw.more as string) || "",
+  tags: "",
+  img_urls: [],
+  icons: "",
+  origin: (raw.origin as "spark" | "apm") || "apm",
+  currentStatus: "not-installed",
+});
 
 const openDetail = async (app: App | OpenDetailInput) => {
   // 提取 pkgname 和 category（必须存在）
@@ -1029,26 +1065,11 @@ const openDetail = async (app: App | OpenDetailInput) => {
       finalApp = fullApp;
     } else {
       // 两个仓库都没有找到，且本地也没有，构造一个最小可用的 App 对象
-      finalApp = {
-        name: ((app as Record<string, unknown>).name as string) || "",
-        pkgname: pkgname,
-        version: ((app as Record<string, unknown>).version as string) || "",
-        filename: ((app as Record<string, unknown>).filename as string) || "",
-        category: category,
-        torrent_address: "",
-        author: "",
-        contributor: "",
-        website: "",
-        update: "",
-        size: "",
-        more: ((app as Record<string, unknown>).more as string) || "",
-        tags: "",
-        img_urls: [],
-        icons: "",
-        origin:
-          ((app as Record<string, unknown>).origin as "spark" | "apm") || "apm",
-        currentStatus: "not-installed",
-      } as App;
+      finalApp = createFallbackApp(
+        app as Record<string, unknown>,
+        pkgname,
+        category,
+      );
     }
   } else {
     // 非 HomeView 来源，使用原来的逻辑
@@ -1056,26 +1077,11 @@ const openDetail = async (app: App | OpenDetailInput) => {
       finalApp = fullApp;
     } else {
       // 构造一个最小可用的 App 对象
-      finalApp = {
-        name: ((app as Record<string, unknown>).name as string) || "",
-        pkgname: pkgname,
-        version: ((app as Record<string, unknown>).version as string) || "",
-        filename: ((app as Record<string, unknown>).filename as string) || "",
-        category: category,
-        torrent_address: "",
-        author: "",
-        contributor: "",
-        website: "",
-        update: "",
-        size: "",
-        more: ((app as Record<string, unknown>).more as string) || "",
-        tags: "",
-        img_urls: [],
-        icons: "",
-        origin:
-          ((app as Record<string, unknown>).origin as "spark" | "apm") || "apm",
-        currentStatus: "not-installed",
-      } as App;
+      finalApp = createFallbackApp(
+        app as Record<string, unknown>,
+        pkgname,
+        category,
+      );
     }
   }
 
@@ -1118,7 +1124,10 @@ const openDetail = async (app: App | OpenDetailInput) => {
         }
       }
     }
-    if (preferred && (preferred === "spark" ? finalApp.sparkApp : finalApp.apmApp)) {
+    if (
+      preferred &&
+      (preferred === "spark" ? finalApp.sparkApp : finalApp.apmApp)
+    ) {
       finalApp.viewingOrigin = preferred;
     } else if (sparkInstalled && !apmInstalled) {
       // 无点击来源时：仅一个仓库已安装则优先展示已安装版本
@@ -1550,7 +1559,10 @@ const loadHomeListApps = async (entryId: string) => {
     try {
       const path = `/${finalArch}${jsonUrl}`;
       const rawApps =
-        (await fetchWithRetry<Record<string, string>[]>(path, rootAbortController.signal)) || [];
+        (await fetchWithRetry<Record<string, string>[]>(
+          path,
+          rootAbortController.signal,
+        )) || [];
       const apps = parseAppList(rawApps, mode);
       for (const app of apps) {
         if (!app.pkgname || seenPkgnames.has(app.pkgname)) continue;
@@ -2963,10 +2975,16 @@ const normalizeAppJson = (
   size: appJson.Size,
   more: appJson.More,
   tags: appJson.Tags,
-  img_urls:
-    typeof appJson.img_urls === "string"
-      ? (JSON.parse(appJson.img_urls) as string[])
-      : appJson.img_urls,
+  img_urls: (() => {
+    if (typeof appJson.img_urls === "string") {
+      try {
+        return JSON.parse(appJson.img_urls) as string[];
+      } catch {
+        return [];
+      }
+    }
+    return (appJson.img_urls as string[]) || [];
+  })(),
   icons: appJson.icons,
   category: category,
   origin: origin,
@@ -3140,7 +3158,10 @@ const loadApps = async (onFirstBatch?: () => void) => {
               const path = `/${finalArch}/${category}/applist.json`;
 
               logger.info(`加载分类: ${category} (来源: ${mode})`);
-              const categoryApps = await fetchWithRetry<AppJson[]>(path, rootAbortController.signal);
+              const categoryApps = await fetchWithRetry<AppJson[]>(
+                path,
+                rootAbortController.signal,
+              );
 
               const normalizedApps = (categoryApps || []).map((appJson) =>
                 normalizeAppJson(appJson, category, mode as "spark" | "apm"),
@@ -3205,14 +3226,134 @@ const handleWindowResize = () => {
   }, 400);
 };
 
+// —— 以下为可复用的事件/IPC 监听处理器（命名函数，便于 onUnmounted 统一移除）——
+// 收集"等待 loading 完成后执行一次"的 watcher，便于卸载时统一停止，避免泄漏
+const pendingWatchers: Array<() => void> = [];
+const registerOnceWatcher = (stop: () => void): void => {
+  pendingWatchers.push(stop);
+};
+
+const handleHashChange = () => {
+  isSubmitterView.value = window.location.hash === "#submitter";
+};
+
+const handleKeydown = (e: KeyboardEvent) => {
+  if (showPreview.value) {
+    if (e.key === "Escape") closeScreenPreview();
+    if (e.key === "ArrowLeft") prevScreen();
+    if (e.key === "ArrowRight") nextScreen();
+  }
+  if (showModal.value && e.key === "Escape") {
+    closeDetail();
+  }
+};
+
+const handleDeepLinkUpdate = () => {
+  if (loading.value) {
+    const stop = watch(loading, (val) => {
+      if (!val) {
+        openUpdateModal();
+        stop();
+        const idx = pendingWatchers.indexOf(stop);
+        if (idx >= 0) pendingWatchers.splice(idx, 1);
+      }
+    });
+    registerOnceWatcher(stop);
+  } else {
+    openUpdateModal();
+  }
+};
+
+const handleDeepLinkInstalled = () => {
+  if (loading.value) {
+    const stop = watch(loading, (val) => {
+      if (!val) {
+        openInstalledModal();
+        stop();
+        const idx = pendingWatchers.indexOf(stop);
+        if (idx >= 0) pendingWatchers.splice(idx, 1);
+      }
+    });
+    registerOnceWatcher(stop);
+  } else {
+    openInstalledModal();
+  }
+};
+
+const handleTriggerApmInstallDialog = () => {
+  showApmInstallDialog.value = true;
+};
+
+const handleDeepLinkInstall = (_event: IpcRendererEvent, pkgname: string) => {
+  const tryOpen = () => {
+    const target = apps.value.find((a) => a.pkgname === pkgname);
+    if (target) {
+      openDetail(target);
+    } else {
+      logger.warn(`Deep link: app ${pkgname} not found`);
+    }
+  };
+  if (loading.value) {
+    const stop = watch(loading, (val) => {
+      if (!val) {
+        tryOpen();
+        stop();
+        const idx = pendingWatchers.indexOf(stop);
+        if (idx >= 0) pendingWatchers.splice(idx, 1);
+      }
+    });
+    registerOnceWatcher(stop);
+  } else {
+    tryOpen();
+  }
+};
+
+const handleDeepLinkSearch = (
+  _event: IpcRendererEvent,
+  data: { pkgname: string },
+) => {
+  const tryOpen = () => {
+    currentView.value = "default";
+    activeTab.value = "all";
+    const target = apps.value.find((a) => a.pkgname === data.pkgname);
+    if (target) {
+      openDetail({ ...target, _fromDeepLink: true });
+    } else {
+      searchQuery.value = data.pkgname;
+      logger.warn(
+        `Deep link: app ${data.pkgname} not found, fallback to search`,
+      );
+    }
+  };
+  if (loading.value) {
+    const stop = watch(loading, (val) => {
+      if (!val) {
+        tryOpen();
+        stop();
+        const idx = pendingWatchers.indexOf(stop);
+        if (idx >= 0) pendingWatchers.splice(idx, 1);
+      }
+    });
+    registerOnceWatcher(stop);
+  } else {
+    tryOpen();
+  }
+};
+
+const handleRemoveComplete = (
+  _event: IpcRendererEvent,
+  payload: ChannelPayload,
+) => {
+  const pkgname = currentApp.value?.pkgname;
+  if (payload.success && pkgname) {
+    removeDownloadItem(pkgname);
+  }
+};
+
 // 生命周期钩子
 onMounted(async () => {
   initTheme();
   updateCenterStore.bind();
-
-  const handleHashChange = () => {
-    isSubmitterView.value = window.location.hash === "#submitter";
-  };
 
   handleHashChange();
   window.addEventListener("hashchange", handleHashChange);
@@ -3273,121 +3414,23 @@ onMounted(async () => {
   logger.info("所有应用数据加载完成");
 
   // 设置键盘导航
-  document.addEventListener("keydown", (e) => {
-    if (showPreview.value) {
-      if (e.key === "Escape") closeScreenPreview();
-      if (e.key === "ArrowLeft") prevScreen();
-      if (e.key === "ArrowRight") nextScreen();
-    }
-    if (showModal.value && e.key === "Escape") {
-      closeDetail();
-    }
-  });
+  document.addEventListener("keydown", handleKeydown);
 
   // Deep link Handlers
-  window.ipcRenderer.on("deep-link-update", () => {
-    if (loading.value) {
-      const stop = watch(loading, (val) => {
-        if (!val) {
-          openUpdateModal();
-          stop();
-        }
-      });
-    } else {
-      openUpdateModal();
-    }
-  });
-
-  window.ipcRenderer.on("deep-link-installed", () => {
-    if (loading.value) {
-      const stop = watch(loading, (val) => {
-        if (!val) {
-          openInstalledModal();
-          stop();
-        }
-      });
-    } else {
-      openInstalledModal();
-    }
-  });
-
-  window.ipcRenderer.on("trigger-apm-install-dialog", () => {
-    showApmInstallDialog.value = true;
-  });
-
+  window.ipcRenderer.on("deep-link-update", handleDeepLinkUpdate);
+  window.ipcRenderer.on("deep-link-installed", handleDeepLinkInstalled);
   window.ipcRenderer.on(
-    "deep-link-install",
-    (_event: IpcRendererEvent, pkgname: string) => {
-      const tryOpen = () => {
-        const target = apps.value.find((a) => a.pkgname === pkgname);
-        if (target) {
-          openDetail(target);
-        } else {
-          logger.warn(`Deep link: app ${pkgname} not found`);
-        }
-      };
-
-      if (loading.value) {
-        const stop = watch(loading, (val) => {
-          if (!val) {
-            tryOpen();
-            stop();
-          }
-        });
-      } else {
-        tryOpen();
-      }
-    },
+    "trigger-apm-install-dialog",
+    handleTriggerApmInstallDialog,
   );
-
-  window.ipcRenderer.on(
-    "deep-link-search",
-    (_event: IpcRendererEvent, data: { pkgname: string }) => {
-      // 根据包名直接打开应用详情
-      const tryOpen = () => {
-        // 先切换到"全部应用"分类
-        currentView.value = "default";
-        activeTab.value = "all";
-        // 使用类似 HomeView 的方式打开应用，从两个仓库获取完整信息
-        const target = apps.value.find((a) => a.pkgname === data.pkgname);
-        if (target) {
-          openDetail({ ...target, _fromDeepLink: true });
-        } else {
-          // 如果找不到应用，回退到搜索模式
-          searchQuery.value = data.pkgname;
-          logger.warn(
-            `Deep link: app ${data.pkgname} not found, fallback to search`,
-          );
-        }
-      };
-
-      if (loading.value) {
-        const stop = watch(loading, (val) => {
-          if (!val) {
-            tryOpen();
-            stop();
-          }
-        });
-      } else {
-        tryOpen();
-      }
-    },
-  );
+  window.ipcRenderer.on("deep-link-install", handleDeepLinkInstall);
+  window.ipcRenderer.on("deep-link-search", handleDeepLinkSearch);
 
   window.ipcRenderer.on(
     "install-complete",
     handleInstallCompleteForDownloadRecord,
   );
-
-  window.ipcRenderer.on(
-    "remove-complete",
-    (_event: IpcRendererEvent, payload: ChannelPayload) => {
-      const pkgname = currentApp.value?.pkgname;
-      if (payload.success && pkgname) {
-        removeDownloadItem(pkgname);
-      }
-    },
-  );
+  window.ipcRenderer.on("remove-complete", handleRemoveComplete);
 
   window.ipcRenderer.send("renderer-ready", { status: true });
   logger.info("Renderer process is ready!");
@@ -3396,11 +3439,26 @@ onMounted(async () => {
 onUnmounted(() => {
   rootAbortController.abort();
   updateCenterStore.unbind();
+  // 停止仍挂起的"等待 loading 完成后执行一次"的 watcher，避免泄漏
+  for (const stop of pendingWatchers.splice(0)) stop();
+  // 移除 window / document 监听
+  window.removeEventListener("hashchange", handleHashChange);
+  window.removeEventListener("resize", handleWindowResize);
+  document.removeEventListener("keydown", handleKeydown);
+  // 移除所有 IPC 监听
+  window.ipcRenderer.off("deep-link-update", handleDeepLinkUpdate);
+  window.ipcRenderer.off("deep-link-installed", handleDeepLinkInstalled);
+  window.ipcRenderer.off(
+    "trigger-apm-install-dialog",
+    handleTriggerApmInstallDialog,
+  );
+  window.ipcRenderer.off("deep-link-install", handleDeepLinkInstall);
+  window.ipcRenderer.off("deep-link-search", handleDeepLinkSearch);
   window.ipcRenderer.off(
     "install-complete",
     handleInstallCompleteForDownloadRecord,
   );
-  window.removeEventListener("resize", handleWindowResize);
+  window.ipcRenderer.off("remove-complete", handleRemoveComplete);
 });
 
 // 观察器
