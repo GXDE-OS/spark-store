@@ -24,13 +24,14 @@ export interface ContributorRank {
  * 聚合与展示统一去除 `<...>` 取显示名。
  */
 export function parseContributors(raw: string | undefined): string[] {
-  if (!raw) return [];
+  if (!raw || typeof raw !== "string") return [];
   const names: string[] = [];
   for (const part of raw.split(/[;；]/)) {
     const trimmed = part.trim();
     if (!trimmed) continue;
+    // 去除 <...> 包裹的邮箱，取显示名；长度 1~50 过滤空字符串/异常超长
     const name = trimmed.replace(/<[^>]*>/g, "").trim();
-    if (name) names.push(name);
+    if (name.length > 0 && name.length <= 50) names.push(name);
   }
   return names;
 }

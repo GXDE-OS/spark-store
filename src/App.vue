@@ -1316,7 +1316,7 @@ const loadRanking = async () => {
   const gen = ++rankingGeneration;
   rankingLoading.value = true;
   const all = apps.value.slice();
-  const CONCURRENCY = 64;
+  const CONCURRENCY = 15;
   const results: App[] = [];
   for (let i = 0; i < all.length; i += CONCURRENCY) {
     if (gen !== rankingGeneration) {
@@ -1359,42 +1359,51 @@ const loadHome = async () => {
     // 按名称去重，spark 优先：同名链接 spark 覆盖 apm
     const seenNames = new Set<string>();
 
-    for (const mode of modes) {
-      const finalArch = mode === "spark" ? `${arch}-store` : `${arch}-apm`;
-      const base = `${APM_STORE_BASE_URL}/${finalArch}/home`;
-
-      // homelinks.json
-      try {
-        const res = await fetch(`${base}/homelinks.json`);
-        if (res.ok) {
-          const raw = await res.json();
-          // 校验 links 为数组，且每项均为对象（避免后端返回异常结构导致运行时错误）
-          const links = Array.isArray(raw) ? (raw.filter((x) => x && typeof x === "object") as Record<string, unknown>[]) : [];
-          for (const l of links) {
-            const name = (l.Name as string) || (l.name as string) || "";
-            if (!name) continue; // 跳过空名称，避免空字符串污染 seenNames 与去重逻辑
-            if (seenNames.has(name)) continue; // 已由更高优先级来源（spark）占据
-            // 仅校验 url 必需；远程 homelinks.json 不含 icon 字段（图片由 imgUrl 提供），
-            // 故 icon 不作为硬性校验，缺省为空串以兼容 HomeLink 类型。
-            const url = (l.Url as string) || (l.url as string) || "";
-            if (!url) continue;
-            const icon = (l.Icon as string) || (l.icon as string) || "";
-            seenNames.add(name);
-            // 显式提取已知字段构造，避免通过展开运算符 { ...l } 把远程不可信数据中的未知属性注入响应式状态
-            const safeLink: HomeLink = {
-              name,
-              url,
-              icon,
-              more: (l.more as string) || undefined,
-              imgUrl: (l.imgUrl as string) || undefined,
-              type: (l.type as string) || undefined,
-              origin: mode,
-            };
-            homeLinks.value.push(safeLink);
-          }
+    // 并行请求各来源的 homelinks.json，缩短首页加载耗时
+    const modeResults = await Promise.all(
+      modes.map(async (mode) => {
+        const finalArch = mode === "spark" ? `${arch}-store` : `${arch}-apm`;
+        const base = `${APM_STORE_BASE_URL}/${finalArch}/home`;
+        try {
+          const res = await fetch(`${base}/homelinks.json`);
+          if (res.ok) return { mode, raw: (await res.json()) as unknown };
+        } catch (e) {
+          console.warn(`Failed to load ${mode} homelinks.json`, e);
         }
-      } catch (e) {
-        console.warn(`Failed to load ${mode} homelinks.json`, e);
+        return { mode, raw: undefined };
+      }),
+    );
+
+    for (const { mode, raw } of modeResults) {
+      if (!raw) continue;
+      // 校验 links 为数组，且每项均为对象（避免后端返回异常结构导致运行时错误）
+      const links = Array.isArray(raw)
+        ? (raw.filter((x) => x && typeof x === "object") as Record<
+            string,
+            unknown
+          >[])
+        : [];
+      for (const l of links) {
+        const name = (l.Name as string) || (l.name as string) || "";
+        if (!name) continue; // 跳过空名称，避免空字符串污染 seenNames 与去重逻辑
+        if (seenNames.has(name)) continue; // 已由更高优先级来源（spark）占据
+        // 仅校验 url 必需；远程 homelinks.json 不含 icon 字段（图片由 imgUrl 提供），
+        // 故 icon 不作为硬性校验，缺省为空串以兼容 HomeLink 类型。
+        const url = (l.Url as string) || (l.url as string) || "";
+        if (!url) continue;
+        const icon = (l.Icon as string) || (l.icon as string) || "";
+        seenNames.add(name);
+        // 显式提取已知字段构造，避免通过展开运算符 { ...l } 把远程不可信数据中的未知属性注入响应式状态
+        const safeLink: HomeLink = {
+          name,
+          url,
+          icon,
+          more: (l.more as string) || undefined,
+          imgUrl: (l.imgUrl as string) || undefined,
+          type: (l.type as string) || undefined,
+          origin: mode,
+        };
+        homeLinks.value.push(safeLink);
       }
     }
   } catch (error: unknown) {

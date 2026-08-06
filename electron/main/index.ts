@@ -361,6 +361,16 @@ function saveWindowState(state: WindowState): void {
 }
 
 let saveBoundsTimer: NodeJS.Timeout | null = null;
+function flushSaveBounds(): void {
+  if (saveBoundsTimer) {
+    clearTimeout(saveBoundsTimer);
+    saveBoundsTimer = null;
+  }
+  if (win && !win.isDestroyed()) {
+    const { width, height, x, y } = win.getBounds();
+    saveWindowState({ width, height, x, y, maximized: win.isMaximized() });
+  }
+}
 function scheduleSaveBounds(winInstance: BrowserWindow): void {
   if (saveBoundsTimer) clearTimeout(saveBoundsTimer);
   saveBoundsTimer = setTimeout(() => {
@@ -375,6 +385,11 @@ function scheduleSaveBounds(winInstance: BrowserWindow): void {
     });
   }, 400);
 }
+
+// 应用退出前立即持久化（防抖 400ms 可能在快速关闭时丢失最后一次状态）
+app.on("before-quit", () => {
+  flushSaveBounds();
+});
 
 async function createWindow() {
   const saved = loadWindowState();
