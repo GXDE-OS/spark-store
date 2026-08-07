@@ -1269,7 +1269,6 @@ ipcMain.handle("show-apm-install-dialog", async (event) => {
   return { success: false, cancelled: true };
 });
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 ipcMain.handle(
   "uninstall-installed",
   async (
@@ -1283,41 +1282,41 @@ ipcMain.handle(
     }
     const { pkgname, origin } = parsed;
 
-  const superUserCmd = await checkSuperUserCommand();
-  const execCommand = superUserCmd || SHELL_CALLER_PATH;
-  const execParams = superUserCmd ? [SHELL_CALLER_PATH] : [];
+    const superUserCmd = await checkSuperUserCommand();
+    const execCommand = superUserCmd || SHELL_CALLER_PATH;
+    const execParams = superUserCmd ? [SHELL_CALLER_PATH] : [];
 
-  if (origin === "apm") {
-    execParams.push("apm", "remove", "-y", pkgname);
-  } else {
-    execParams.push("aptss", "remove", "-y", pkgname);
-  }
+    if (origin === "apm") {
+      execParams.push("apm", "remove", "-y", pkgname);
+    } else {
+      execParams.push("aptss", "remove", "-y", pkgname);
+    }
 
-  const { code, stdout, stderr } = await runCommandCapture(
-    execCommand,
-    execParams,
-  );
-  const success = code === 0;
+    const { code, stdout, stderr } = await runCommandCapture(
+      execCommand,
+      execParams,
+    );
+    const success = code === 0;
 
-  if (success) {
-    logger.info(`卸载完成: ${pkgname}`);
-  } else {
-    logger.error(`卸载失败: ${pkgname} ${stderr || stdout}`);
-  }
+    if (success) {
+      logger.info(`卸载完成: ${pkgname}`);
+    } else {
+      logger.error(`卸载失败: ${pkgname} ${stderr || stdout}`);
+    }
 
-  return {
-    success,
-    message: success
-      ? "卸载完成"
-      : stderr || stdout || `卸载失败，退出码 ${code}`,
-  };
-});
+    return {
+      success,
+      message: success
+        ? "卸载完成"
+        : stderr || stdout || `卸载失败，退出码 ${code}`,
+    };
+  },
+);
 
 interface LaunchAppPayload {
   pkgname: string;
   origin?: "spark" | "apm";
 }
-
 
 ipcMain.handle(
   "launch-app",

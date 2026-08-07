@@ -226,7 +226,8 @@ export interface CategoryInfo {
   zh: string;
   origins?: string[];
   origin?: "spark" | "apm";
-  [k: string]: unknown;
+  // 保留扩展点，避免使用宽泛的索引签名削弱类型安全
+  extra?: Record<string, unknown>;
 }
 
 export interface HomeLink {
@@ -238,7 +239,6 @@ export interface HomeLink {
   imgUrl?: string;
   type?: string;
   origin?: "spark" | "apm";
-  [k: string]: unknown;
 }
 
 export interface SidebarEntry {
