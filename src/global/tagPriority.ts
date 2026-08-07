@@ -21,6 +21,9 @@ const VALID_STRATEGIES: TagPriorityStrategy[] = ["auto", "spark", "apm"];
 // 共享响应式引用：设置页写入、详情页读取，保证跨组件同步
 const strategy = ref<TagPriorityStrategy>("auto");
 
+// 导出共享 ref，供详情页以响应式方式 watch（设置变化实时生效）
+export const tagPriorityStrategyRef = strategy;
+
 let loaded = false;
 
 const readFromStorage = (): TagPriorityStrategy => {

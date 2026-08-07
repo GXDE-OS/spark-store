@@ -308,21 +308,17 @@ function getWindowStatePath(): string {
 
 // 校验保存的窗口位置是否至少部分落在某个显示器可见区域内，避免窗口跑到屏幕外
 function isVisible(bounds: WindowState): boolean {
-  if (
-    bounds.width === undefined ||
-    bounds.height === undefined ||
-    bounds.x === undefined ||
-    bounds.y === undefined
-  ) {
+  // 解构为局部常量后，控制流收窄（const 不可变）可穿透到下方嵌套闭包，
+  // 消除 x/y/width/height 的 “可能为未定义” 告警
+  const { x, y, width, height } = bounds;
+  if (x === undefined || y === undefined || width === undefined || height === undefined) {
     return false;
   }
   const displays = screen.getAllDisplays();
   return displays.some((display) => {
-    const { x, y, width, height } = display.workArea;
-    const horizontally =
-      bounds.x < x + width && bounds.x + bounds.width > x;
-    const vertically =
-      bounds.y < y + height && bounds.y + bounds.height > y;
+    const w = display.workArea;
+    const horizontally = x < w.x + w.width && x + width > w.x;
+    const vertically = y < w.y + w.height && y + height > w.y;
     return horizontally && vertically;
   });
 }

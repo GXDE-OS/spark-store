@@ -1095,38 +1095,46 @@ const openDetail = async (app: App | OpenDetailInput) => {
           }) as Promise<boolean>)
         : Promise.resolve(false),
     ]);
-    // 优先遵从点击来源 origin（未安装时、已安装时都应以用户点击的版本为准）
-    let preferred = (app as Record<string, unknown>).origin as
-      | "spark"
-      | "apm"
-      | undefined;
+    // 来源默认展示规则：
+    //   1) 已安装页打开：按安装类型打开。
+    //        - 仅一个来源已安装 → 强制展示该已装来源（无需策略覆盖）
+    //        - 多个来源已安装 → 按「设置的优先标签」打开（策略）
+    //   2) 其他页面：一律按「设置的优先标签」打开（策略 > 服务端混合默认），不强制。
+    // 注：forceViewingOrigin 仅用于「已安装页 + 唯一安装来源」这一显式安装类型场景，
+    //     其余情况都不强制，交由详情页按用户标签策略重算。
+    let forceOrigin: "spark" | "apm" | undefined = undefined;
     if (fromInstalled) {
-      // 已安装页：依据实际安装来源决定默认展示
       const installedOrigins = (app as Record<string, unknown>).origins as
         | Array<"spark" | "apm">
         | undefined;
-      if (installedOrigins && installedOrigins.length > 0) {
-        if (
-          installedOrigins.includes("spark") &&
-          installedOrigins.includes("apm")
-        ) {
-          // 两种类型都已安装：保持所有应用页的自动显示模式（不强制指定来源）
-          preferred = undefined;
-        } else {
-          // 仅安装一种类型：优先显示已安装的类型（另一类型仍可在来源切换中查看）
-          preferred = installedOrigins[0];
-        }
+      if (installedOrigins && installedOrigins.length === 1) {
+        // 单来源安装：按安装类型强制
+        forceOrigin = installedOrigins[0];
+      } else if (installedOrigins && installedOrigins.length > 1) {
+        // 多来源安装：交由策略（按设置优先标签），不强制
+        forceOrigin = undefined;
+      } else {
+        // origins 未随事件携带时，用 IPC 检测结果兜底判断安装类型
+        if (sparkInstalled && !apmInstalled) forceOrigin = "spark";
+        else if (apmInstalled && !sparkInstalled) forceOrigin = "apm";
       }
     }
-    if (preferred && (preferred === "spark" ? finalApp.sparkApp : finalApp.apmApp)) {
-      finalApp.viewingOrigin = preferred;
+    // 非强制分支：清除可能由「已安装页」入口遗留的 forceViewingOrigin 粘性标志，
+    // 避免同一应用从其他页面再次打开时被锁死在旧来源（表现为设置切换不生效）。
+    finalApp.forceViewingOrigin = false;
+    if (forceOrigin && (forceOrigin === "spark" ? finalApp.sparkApp : finalApp.apmApp)) {
+      // 已安装页 + 唯一安装来源 → 强制展示该安装类型，优先级高于用户标签策略
+      finalApp.viewingOrigin = forceOrigin;
+      finalApp.forceViewingOrigin = true;
     } else if (sparkInstalled && !apmInstalled) {
-      // 无点击来源时：仅一个仓库已安装则优先展示已安装版本
+      // 仅 Spark 安装（其他页面）：默认回退展示已装版本，不强制（仍受用户策略覆盖）
       finalApp.viewingOrigin = "spark";
     } else if (apmInstalled && !sparkInstalled) {
       finalApp.viewingOrigin = "apm";
     } else {
-      // 都安装/都未安装且未指定来源：按优先级配置决定默认展示
+      // 都安装/都未安装且未指定来源：交由「标签优先显示策略」决定默认展示。
+      // 此处仅写入混合默认作为回退（供 appIdentity / 截图等下游使用），
+      // 但不置 forceViewingOrigin，详情页会按用户策略重算。
       finalApp.viewingOrigin = getHybridDefaultOrigin(
         finalApp.sparkApp || finalApp,
       );
@@ -1496,7 +1504,12 @@ const loadHomeListApps = async (entryId: string) => {
     mode: "spark" | "apm",
   ): App[] =>
     rawApps.map((a) => {
-      const category = a.Category || a.category || "unknown";
+      // 首页推荐列表的 jsonUrl 形如 /home/lists/xxx.json；服务端原始数据不含 category 字段，
+      // 这里提取 URL 首段目录作为分类（无真实分类时回退 "unknown"），避免污染后续优先级匹配。
+      const urlCategory = (urls[mode] || "")
+        .split("/")
+        .filter(Boolean)[0] || "unknown";
+      const category = a.Category || a.category || urlCategory;
 
       let img_urls: string[] = [];
       const rawImgUrls = a.img_urls;

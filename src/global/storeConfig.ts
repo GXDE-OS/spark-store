@@ -1,8 +1,16 @@
 import { ref } from "vue";
+import axios from "axios";
 import type { App, StoreMode } from "./typedefinition";
 
 export const APM_STORE_BASE_URL: string =
   import.meta.env.VITE_APM_STORE_BASE_URL || "";
+
+// 加载优先级配置专用客户端：与渲染进程其余请求共用同一套 HTTP 客户端，
+// 避免 Electron 渲染进程中全局 fetch 失败导致配置始终为空、auto 模式全部回退 APM。
+const priorityConfigAxios = axios.create({
+  baseURL: APM_STORE_BASE_URL,
+  timeout: 10000,
+});
 
 export const APM_STORE_STATS_BASE_URL: string =
   import.meta.env.VITE_APM_STORE_STATS_BASE_URL || "";
@@ -77,59 +85,54 @@ export let hasPriorityConfigFile = false;
  */
 export async function loadPriorityConfig(arch: string): Promise<void> {
   try {
-    const configUrl = `${APM_STORE_BASE_URL}/${arch}-store/priority-config.json`;
-    const response = await fetch(configUrl, {
-      method: "GET",
-      cache: "no-cache",
-    });
-
-    if (response.ok) {
-      const config = await response.json();
-      hasPriorityConfigFile = true;
-      // 支持新旧两种配置格式
-      if (config.sparkPriority || config.apmPriority) {
-        // 新格式：双向配置
-        dynamicPriorityConfig = {
-          sparkPriority: {
-            pkgnames: config.sparkPriority?.pkgnames || [],
-            categories: config.sparkPriority?.categories || [],
-            tags: config.sparkPriority?.tags || [],
-          },
-          apmPriority: {
-            pkgnames: config.apmPriority?.pkgnames || [],
-            categories: config.apmPriority?.categories || [],
-            tags: config.apmPriority?.tags || [],
-          },
-        };
-      } else {
-        // 旧格式：只配置 sparkPriority（兼容旧配置）
-        dynamicPriorityConfig = {
-          sparkPriority: {
-            pkgnames: config.pkgnames || [],
-            categories: config.categories || [],
-            tags: config.tags || [],
-          },
-          apmPriority: {
-            pkgnames: [],
-            categories: [],
-            tags: [],
-          },
-        };
-      }
-      isPriorityConfigLoaded = true;
-      console.log(
-        "[PriorityConfig] 已从服务器加载优先级配置:",
-        dynamicPriorityConfig,
-      );
+    const configPath = `/${arch}-store/priority-config.json`;
+    console.log(
+      `[PriorityConfig] 开始加载优先级配置: ${APM_STORE_BASE_URL}${configPath}`,
+    );
+    const response = await priorityConfigAxios.get(configPath);
+    const config = response.data;
+    hasPriorityConfigFile = true;
+    // 支持新旧两种配置格式
+    if (config.sparkPriority || config.apmPriority) {
+      // 新格式：双向配置
+      dynamicPriorityConfig = {
+        sparkPriority: {
+          pkgnames: config.sparkPriority?.pkgnames || [],
+          categories: config.sparkPriority?.categories || [],
+          tags: config.sparkPriority?.tags || [],
+        },
+        apmPriority: {
+          pkgnames: config.apmPriority?.pkgnames || [],
+          categories: config.apmPriority?.categories || [],
+          tags: config.apmPriority?.tags || [],
+        },
+      };
     } else {
-      // 配置文件不存在，默认优先 Spark
-      console.log("[PriorityConfig] 服务器无配置文件，使用默认 Spark 优先");
-      hasPriorityConfigFile = false;
-      resetPriorityConfig();
+      // 旧格式：只配置 sparkPriority（兼容旧配置）
+      dynamicPriorityConfig = {
+        sparkPriority: {
+          pkgnames: config.pkgnames || [],
+          categories: config.categories || [],
+          tags: config.tags || [],
+        },
+        apmPriority: {
+          pkgnames: [],
+          categories: [],
+          tags: [],
+        },
+      };
     }
+    isPriorityConfigLoaded = true;
+    console.log(
+      "[PriorityConfig] 已从服务器加载优先级配置:",
+      JSON.stringify(dynamicPriorityConfig),
+    );
   } catch (error) {
-    // 获取失败，默认优先 Spark
-    console.warn("[PriorityConfig] 加载配置失败，使用默认 Spark 优先:", error);
+    // 获取失败（含 404：服务器无配置文件），默认优先 APM
+    console.warn(
+      `[PriorityConfig] 加载配置失败（${APM_STORE_BASE_URL}/${arch}-store/priority-config.json），使用默认 APM 优先:`,
+      error,
+    );
     hasPriorityConfigFile = false;
     resetPriorityConfig();
   }
@@ -155,69 +158,58 @@ function resetPriorityConfig(): void {
 }
 
 /**
- * 获取混合模式下应用的默认优先来源
- * 判断优先级（从高到低）：
- * 1. apmPriority.pkgnames - 强制优先 APM
- * 2. sparkPriority.pkgnames - 强制优先 Spark
- * 3. apmPriority.categories - 该分类优先 APM
- * 4. sparkPriority.categories - 该分类优先 Spark
- * 5. apmPriority.tags - 包含标签优先 APM
- * 6. sparkPriority.tags - 包含标签优先 Spark
- * 7. 默认行为：
- *    - 没有配置文件 → 优先 Spark
- *    - 有配置文件但规则为空 → 优先 APM
+ * 按优先级配置规则判断单个应用标识是否命中「优先来源」。
+ * 命中则返回 "apm" / "spark"，未命中返回 null。
+ * 规则优先级（从高到低）：apmPriority.pkgnames > sparkPriority.pkgnames >
+ * apmPriority.categories > sparkPriority.categories > apmPriority.tags > sparkPriority.tags
+ */
+function matchPriority(app: App): "apm" | "spark" | null {
+  const { sparkPriority, apmPriority } = dynamicPriorityConfig;
+
+  if (apmPriority.pkgnames.includes(app.pkgname)) return "apm";
+  if (sparkPriority.pkgnames.includes(app.pkgname)) return "spark";
+  if (apmPriority.categories.includes(app.category)) return "apm";
+  if (sparkPriority.categories.includes(app.category)) return "spark";
+
+  if (app.tags && apmPriority.tags.length > 0) {
+    const appTags = app.tags.split(";").map((t) => t.trim().toLowerCase());
+    for (const ruleTag of apmPriority.tags) {
+      if (appTags.includes(ruleTag.toLowerCase())) return "apm";
+    }
+  }
+  if (app.tags && sparkPriority.tags.length > 0) {
+    const appTags = app.tags.split(";").map((t) => t.trim().toLowerCase());
+    for (const ruleTag of sparkPriority.tags) {
+      if (appTags.includes(ruleTag.toLowerCase())) return "spark";
+    }
+  }
+  return null;
+}
+
+/**
+ * 获取混合模式下应用的默认优先来源（即「应用配置优先级」）。
+ * 对合并应用，依次用顶层标识、sparkApp、apmApp 去匹配优先级配置，
+ * 任一来源命中即生效（避免顶层 pkgname 取自某一子版而漏掉另一子版的规则）。
+ * 均不命中时回退到 HYBRID_DEFAULT_PRIORITY（默认优先 APM）。
  * @param app 应用信息
  * @returns "apm" 或 "spark"
  */
 export function getHybridDefaultOrigin(app: App): "apm" | "spark" {
-  const { sparkPriority, apmPriority } = dynamicPriorityConfig;
+  const result = matchPriority(app);
+  if (result) return result;
 
-  // 1. 检查 APM 优先的包名（最高优先级）
-  if (apmPriority.pkgnames.includes(app.pkgname)) {
-    return "apm";
-  }
-
-  // 2. 检查 Spark 优先的包名
-  if (sparkPriority.pkgnames.includes(app.pkgname)) {
-    return "spark";
-  }
-
-  // 3. 检查 APM 优先的分类
-  if (apmPriority.categories.includes(app.category)) {
-    return "apm";
-  }
-
-  // 4. 检查 Spark 优先的分类
-  if (sparkPriority.categories.includes(app.category)) {
-    return "spark";
-  }
-
-  // 5. 检查 APM 优先的标签
-  if (app.tags && apmPriority.tags.length > 0) {
-    const appTags = app.tags.split(";").map((t) => t.trim().toLowerCase());
-    for (const ruleTag of apmPriority.tags) {
-      if (appTags.includes(ruleTag.toLowerCase())) {
-        return "apm";
-      }
+  // 合并应用：两个子版分别匹配，任一命中即采用
+  if (app.isMerged) {
+    if (app.sparkApp) {
+      const r = matchPriority(app.sparkApp);
+      if (r) return r;
+    }
+    if (app.apmApp) {
+      const r = matchPriority(app.apmApp);
+      if (r) return r;
     }
   }
 
-  // 6. 检查 Spark 优先的标签
-  if (app.tags && sparkPriority.tags.length > 0) {
-    const appTags = app.tags.split(";").map((t) => t.trim().toLowerCase());
-    for (const ruleTag of sparkPriority.tags) {
-      if (appTags.includes(ruleTag.toLowerCase())) {
-        return "spark";
-      }
-    }
-  }
-
-  // 7. 默认行为
-  if (!hasPriorityConfigFile) {
-    // 没有配置文件 → 默认优先 Spark
-    return "spark";
-  } else {
-    // 有配置文件但规则为空 → 默认优先 APM
-    return "apm";
-  }
+  // 默认行为：与 HYBRID_DEFAULT_PRIORITY 保持一致（默认优先 APM）
+  return HYBRID_DEFAULT_PRIORITY;
 }

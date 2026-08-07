@@ -115,6 +115,7 @@ export interface App {
   sparkApp?: App; // Optional reference to the spark version
   apmApp?: App; // Optional reference to the apm version
   viewingOrigin?: "spark" | "apm"; // Currently viewed origin inside the app modal
+  forceViewingOrigin?: boolean; // true 表示 viewingOrigin 为父组件显式指定（如从已安装页按特定来源打开），优先级高于用户标签策略；未设置或 false 时由标签策略决定默认展示
   origins?: Array<"spark" | "apm">; // 实际安装来源集合（同时以 APM 与 Spark 安装时含两项）
   downloadCount?: number; // 下载量（用于下载排行，由 download-times.txt 解析）
 }

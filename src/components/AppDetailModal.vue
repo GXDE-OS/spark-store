@@ -578,7 +578,8 @@ import {
   getHybridDefaultOrigin,
 } from "../global/storeConfig";
 import {
-  getTagPriorityStrategy,
+  tagPriorityStrategyRef,
+  initTagPriorityStrategy,
   type TagPriorityStrategy,
 } from "../global/tagPriority";
 // 评论功能暂时关闭
@@ -641,8 +642,9 @@ const computeDefaultViewingOrigin = (
   app: App,
   strategy: TagPriorityStrategy,
 ): "spark" | "apm" => {
-  // 父组件已显式指定展示来源（如从已安装应用页按特定来源打开），优先级最高
-  if (app.viewingOrigin) return app.viewingOrigin;
+  // 父组件显式指定展示来源（如从已安装应用页按特定来源打开）时优先级最高，
+  // 此时强制覆盖用户标签策略；否则交由下方策略逻辑决定。
+  if (app.forceViewingOrigin && app.viewingOrigin) return app.viewingOrigin;
 
   // 非合并应用只有一个来源标签，直接展示该标签
   if (!app.isMerged) return app.origin;
@@ -661,19 +663,49 @@ const computeDefaultViewingOrigin = (
     return preferred;
   }
 
-  // 回退到应用配置的优先级策略（getHybridDefaultOrigin），并约束在可用标签范围内
-  const auto = getHybridDefaultOrigin(app.sparkApp ?? app.apmApp ?? app);
+  // 回退到应用配置的优先级策略（getHybridDefaultOrigin），使用合并应用自身的
+  // 规范标识（pkgname/category/tags）匹配服务器 priority-config.json，并约束在可用标签范围内
+  const auto = getHybridDefaultOrigin(app);
+  console.log(
+    `[PriorityConfig] auto 决策 pkgname=${app.pkgname} category=${app.category} sparkTags=${app.sparkApp?.tags ?? ""} apmTags=${app.apmApp?.tags ?? ""} -> ${auto}`,
+  );
   return available.includes(auto) ? auto : available[0];
 };
 
+// 进入详情页时按「标签优先显示策略」计算默认来源标签。
+// 同时监听 props.app 与共享策略 ref：
+//   - props.app 变化（重开/切换应用）→ 始终按当前策略重算（手动切标签仅本次会话预览，不持久）
+//   - 策略变化（在设置页实时切换）→ 已打开且未手动切标签的详情页立即更新默认标签
+// 手动点标签页（selectOrigin）只是临时预览：置 manualOverride 标记，本次会话内保持，
+//   既不被策略变化强行拉回，也不跨重开持久（重开后会按设置重算）。
+initTagPriorityStrategy();
+const manualOverride = ref(false); // 用户是否手动切换过标签（本次会话）
+let lastPkgname: string | null = null; // 上一次计算对应的应用 pkgname，用于识别"新打开/重开"
 watch(
-  () => props.app,
-  (newApp: App | null) => {
+  [() => props.app, tagPriorityStrategyRef],
+  ([newApp]: [App | null, TagPriorityStrategy]) => {
     isIconLoaded.value = false;
-    if (newApp) {
+    if (!newApp) {
+      // 详情页关闭：清空会话状态，确保下次打开按最新策略重算
+      lastPkgname = null;
+      manualOverride.value = false;
+      return;
+    }
+    if (newApp.pkgname !== lastPkgname) {
+      // 新应用（含重开后再次打开同一应用）：重置手动标记，按当前策略计算
+      lastPkgname = newApp.pkgname;
+      manualOverride.value = false;
       viewingOrigin.value = computeDefaultViewingOrigin(
         newApp,
-        getTagPriorityStrategy(),
+        tagPriorityStrategyRef.value,
+      );
+    } else if (manualOverride.value || newApp.forceViewingOrigin) {
+      // 同一应用且用户正在手动预览 / 父组件强制来源：保留当前标签，不重算
+    } else {
+      // 同一应用、无手动预览、策略变化 → 实时按新策略更新默认标签
+      viewingOrigin.value = computeDefaultViewingOrigin(
+        newApp,
+        tagPriorityStrategyRef.value,
       );
     }
   },
@@ -845,6 +877,8 @@ const confirmOpen = (origin: "spark" | "apm") => {
 // };
 
 const selectOrigin = (origin: "spark" | "apm") => {
+  // 手动切换标签：仅本次会话预览，不写回策略、不跨重开持久
+  manualOverride.value = true;
   viewingOrigin.value = origin;
   emit("select-origin", origin);
 };
