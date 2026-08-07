@@ -577,6 +577,10 @@ import {
   APM_STORE_BASE_URL,
   getHybridDefaultOrigin,
 } from "../global/storeConfig";
+import {
+  getTagPriorityStrategy,
+  type TagPriorityStrategy,
+} from "../global/tagPriority";
 // 评论功能暂时关闭
 // import { buildReviewAppKey, buildReviewTags } from "../modules/appIdentity";
 import type { App, AppReview, ReviewTags } from "../global/typedefinition";
@@ -632,25 +636,45 @@ const openWebsite = (url: string) => {
   }
 };
 
+// 根据「标签优先显示策略」与应用的可用来源标签，计算默认展示的来源
+const computeDefaultViewingOrigin = (
+  app: App,
+  strategy: TagPriorityStrategy,
+): "spark" | "apm" => {
+  // 父组件已显式指定展示来源（如从已安装应用页按特定来源打开），优先级最高
+  if (app.viewingOrigin) return app.viewingOrigin;
+
+  // 非合并应用只有一个来源标签，直接展示该标签
+  if (!app.isMerged) return app.origin;
+
+  // 合并应用：available 为实际存在的来源标签
+  const available: Array<"spark" | "apm"> = [];
+  if (app.sparkApp) available.push("spark");
+  if (app.apmApp) available.push("apm");
+  if (available.length === 0) return app.origin; // 兜底
+  if (available.length === 1) return available[0]; // 仅有一个标签时默认展示该标签
+
+  // 按策略优先选择对应标签
+  const preferred: "spark" | "apm" | null =
+    strategy === "spark" ? "spark" : strategy === "apm" ? "apm" : null;
+  if (preferred && available.includes(preferred)) {
+    return preferred;
+  }
+
+  // 回退到应用配置的优先级策略（getHybridDefaultOrigin），并约束在可用标签范围内
+  const auto = getHybridDefaultOrigin(app.sparkApp ?? app.apmApp ?? app);
+  return available.includes(auto) ? auto : available[0];
+};
+
 watch(
   () => props.app,
   (newApp: App | null) => {
     isIconLoaded.value = false;
     if (newApp) {
-      if (newApp.isMerged) {
-        // 若父组件已根据安装状态设置了优先展示的版本，则使用
-        // 否则根据优先级配置决定默认来源
-        if (newApp.viewingOrigin) {
-          viewingOrigin.value = newApp.viewingOrigin;
-        } else if (newApp.sparkApp) {
-          // 使用优先级配置决定默认来源
-          viewingOrigin.value = getHybridDefaultOrigin(newApp.sparkApp);
-        } else {
-          viewingOrigin.value = "apm";
-        }
-      } else {
-        viewingOrigin.value = newApp.origin;
-      }
+      viewingOrigin.value = computeDefaultViewingOrigin(
+        newApp,
+        getTagPriorityStrategy(),
+      );
     }
   },
   { immediate: true },
