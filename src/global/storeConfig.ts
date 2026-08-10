@@ -180,6 +180,7 @@ function matchPriority(app: App): "apm" | "spark" | null {
  * 获取混合模式下应用的默认优先来源（即「应用配置优先级」）。
  * 对合并应用，依次用顶层标识、sparkApp、apmApp 去匹配优先级配置，
  * 任一来源命中即生效（避免顶层 pkgname 取自某一子版而漏掉另一子版的规则）。
+ * 若两子版方向相反命中，遵从 apmPriority「例外优先」语义让 apm 胜出。
  * 均不命中时回退到 HYBRID_DEFAULT_PRIORITY（默认优先 APM）。
  * @param app 应用信息
  * @returns "apm" 或 "spark"
@@ -193,20 +194,17 @@ export function getHybridDefaultOrigin(app: App): "apm" | "spark" {
   // 回退使用顶层 app.category 参与分类规则匹配，避免漏匹配。
   if (app.isMerged) {
     const fallbackCategory = app.category;
-    if (app.sparkApp) {
-      const sparkCandidate: App = app.sparkApp.category
-        ? app.sparkApp
-        : { ...app.sparkApp, category: fallbackCategory };
-      const r = matchPriority(sparkCandidate);
-      if (r) return r;
-    }
-    if (app.apmApp) {
-      const apmCandidate: App = app.apmApp.category
-        ? app.apmApp
-        : { ...app.apmApp, category: fallbackCategory };
-      const r = matchPriority(apmCandidate);
-      if (r) return r;
-    }
+    // 构造 category 回退顶层的候选项，避免子版 category 为空时分类规则漏匹配
+    const toCandidate = (sub: App): App =>
+      sub.category ? sub : { ...sub, category: fallbackCategory };
+    const sparkHit = app.sparkApp ? matchPriority(toCandidate(app.sparkApp)) : null;
+    const apmHit = app.apmApp ? matchPriority(toCandidate(app.apmApp)) : null;
+
+    // apmPriority 是「例外优先于 sparkPriority」：当两子版方向相反命中
+    //（sparkApp 命中 spark 且 apmApp 命中 apm）时，按配置语义让 apm 胜出。
+    if (sparkHit === "spark" && apmHit === "apm") return "apm";
+    if (sparkHit) return sparkHit;
+    if (apmHit) return apmHit;
   }
 
   // 默认行为：与 HYBRID_DEFAULT_PRIORITY 保持一致（默认优先 APM）
