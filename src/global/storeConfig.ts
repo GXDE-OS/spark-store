@@ -70,14 +70,6 @@ export let dynamicPriorityConfig: PriorityRules = {
   },
 };
 
-// 标记是否已从服务器加载配置
-export let isPriorityConfigLoaded = false;
-
-// 标记服务器上是否存在配置文件
-// false = 没有配置文件，默认优先 Spark
-// true = 有配置文件，按配置规则判断（配置为空则默认优先 APM）
-export let hasPriorityConfigFile = false;
-
 /**
  * 从服务器加载优先级配置
  * 配置文件路径: ${arch}-store/priority-config.json (放在 spark 下)
@@ -91,7 +83,6 @@ export async function loadPriorityConfig(arch: string): Promise<void> {
     );
     const response = await priorityConfigAxios.get(configPath);
     const config = response.data;
-    hasPriorityConfigFile = true;
     // 支持新旧两种配置格式
     if (config.sparkPriority || config.apmPriority) {
       // 新格式：双向配置
@@ -122,24 +113,24 @@ export async function loadPriorityConfig(arch: string): Promise<void> {
         },
       };
     }
-    isPriorityConfigLoaded = true;
     console.log(
       "[PriorityConfig] 已从服务器加载优先级配置:",
       JSON.stringify(dynamicPriorityConfig),
     );
   } catch (error) {
-    // 获取失败（含 404：服务器无配置文件），默认优先 APM
+    // 获取失败（含 404：服务器无配置文件），默认优先 APM。
+    // 注：此处为配置缺失/加载失败，dynamicPriorityConfig 重置为空规则，
+    // 由 getHybridDefaultOrigin 回退 HYBRID_DEFAULT_PRIORITY（默认 APM）。
     console.warn(
       `[PriorityConfig] 加载配置失败（${APM_STORE_BASE_URL}/${arch}-store/priority-config.json），使用默认 APM 优先:`,
       error,
     );
-    hasPriorityConfigFile = false;
     resetPriorityConfig();
   }
 }
 
 /**
- * 重置优先级配置为默认值
+ * 重置优先级配置为默认值（配置缺失/加载失败时调用）
  */
 function resetPriorityConfig(): void {
   dynamicPriorityConfig = {
@@ -154,7 +145,6 @@ function resetPriorityConfig(): void {
       tags: [],
     },
   };
-  isPriorityConfigLoaded = true;
 }
 
 /**
@@ -198,14 +188,23 @@ export function getHybridDefaultOrigin(app: App): "apm" | "spark" {
   const result = matchPriority(app);
   if (result) return result;
 
-  // 合并应用：两个子版分别匹配，任一命中即采用
+  // 合并应用：两个子版分别匹配，任一命中即采用。
+  // 若子版自身 category 为空（如部分入口构造的 fallback 应用），
+  // 回退使用顶层 app.category 参与分类规则匹配，避免漏匹配。
   if (app.isMerged) {
+    const fallbackCategory = app.category;
     if (app.sparkApp) {
-      const r = matchPriority(app.sparkApp);
+      const sparkCandidate: App = app.sparkApp.category
+        ? app.sparkApp
+        : { ...app.sparkApp, category: fallbackCategory };
+      const r = matchPriority(sparkCandidate);
       if (r) return r;
     }
     if (app.apmApp) {
-      const r = matchPriority(app.apmApp);
+      const apmCandidate: App = app.apmApp.category
+        ? app.apmApp
+        : { ...app.apmApp, category: fallbackCategory };
+      const r = matchPriority(apmCandidate);
       if (r) return r;
     }
   }

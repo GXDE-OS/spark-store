@@ -644,6 +644,8 @@ const computeDefaultViewingOrigin = (
 ): "spark" | "apm" => {
   // 父组件显式指定展示来源（如从已安装应用页按特定来源打开）时优先级最高，
   // 此时强制覆盖用户标签策略；否则交由下方策略逻辑决定。
+  // 注意：被强制的应用（forceViewingOrigin=true）在详情页保持打开期间，
+  // 即使设置页切换标签策略也不会实时变更其展示来源（已安装来源高于策略，属设计行为）。
   if (app.forceViewingOrigin && app.viewingOrigin) return app.viewingOrigin;
 
   // 非合并应用只有一个来源标签，直接展示该标签
@@ -666,9 +668,6 @@ const computeDefaultViewingOrigin = (
   // 回退到应用配置的优先级策略（getHybridDefaultOrigin），使用合并应用自身的
   // 规范标识（pkgname/category/tags）匹配服务器 priority-config.json，并约束在可用标签范围内
   const auto = getHybridDefaultOrigin(app);
-  console.log(
-    `[PriorityConfig] auto 决策 pkgname=${app.pkgname} category=${app.category} sparkTags=${app.sparkApp?.tags ?? ""} apmTags=${app.apmApp?.tags ?? ""} -> ${auto}`,
-  );
   return available.includes(auto) ? auto : available[0];
 };
 
