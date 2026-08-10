@@ -139,6 +139,15 @@ export const createUpdateCenterStore = (): UpdateCenterStore => {
     isOpen.value = true;
     loading.value = true;
     try {
+      // 打开更新中心时先刷新软件源，避免使用旧的 apt 缓存导致扫不到更新
+      try {
+        await window.ipcRenderer.invoke(
+          "update-center-run-system-update",
+          storeFilter,
+        );
+      } catch (error) {
+        console.error("[UpdateCenter] open: system update failed", error);
+      }
       const nextSnapshot = await window.updateCenter.open(storeFilter);
       applySnapshot(nextSnapshot);
     } finally {
