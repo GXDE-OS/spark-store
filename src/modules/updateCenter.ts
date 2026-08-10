@@ -133,11 +133,8 @@ export const createUpdateCenterStore = (): UpdateCenterStore => {
     isBound = false;
   };
 
-  // 先刷新软件源，再加载更新列表；刷新失败仅告警，不阻断扫描
-  const runSystemUpdateThenLoad = async (
-    storeFilter: StoreFilter,
-    load: (filter: StoreFilter) => Promise<UpdateCenterSnapshot>,
-  ): Promise<void> => {
+  // 刷新软件源（不加载列表）：网络慢/卡死由主进程超时保护，不会永久挂起
+  const runSystemUpdate = async (storeFilter: StoreFilter): Promise<void> => {
     try {
       await window.ipcRenderer.invoke(
         "update-center-run-system-update",
@@ -145,9 +142,61 @@ export const createUpdateCenterStore = (): UpdateCenterStore => {
       );
     } catch (error) {
       console.error("[UpdateCenter] system update failed", error);
+      throw error;
     }
-    const nextSnapshot = await load(storeFilter);
-    applySnapshot(nextSnapshot);
+  };
+
+  // 主动刷新：先刷新源再加载列表（用户点击刷新按钮时使用，期望即时结果）
+  const refresh = async (
+    storeFilter: StoreFilter = lastStoreFilter,
+  ): Promise<void> => {
+    lastStoreFilter = storeFilter;
+    loading.value = true;
+    try {
+      await runSystemUpdate(storeFilter);
+      const nextSnapshot = await window.updateCenter.refresh(storeFilter);
+      applySnapshot(nextSnapshot);
+    } finally {
+      loading.value = false;
+    }
+  };
+
+  // 打开更新中心：先用缓存秒开列表（不卡 UI），再后台刷新源并重新加载。
+  // 后台刷新带指数退避重试；窗口关闭即停，避免无效重试。
+  // 与 electron/main/index.ts 的预刷新重试为【对称设计】，非代码遗漏：
+  // 前端负责“打开更新中心兜底”，主进程负责“启动预热”，
+  // 两者进程/守卫/调用目标不同，故各自保留一份，勿抽共享。
+  const MAX_BACKGROUND_RETRIES = 3;
+  const BACKGROUND_BACKOFF_MS = [2000, 4000, 8000];
+
+  // 按重试次数取退避毫秒（越界时回退到最大间隔）
+  const getBackoffDelay = (attempt: number): number =>
+    BACKGROUND_BACKOFF_MS[attempt - 1] ??
+    BACKGROUND_BACKOFF_MS[BACKGROUND_BACKOFF_MS.length - 1];
+
+  const backgroundRefresh = async (
+    storeFilter: StoreFilter,
+    attempt: number,
+  ): Promise<void> => {
+    if (!isOpen.value) return; // 窗口已关闭，停止重试
+    try {
+      await runSystemUpdate(storeFilter);
+      const nextSnapshot = await window.updateCenter.refresh(storeFilter);
+      if (!isOpen.value) return;
+      applySnapshot(nextSnapshot);
+    } catch (error) {
+      if (attempt >= MAX_BACKGROUND_RETRIES) {
+        console.warn(
+          `[UpdateCenter] background refresh failed after ${MAX_BACKGROUND_RETRIES} attempts`,
+          error,
+        );
+        return;
+      }
+      const delay = getBackoffDelay(attempt);
+      window.setTimeout(() => {
+        void backgroundRefresh(storeFilter, attempt + 1);
+      }, delay);
+    }
   };
 
   const open = async (storeFilter: StoreFilter = "both"): Promise<void> => {
@@ -156,22 +205,14 @@ export const createUpdateCenterStore = (): UpdateCenterStore => {
     isOpen.value = true;
     loading.value = true;
     try {
-      await runSystemUpdateThenLoad(storeFilter, window.updateCenter.open);
+      // 1. 先加载缓存，立即显示列表（秒开，不阻塞于网络刷新）
+      const cachedSnapshot = await window.updateCenter.open(storeFilter);
+      applySnapshot(cachedSnapshot);
     } finally {
       loading.value = false;
     }
-  };
-
-  const refresh = async (
-    storeFilter: StoreFilter = lastStoreFilter,
-  ): Promise<void> => {
-    lastStoreFilter = storeFilter;
-    loading.value = true;
-    try {
-      await runSystemUpdateThenLoad(storeFilter, window.updateCenter.refresh);
-    } finally {
-      loading.value = false;
-    }
+    // 2. 后台异步刷新源并在完成后更新列表（失败自动重试）
+    void backgroundRefresh(storeFilter, 1);
   };
 
   const ignoreItem = async (

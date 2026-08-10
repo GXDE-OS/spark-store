@@ -3466,6 +3466,9 @@ onMounted(async () => {
   window.ipcRenderer.on("remove-complete", handleRemoveComplete);
 
   window.ipcRenderer.send("renderer-ready", { status: true });
+  // 首页/数据加载完成（主界面已可交互），通知主进程立即开始后台刷新软件源，
+  // 趁系统负载不高时提前刷新 aptss/apm 源，用户稍后打开“软件更新”即可秒出。
+  window.ipcRenderer.send("update-center-trigger-prefetch");
   logger.info("Renderer process is ready!");
 });
 

@@ -19,7 +19,10 @@ import { handleCommandLine } from "./deeplink.js";
 import { isLoaded } from "../global.js";
 import { tasks } from "./backend/install-manager.js";
 import { sendTelemetryOnce } from "./backend/telemetry.js";
-import { initializeUpdateCenter } from "./backend/update-center/index.js";
+import {
+  initializeUpdateCenter,
+  runSystemUpdateSources,
+} from "./backend/update-center/index.js";
 import {
   getMainWindowCloseAction,
   type MainWindowCloseGuardState,
@@ -656,7 +659,51 @@ app.whenReady().then(() => {
   initializeUpdateCenter();
   // 启动后执行一次遥测（仅 Linux，不阻塞）
   sendTelemetryOnce(getAppVersion());
+
+  // 注册“渲染进程首页加载完成”信号：收到后立即开始后台刷新软件源，
+  // 趁系统负载不高时提前刷新 aptss/apm 源，用户稍后打开“软件更新”即可秒出。
+  // 同时保留一个兜底定时器，防止渲染进程未发信号时完全不刷新。
+  ipcMain.on("update-center-trigger-prefetch", () => {
+    startSourcePreRefreshOnce();
+  });
+  setTimeout(startSourcePreRefreshOnce, PRE_REFRESH_FALLBACK_MS);
 });
+
+// 启动后空闲预刷新软件源（带重试），不阻塞启动流程
+// 与 src/modules/updateCenter.ts 的 backgroundRefresh 重试为【对称设计】，非代码遗漏：
+// 主进程负责“启动预热”，前端负责“打开兜底”，
+// 两者进程/守卫/调用目标不同，故各自保留一份，勿抽共享。
+const PRE_REFRESH_BACKOFF_MS = [2000, 4000, 8000];
+const PRE_REFRESH_MAX_RETRIES = 3;
+const PRE_REFRESH_FALLBACK_MS = 15_000; // 渲染信号未到达时的兜底，15s 后也跑
+let preRefreshStarted = false;
+
+// 按重试次数取退避毫秒（越界时回退到最大间隔）
+const getPreRefreshBackoffDelay = (attempt: number): number =>
+  PRE_REFRESH_BACKOFF_MS[attempt - 1] ??
+  PRE_REFRESH_BACKOFF_MS[PRE_REFRESH_BACKOFF_MS.length - 1];
+
+// 确保预刷新只触发一次（渲染信号或兜底定时器 whichever first）
+const startSourcePreRefreshOnce = (attempt = 1): void => {
+  if (preRefreshStarted) return;
+  preRefreshStarted = true;
+
+  const run = (): void => {
+    runSystemUpdateSources("both")
+      .then((results) => {
+        console.log("[UpdateCenter] pre-refresh done:", results);
+      })
+      .catch((error) => {
+        console.warn("[UpdateCenter] pre-refresh failed:", error);
+        if (attempt < PRE_REFRESH_MAX_RETRIES) {
+          const delay = getPreRefreshBackoffDelay(attempt);
+          setTimeout(() => startSourcePreRefreshOnce(attempt + 1), delay);
+        }
+      });
+  };
+
+  run();
+};
 
 app.on("window-all-closed", () => {
   win = null;
