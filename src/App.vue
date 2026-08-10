@@ -901,7 +901,11 @@ const fetchAppFromStore = async (
     const appJsonUrl = `${APM_STORE_BASE_URL}/${finalArch}/${encodeURIComponent(
       category,
     )}/${encodeURIComponent(pkgname)}/app.json`;
-    const response = await fetch(appJsonUrl);
+    // 接入 rootAbortController.signal，确保组件卸载/详情关闭时请求可被取消，
+    // 避免竞态与内存泄漏（onUnmounted 会 abort 该 controller）
+    const response = await fetch(appJsonUrl, {
+      signal: rootAbortController.signal,
+    });
     if (!response.ok) return null;
     const appJson = await response.json();
     // img_urls 可能为字符串形式的 JSON，解析失败时安全回退为空数组
@@ -935,6 +939,8 @@ const fetchAppFromStore = async (
       currentStatus: "not-installed",
     };
   } catch (e) {
+    // 组件卸载/详情关闭触发 abort 时静默返回，避免刷 AbortError 日志
+    if ((e as Error)?.name === "AbortError") return null;
     console.warn(`Failed to fetch ${origin} app info for ${pkgname}`, e);
     return null;
   }
@@ -1398,23 +1404,40 @@ const loadHome = async () => {
           >[])
         : [];
       for (const l of links) {
-        const name = (l.Name as string) || (l.name as string) || "";
+        // 远程数据不可信，使用 typeof 运行时守卫替代 `as string` 断言，
+        // 避免非字符串字段（如数字/对象）被注入状态导致下游显示异常。
+        const name =
+          typeof l.Name === "string"
+            ? l.Name
+            : typeof l.name === "string"
+              ? l.name
+              : "";
         if (!name) continue; // 跳过空名称，避免空字符串污染 seenNames 与去重逻辑
         if (seenNames.has(name)) continue; // 已由更高优先级来源（spark）占据
         // 仅校验 url 必需；远程 homelinks.json 不含 icon 字段（图片由 imgUrl 提供），
         // 故 icon 不作为硬性校验，缺省为空串以兼容 HomeLink 类型。
-        const url = (l.Url as string) || (l.url as string) || "";
+        const url =
+          typeof l.Url === "string"
+            ? l.Url
+            : typeof l.url === "string"
+              ? l.url
+              : "";
         if (!url) continue;
-        const icon = (l.Icon as string) || (l.icon as string) || "";
+        const icon =
+          typeof l.Icon === "string"
+            ? l.Icon
+            : typeof l.icon === "string"
+              ? l.icon
+              : "";
         seenNames.add(name);
         // 显式提取已知字段构造，避免通过展开运算符 { ...l } 把远程不可信数据中的未知属性注入响应式状态
         const safeLink: HomeLink = {
           name,
           url,
           icon,
-          more: (l.more as string) || undefined,
-          imgUrl: (l.imgUrl as string) || undefined,
-          type: (l.type as string) || undefined,
+          more: typeof l.more === "string" ? l.more : undefined,
+          imgUrl: typeof l.imgUrl === "string" ? l.imgUrl : undefined,
+          type: typeof l.type === "string" ? l.type : undefined,
           origin: mode,
         };
         homeLinks.value.push(safeLink);

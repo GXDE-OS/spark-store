@@ -83,8 +83,7 @@ export function topUpdatedContributors(
   recentN: number = RECENT_UPDATE_WINDOW,
   topN: number = TOP_N,
 ): ContributorRank[] {
-  const recent = topByUpdate(apps, origin, recentN).filter(
-    (a) => a.origin === origin,
-  );
+  // topByUpdate 内部已按 origin 过滤，无需再次 filter
+  const recent = topByUpdate(apps, origin, recentN);
   return toRanks(countContributors(recent), topN);
 }

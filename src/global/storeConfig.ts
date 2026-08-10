@@ -113,9 +113,16 @@ export async function loadPriorityConfig(arch: string): Promise<void> {
         },
       };
     }
+    // 仅打印规则计数而非完整配置，避免潜在敏感信息泄露（诊断用）
+    const ruleCount = (r: {
+      pkgnames: string[];
+      categories: string[];
+      tags: string[];
+    }) => r.pkgnames.length + r.categories.length + r.tags.length;
     console.log(
-      "[PriorityConfig] 已从服务器加载优先级配置:",
-      JSON.stringify(dynamicPriorityConfig),
+      `[PriorityConfig] 已从服务器加载优先级配置: spark ${ruleCount(
+        dynamicPriorityConfig.sparkPriority,
+      )} 条, apm ${ruleCount(dynamicPriorityConfig.apmPriority)} 条`,
     );
   } catch (error) {
     // 获取失败（含 404：服务器无配置文件），默认优先 APM。
