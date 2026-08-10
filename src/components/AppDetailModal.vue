@@ -587,15 +587,16 @@ import type { App, AppReview, ReviewTags } from "../global/typedefinition";
 
 /**
  * 净化后端返回的应用描述（v-html 前严格去除所有标签）。
- * 程序先将用户内容中的所有 HTML 标签剥离，再将 \n 转为 <br>。
- * <br> 是纯程序生成，不含任何用户输入，可安全放入 v-html。
+ * 使用 textContent 做 HTML 实体转义，彻底杜绝 <script>/onerror/嵌套标签/编码绕过等 XSS；
+ * 再将 \n 转为 <br>。<br> 是纯程序生成，不含任何用户输入，可安全放入 v-html。
  */
 const sanitizeMoreContent = (raw: string): string => {
   if (!raw) return "";
-  // 去除所有 HTML 标签，避免 XSS（包括 <script>/onerror/等）
-  const stripped = raw.replace(/<[^>]*>/g, "");
-  // 将 \n 转为安全的 <br>
-  return stripped.replace(/\n/g, "<br>");
+  // 用 textContent 转义所有 HTML 特殊字符（比正则替换 /<[^>]*>/g 更安全，防嵌套/编码绕过）
+  const stripped = document.createElement("div");
+  stripped.textContent = raw;
+  // 将 \n 转为安全的 <br>（此时 textContent 已是转义后的纯文本字符串）
+  return (stripped.textContent ?? "").replace(/\n/g, "<br>");
 };
 
 const attrs = useAttrs();

@@ -1134,7 +1134,10 @@ const openDetail = async (app: App | OpenDetailInput) => {
     // 非强制分支：清除可能由「已安装页」入口遗留的 forceViewingOrigin 粘性标志，
     // 避免同一应用从其他页面再次打开时被锁死在旧来源（表现为设置切换不生效）。
     finalApp.forceViewingOrigin = false;
-    if (forceOrigin && (forceOrigin === "spark" ? finalApp.sparkApp : finalApp.apmApp)) {
+    if (
+      forceOrigin &&
+      (forceOrigin === "spark" ? finalApp.sparkApp : finalApp.apmApp)
+    ) {
       // 已安装页 + 唯一安装来源 → 强制展示该安装类型，优先级高于用户标签策略
       finalApp.viewingOrigin = forceOrigin;
       finalApp.forceViewingOrigin = true;
@@ -1544,9 +1547,8 @@ const loadHomeListApps = async (entryId: string) => {
     rawApps.map((a) => {
       // 首页推荐列表的 jsonUrl 形如 /home/lists/xxx.json；服务端原始数据不含 category 字段，
       // 这里提取 URL 首段目录作为分类（无真实分类时回退 "unknown"），避免污染后续优先级匹配。
-      const urlCategory = (urls[mode] || "")
-        .split("/")
-        .filter(Boolean)[0] || "unknown";
+      const urlCategory =
+        (urls[mode] || "").split("/").filter(Boolean)[0] || "unknown";
       const category = a.Category || a.category || urlCategory;
 
       let img_urls: string[] = [];
@@ -2176,7 +2178,14 @@ const closeSettingsModal = () => {
 };
 
 const openExternalUrl = (url: string) => {
-  window.open(url, "_blank", "noopener,noreferrer");
+  try {
+    const parsed = new URL(url);
+    // 仅允许 http/https 协议，防止 javascript:/data: 等造成 XSS
+    if (!["http:", "https:"].includes(parsed.protocol)) return;
+    window.open(url, "_blank", "noopener,noreferrer");
+  } catch {
+    // 非法 URL 直接忽略，不打开
+  }
 };
 
 const openReviewUserProfile = (review: AppReview): void => {
@@ -3426,14 +3435,15 @@ onMounted(async () => {
   loading.value = true;
   homeLoading.value = true;
 
-  // 区域1(links) 与 区域2 板块(homeList) 并行；全量应用也并行加载
-  await Promise.all([
-    loadHome(),
-    preloadHomeListApps(),
-    loadApps(() => {
-      loading.value = false; // 首屏：已有部分应用即可显示，排行稍后刷新
-    }),
-  ]);
+  // 首页推荐（区域1 links + 区域2 homeList 板块）轻量且独立，
+  // 不依赖全量应用，进入软件即优先并行加载并显示，不再与 loadApps 耦合。
+  await Promise.all([loadHome(), preloadHomeListApps()]);
+
+  // 全量应用后台加载（不阻塞首页推荐）：首个分类成功即关闭首屏遮罩，
+  // 增量渲染，排行稍后由 loadRanking 刷新。
+  void loadApps(() => {
+    loading.value = false; // 首屏：已有部分应用即可显示
+  });
 
   // 全量应用加载完成后再刷新排行榜，确保 spark/apm 应用均已就绪
   loadRanking();

@@ -285,10 +285,16 @@ const parseUpgradableList = (output: string) => {
 
 // Listen for download requests from renderer process
 ipcMain.on("queue-install", async (event, download_json) => {
-  const download =
-    typeof download_json === "string"
-      ? JSON.parse(download_json)
-      : download_json;
+  let download: unknown;
+  try {
+    download =
+      typeof download_json === "string"
+        ? JSON.parse(download_json)
+        : download_json;
+  } catch (err) {
+    logger.error({ err }, "queue-install: invalid JSON payload, ignoring task");
+    return;
+  }
   const { id, pkgname, metalinkUrl, filename, origin, upgradeOnly } =
     download || {};
 

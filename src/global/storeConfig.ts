@@ -83,6 +83,10 @@ export async function loadPriorityConfig(arch: string): Promise<void> {
     );
     const response = await priorityConfigAxios.get(configPath);
     const config = response.data;
+    // 顶层结构校验：畸形数据（非对象/为数组/null）直接走失败回退，避免访问属性抛错
+    if (!config || typeof config !== "object" || Array.isArray(config)) {
+      throw new Error("Invalid priority-config format: expected object");
+    }
     // 支持新旧两种配置格式
     if (config.sparkPriority || config.apmPriority) {
       // 新格式：双向配置
@@ -204,7 +208,9 @@ export function getHybridDefaultOrigin(app: App): "apm" | "spark" {
     // 构造 category 回退顶层的候选项，避免子版 category 为空时分类规则漏匹配
     const toCandidate = (sub: App): App =>
       sub.category ? sub : { ...sub, category: fallbackCategory };
-    const sparkHit = app.sparkApp ? matchPriority(toCandidate(app.sparkApp)) : null;
+    const sparkHit = app.sparkApp
+      ? matchPriority(toCandidate(app.sparkApp))
+      : null;
     const apmHit = app.apmApp ? matchPriority(toCandidate(app.apmApp)) : null;
 
     // apmPriority 是「例外优先于 sparkPriority」：当两子版方向相反命中
