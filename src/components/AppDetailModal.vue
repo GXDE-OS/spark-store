@@ -296,7 +296,7 @@
               </h3>
               <div
                 class="text-sm leading-relaxed text-slate-600 dark:text-slate-300 space-y-2"
-                v-html="displayApp.more.replace(/\n/g, '<br>')"
+                v-html="sanitizeMoreContent(displayApp.more)"
               ></div>
             </div>
             <div
@@ -385,7 +385,6 @@
       </div>
     </div>
   </Transition>
-
 
   <!-- 元数据详情弹窗 -->
   <Transition
@@ -585,6 +584,19 @@ import {
 // 评论功能暂时关闭
 // import { buildReviewAppKey, buildReviewTags } from "../modules/appIdentity";
 import type { App, AppReview, ReviewTags } from "../global/typedefinition";
+
+/**
+ * 净化后端返回的应用描述（v-html 前严格去除所有标签）。
+ * 程序先将用户内容中的所有 HTML 标签剥离，再将 \n 转为 <br>。
+ * <br> 是纯程序生成，不含任何用户输入，可安全放入 v-html。
+ */
+const sanitizeMoreContent = (raw: string): string => {
+  if (!raw) return "";
+  // 去除所有 HTML 标签，避免 XSS（包括 <script>/onerror/等）
+  const stripped = raw.replace(/<[^>]*>/g, "");
+  // 将 \n 转为安全的 <br>
+  return stripped.replace(/\n/g, "<br>");
+};
 
 const attrs = useAttrs();
 
@@ -846,7 +858,9 @@ const handleRemove = () => {
 // 双来源安装时，"打开"需先让用户选择打开 APM 还是 Spark 版
 const openChoiceVisible = ref(false);
 const openOrigins = (app: App | null): Array<"spark" | "apm"> =>
-  app?.origins && app.origins.length > 0 ? app.origins : [app?.origin ?? "spark"];
+  app?.origins && app.origins.length > 0
+    ? app.origins
+    : [app?.origin ?? "spark"];
 
 const onOpenClick = () => {
   const app = displayApp.value;

@@ -1,11 +1,16 @@
 import { join } from "node:path";
+import { tmpdir } from "node:os";
 
 import { runAria2Download, type Aria2DownloadResult } from "./download";
 import { installPackage } from "../shared-installer";
 import type { UpdateCenterQueue, UpdateCenterTask } from "./queue";
 import type { UpdateCenterItem } from "./types";
 
-const DEFAULT_DOWNLOAD_ROOT = "/tmp/spark-store/update-center";
+const DEFAULT_DOWNLOAD_ROOT = join(
+  tmpdir(),
+  `spark-store-${process.pid}`,
+  "update-center",
+);
 
 export interface InstallUpdateItemOptions {
   item: UpdateCenterItem;

@@ -97,6 +97,10 @@ export const MAIN_DIST = path.join(process.env.APP_ROOT, "dist-electron");
 export const RENDERER_DIST = path.join(process.env.APP_ROOT, "dist");
 export const VITE_DEV_SERVER_URL = process.env.VITE_DEV_SERVER_URL;
 
+// 进程专属临时目录，避免多实例/残留进程互相影响
+// 退出时由 will-quit 统一清理
+export const TEMP_BASE = path.join(os.tmpdir(), `spark-store-${process.pid}`);
+
 process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL
   ? path.join(process.env.APP_ROOT, "public")
   : RENDERER_DIST;
@@ -311,7 +315,12 @@ function isVisible(bounds: WindowState): boolean {
   // 解构为局部常量后，控制流收窄（const 不可变）可穿透到下方嵌套闭包，
   // 消除 x/y/width/height 的 “可能为未定义” 告警
   const { x, y, width, height } = bounds;
-  if (x === undefined || y === undefined || width === undefined || height === undefined) {
+  if (
+    x === undefined ||
+    y === undefined ||
+    width === undefined ||
+    height === undefined
+  ) {
     return false;
   }
   const displays = screen.getAllDisplays();
@@ -327,9 +336,7 @@ function loadWindowState(): WindowState {
   try {
     const file = getWindowStatePath();
     if (fs.existsSync(file)) {
-      const parsed = JSON.parse(
-        fs.readFileSync(file, "utf-8"),
-      ) as WindowState;
+      const parsed = JSON.parse(fs.readFileSync(file, "utf-8")) as WindowState;
       if (
         parsed.width !== undefined &&
         parsed.height !== undefined &&
@@ -400,7 +407,10 @@ async function createWindow() {
     : Math.max(saved.width ?? DEFAULT_WINDOW_SIZE.width, MIN_WINDOW_SIZE.width);
   const restoredHeight = oversized
     ? DEFAULT_WINDOW_SIZE.height
-    : Math.max(saved.height ?? DEFAULT_WINDOW_SIZE.height, MIN_WINDOW_SIZE.height);
+    : Math.max(
+        saved.height ?? DEFAULT_WINDOW_SIZE.height,
+        MIN_WINDOW_SIZE.height,
+      );
 
   const mainWindow = new BrowserWindow({
     title: "星火应用商店",
@@ -663,9 +673,9 @@ app.on("activate", () => {
 });
 
 app.on("will-quit", () => {
-  // Clean up temp dir
+  // 清理本进程专属临时目录（PID 隔离，不影响其他实例）
   logger.info("Cleaning up temp dir");
-  fs.rmSync("/tmp/spark-store/", { recursive: true, force: true });
+  fs.rmSync(TEMP_BASE, { recursive: true, force: true });
   logger.info("Done, exiting");
 });
 

@@ -133,23 +133,30 @@ export const createUpdateCenterStore = (): UpdateCenterStore => {
     isBound = false;
   };
 
+  // 先刷新软件源，再加载更新列表；刷新失败仅告警，不阻断扫描
+  const runSystemUpdateThenLoad = async (
+    storeFilter: StoreFilter,
+    load: (filter: StoreFilter) => Promise<UpdateCenterSnapshot>,
+  ): Promise<void> => {
+    try {
+      await window.ipcRenderer.invoke(
+        "update-center-run-system-update",
+        storeFilter,
+      );
+    } catch (error) {
+      console.error("[UpdateCenter] system update failed", error);
+    }
+    const nextSnapshot = await load(storeFilter);
+    applySnapshot(nextSnapshot);
+  };
+
   const open = async (storeFilter: StoreFilter = "both"): Promise<void> => {
     lastStoreFilter = storeFilter;
     resetSessionState();
     isOpen.value = true;
     loading.value = true;
     try {
-      // 打开更新中心时先刷新软件源，避免使用旧的 apt 缓存导致扫不到更新
-      try {
-        await window.ipcRenderer.invoke(
-          "update-center-run-system-update",
-          storeFilter,
-        );
-      } catch (error) {
-        console.error("[UpdateCenter] open: system update failed", error);
-      }
-      const nextSnapshot = await window.updateCenter.open(storeFilter);
-      applySnapshot(nextSnapshot);
+      await runSystemUpdateThenLoad(storeFilter, window.updateCenter.open);
     } finally {
       loading.value = false;
     }
@@ -161,13 +168,7 @@ export const createUpdateCenterStore = (): UpdateCenterStore => {
     lastStoreFilter = storeFilter;
     loading.value = true;
     try {
-      // 先运行系统更新（aptss update / apm update），确保本地包信息最新
-      await window.ipcRenderer.invoke(
-        "update-center-run-system-update",
-        storeFilter,
-      );
-      const nextSnapshot = await window.updateCenter.refresh(storeFilter);
-      applySnapshot(nextSnapshot);
+      await runSystemUpdateThenLoad(storeFilter, window.updateCenter.refresh);
     } finally {
       loading.value = false;
     }

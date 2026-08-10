@@ -339,7 +339,12 @@ ipcMain.on("queue-install", async (event, download_json) => {
   const superUserCmd = await checkSuperUserCommand();
   let execCommand = "";
   const execParams = [];
-  const downloadDir = `/tmp/spark-store/download/${pkgname}`;
+  const downloadDir = path.join(
+    os.tmpdir(),
+    `spark-store-${process.pid}`,
+    "download",
+    pkgname,
+  );
 
   // APM 应用：若本机没有 apm 命令，通知前端弹窗引导安装 APM
   if (origin === "apm") {
@@ -390,7 +395,14 @@ ipcMain.on("queue-install", async (event, download_json) => {
     execParams.push("apm");
 
     if (metalinkUrl && filename) {
-      execParams.push("ssinstall", `${downloadDir}/${filename}`);
+      // 防御性深度校验：即便 PKGNAME_PATTERN 已挡掉路径遍历字符，仍用 path.basename
+      // 确保 filename 为纯文件名、不含目录分量（belt-and-suspenders）
+      const safeFilename = path.basename(filename);
+      if (safeFilename !== filename) {
+        logger.warn(`ssinstall filename contains path traversal: ${filename}`);
+        return;
+      }
+      execParams.push("ssinstall", path.join(downloadDir, safeFilename));
     } else {
       execParams.push("install", "-y", pkgname);
     }
