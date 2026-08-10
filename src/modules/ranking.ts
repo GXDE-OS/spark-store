@@ -70,9 +70,16 @@ export function topByUpdate(
   origin: AppOrigin,
   topN: number = TOP_N,
 ): App[] {
+  // 按 update 字段倒序；后端日期格式可能不严格一致（如 2026-08-10 / 2026/08/10 /
+  // 带时分秒），用时间戳数字比较比 localeCompare 字符串比较更鲁棒。
+  // 无效日期 getTime() 为 NaN，统一按 0 处理，避免 NaN 参与比较导致乱序。
+  const toTime = (s: string | undefined): number => {
+    const t = new Date(s || "").getTime();
+    return Number.isFinite(t) ? t : 0;
+  };
   return apps
     .filter((a) => a.origin === origin && a.update)
-    .sort((a, b) => (b.update || "").localeCompare(a.update || ""))
+    .sort((a, b) => toTime(b.update) - toTime(a.update))
     .slice(0, topN);
 }
 

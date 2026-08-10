@@ -1311,6 +1311,7 @@ const fetchDownloadCount = async (app: App): Promise<number> => {
   try {
     const resp = await fetch(
       `${APM_STORE_BASE_URL}/${finalArch}/${app.category}/${app.pkgname}/download-times.txt`,
+      { signal: rootAbortController.signal },
     );
     if (!resp.ok) return 0;
     const text = (await resp.text()).trim();
