@@ -450,11 +450,22 @@ const hasOrigin = (app: App, origin: "spark" | "apm"): boolean =>
   app.origins?.includes(origin) ?? app.origin === origin;
 
 // APM / Spark 分别统计实际安装的包数量（同一 pkgname 同时装两种来源时各计一次）
+// 搜索过滤后的全量（不叠加来源筛选），用于顶部统计徽章实时同步搜索结果，
+// 避免搜索时列表缩减而徽章数字仍显示全量造成误导。
+const searchFilteredApps = computed(() => {
+  const q = searchQuery.value.trim().toLowerCase();
+  if (!q) return props.apps;
+  return props.apps.filter(
+    (a) =>
+      a.name.toLowerCase().includes(q) || a.pkgname.toLowerCase().includes(q),
+  );
+});
+
 const apmCount = computed(
-  () => props.apps.filter((a) => hasOrigin(a, "apm")).length,
+  () => searchFilteredApps.value.filter((a) => hasOrigin(a, "apm")).length,
 );
 const sparkCount = computed(
-  () => props.apps.filter((a) => hasOrigin(a, "spark")).length,
+  () => searchFilteredApps.value.filter((a) => hasOrigin(a, "spark")).length,
 );
 // 总数 = APM 包数 + Spark 包数（不同来源视为不同包，单独计数）
 const totalCount = computed(() => apmCount.value + sparkCount.value);

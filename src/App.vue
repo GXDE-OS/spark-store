@@ -1467,13 +1467,15 @@ const loadHomeListEntries = async () => {
       { name: string; urls: { spark?: string; apm?: string } }
     >();
 
-    for (const mode of modes) {
-      const finalArch = mode === "spark" ? `${arch}-store` : `${arch}-apm`;
-      const base = `${APM_STORE_BASE_URL}/${finalArch}/home`;
-
-      try {
-        const res = await fetch(`${base}/homelist.json`);
-        if (res.ok) {
+    // 并发拉取各来源的 homelist.json（spark/apm），缩短首页入口加载耗时；
+    // 各来源独立解析后合并到局部 byName，不逐个触发响应式更新。
+    await Promise.all(
+      modes.map(async (mode) => {
+        const finalArch = mode === "spark" ? `${arch}-store` : `${arch}-apm`;
+        const base = `${APM_STORE_BASE_URL}/${finalArch}/home`;
+        try {
+          const res = await fetch(`${base}/homelist.json`);
+          if (!res.ok) return;
           const lists = await res.json();
           lists.forEach(
             (item: { name?: string; type?: string; jsonUrl?: string }) => {
@@ -1494,11 +1496,11 @@ const loadHomeListEntries = async () => {
               }
             },
           );
+        } catch (e) {
+          console.warn(`Failed to load ${mode} homelist.json`, e);
         }
-      } catch (e) {
-        console.warn(`Failed to load ${mode} homelist.json`, e);
-      }
-    }
+      }),
+    );
 
     const entries: SidebarEntry[] = [];
     const urlsMap: Record<string, { spark?: string; apm?: string }> = {};
@@ -3486,6 +3488,8 @@ onMounted(async () => {
 onUnmounted(() => {
   rootAbortController.abort();
   updateCenterStore.unbind();
+  // 清理窗口尺寸防抖定时器，防止组件销毁后仍触发 IPC 保存调用
+  if (saveBoundsTimer) clearTimeout(saveBoundsTimer);
   // 停止仍挂起的"等待 loading 完成后执行一次"的 watcher，避免泄漏
   for (const stop of pendingWatchers.splice(0)) stop();
   // 移除 window / document 监听

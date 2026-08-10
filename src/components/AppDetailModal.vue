@@ -783,8 +783,10 @@ const installBtnText = computed(() => {
 const iconPath = computed(() => {
   if (!displayApp.value) return "";
   const arch = window.apm_store.arch || "amd64";
+  // 切换来源标签时（viewingOrigin）需动态重算架构路径，确保图标/资源跟随当前查看来源，
+  // 而非固定使用合并应用原始 origin，避免切换源时图标与数据错位。
   const finalArch =
-    displayApp.value.origin === "spark" ? `${arch}-store` : `${arch}-apm`;
+    viewingOrigin.value === "spark" ? `${arch}-store` : `${arch}-apm`;
   return `${APM_STORE_BASE_URL}/${finalArch}/${displayApp.value.category}/${displayApp.value.pkgname}/icon.png`;
 });
 
