@@ -19,6 +19,10 @@
         alt="星火应用商店"
       />
       <span class="truncate text-base font-semibold">星火应用商店</span>
+      <span
+        class="rounded-full border border-orange-400 bg-orange-50 px-2 py-0.5 text-[10px] font-semibold text-orange-600 dark:border-amber-400/70 dark:bg-amber-400/10 dark:text-amber-300 dark:shadow-[0_0_8px_rgba(251,191,36,0.4)]"
+        >社区版</span
+      >
     </div>
 
     <!-- 中：搜索框（取代原 AppHeader 里的搜索） -->
@@ -47,8 +51,9 @@
       </div>
     </div>
 
-    <!-- 右：设置 + 关于 + 窗口控制 -->
+    <!-- 右：主题 + 设置 + 关于 + 分隔符 + 窗口控制 -->
     <div class="window-titlebar-controls flex shrink-0 items-center gap-1">
+      <ThemeToggle :theme-mode="themeMode" @toggle="$emit('toggle-theme')" />
       <button
         type="button"
         class="inline-flex h-9 w-9 items-center justify-center rounded-md text-slate-500 transition hover:bg-slate-200/80 dark:text-slate-400 dark:hover:bg-slate-800"
@@ -100,8 +105,11 @@
 </template>
 
 <script setup lang="ts">
+import ThemeToggle from "./ThemeToggle.vue";
+
 defineProps<{
   searchQuery: string;
+  themeMode: "light" | "dark" | "auto";
 }>();
 
 const emit = defineEmits<{
@@ -110,6 +118,7 @@ const emit = defineEmits<{
   (e: "spk-link", pkgname: string): void;
   (e: "open-install-settings"): void;
   (e: "open-about"): void;
+  (e: "toggle-theme"): void;
   (e: "toggle-sidebar"): void;
 }>();
 

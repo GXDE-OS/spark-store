@@ -6,10 +6,12 @@
   >
     <WindowTitleBar
       :search-query="searchQuery"
+      :theme-mode="themeMode"
       @update:search-query="handleSearchInput"
       @search-focus="handleSearchFocus"
       @open-install-settings="handleOpenInstallSettings"
       @open-about="openAboutModal"
+      @toggle-theme="toggleTheme"
       @toggle-sidebar="isSidebarOpen = !isSidebarOpen"
       @spk-link="handleSpkLink"
     />
@@ -3547,6 +3549,7 @@ watch(themeMode, (newVal) => {
     "set-theme-source",
     newVal === "auto" ? "system" : newVal,
   );
+  syncThemePreference();
 });
 
 watch(isDarkTheme, () => {
