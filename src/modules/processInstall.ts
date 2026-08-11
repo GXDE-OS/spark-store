@@ -221,8 +221,18 @@ window.ipcRenderer.on("install-complete", (_event, log: DownloadResult) => {
   if (downloadObj) {
     if (log.success) {
       downloadObj.status = "completed";
+      downloadObj.logs.push({ time: Date.now(), message: "下载完成" });
     } else {
       downloadObj.status = "failed";
+      // 将失败原因写入日志，避免 UI 停在"正在获取 Metalink"等中间日志后突兀结束
+      let reason = "未知错误";
+      try {
+        const parsed = JSON.parse(log.message);
+        reason = parsed?.message || reason;
+      } catch {
+        reason = log.message || reason;
+      }
+      downloadObj.logs.push({ time: Date.now(), message: `下载失败: ${reason}` });
     }
   }
 });

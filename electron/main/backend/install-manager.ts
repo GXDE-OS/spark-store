@@ -547,20 +547,30 @@ async function runDownloadPhase(task: InstallTask) {
 
       sendLog(`正在获取 Metalink 文件: ${task.metalinkUrl}`);
 
-      const response = await axios.get(task.metalinkUrl, {
-        baseURL: "https://erotica.spark-app.store",
-        responseType: "stream",
-      });
+      let response: Awaited<ReturnType<typeof axios.get>>;
+      try {
+        response = await axios.get(task.metalinkUrl, {
+          baseURL: "https://erotica.spark-app.store",
+          responseType: "stream",
+        });
+      } catch (err) {
+        // Metalink 请求失败（网络/404/超时等）：明确回传渲染端，避免 UI 停在"正在获取"后突兀退出
+        const reason = err instanceof Error ? err.message : String(err);
+        logger.error(`Task ${id} Metalink 下载请求失败: ${reason}`);
+        sendLog(`获取 Metalink 失败: ${reason}`);
+        throw new Error(`获取 Metalink 失败: ${reason}`);
+      }
 
       const writer = fs.createWriteStream(metalinkPath);
       response.data.pipe(writer);
 
       await new Promise<void>((resolve, reject) => {
-        writer.on("finish", resolve);
+        writer.on("finish", () => {
+          sendLog("Metalink 文件下载完成");
+          resolve();
+        });
         writer.on("error", reject);
       });
-
-      sendLog("Metalink 文件下载完成");
 
       // 清理下载目录中的旧文件（保留 .metalink 文件），防止 aria2c 因同名文件卡住
       const existingFiles = fs.readdirSync(downloadDir);
@@ -675,6 +685,7 @@ async function runDownloadPhase(task: InstallTask) {
             });
             child.on("error", (err) => {
               clearInterval(timeoutChecker);
+              sendLog(`aria2c 启动失败: ${err.message}`);
               reject(err);
             });
           });
