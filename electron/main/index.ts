@@ -652,6 +652,15 @@ app.whenReady().then(() => {
   // Set User-Agent for client
   session.defaultSession.webRequest.onBeforeSendHeaders((details, callback) => {
     details.requestHeaders["User-Agent"] = getUserAgent();
+    // 数据 JSON（applist / categories / priority-config / sidebar-config 等）禁用客户端缓存。
+    // nginx 默认不发 Cache-Control，Chromium 会按启发式 TTL（≈(now-LastModified)/10）复用陈旧副本，
+    // 导致服务端上新应用后商店内仍搜不到、且重启无效（仅删 Cache 目录才生效）。
+    // 注意：C2 会给 URL 追加 ?_t=... 版本戳，故需按 query 前的 pathname 判断，而非 endsWith(".json")。
+    const dataUrlPath = details.url.split("?")[0];
+    if (dataUrlPath.endsWith(".json")) {
+      details.requestHeaders["Cache-Control"] = "no-cache";
+      details.requestHeaders["Pragma"] = "no-cache";
+    }
     callback({ cancel: false, requestHeaders: details.requestHeaders });
   });
   createWindow();

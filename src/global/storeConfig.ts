@@ -12,6 +12,20 @@ const priorityConfigAxios = axios.create({
   timeout: 10000,
 });
 
+// C2：priority-config.json 走独立 axios 实例（不经过 axiosInstance），
+// 同样追加 ?_t 版本戳以穿透 CDN 边缘缓存，与 C1 的 no-cache 注入互为兜底。
+priorityConfigAxios.interceptors.request.use((config) => {
+  if (config.method?.toLowerCase() === "get" && typeof config.url === "string") {
+    // 按去除 query 的 pathname 判断，兼容 C2 自身追加的 ?_t= 及任何既有 query
+    const reqPath = config.url.split("?")[0];
+    if (reqPath.endsWith(".json")) {
+      const sep = config.url.includes("?") ? "&" : "?";
+      config.url = `${config.url}${sep}_t=${Date.now()}`;
+    }
+  }
+  return config;
+});
+
 export const APM_STORE_STATS_BASE_URL: string =
   import.meta.env.VITE_APM_STORE_STATS_BASE_URL || "";
 
