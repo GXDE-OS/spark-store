@@ -220,6 +220,7 @@
     <UpdateCenterModal
       :show="updateCenterStore.isOpen.value"
       :store="updateCenterStore"
+      :apps="apps"
       @update:search-query="updateCenterStore.searchQuery.value = $event"
       @toggle-selection="updateCenterStore.toggleSelection"
       @request-start-selected="handleStartSelectedUpdates"
@@ -435,7 +436,10 @@ const axiosInstance = axios.create({
 // 使每次 URL 不同，穿透 CDN 边缘缓存，确保返回最新列表。
 // 与主进程 onBeforeSendHeaders 注入的 no-cache 互为兜底（C1 已对 Chromium 磁盘缓存生效）。
 axiosInstance.interceptors.request.use((config) => {
-  if (config.method?.toLowerCase() === "get" && typeof config.url === "string") {
+  if (
+    config.method?.toLowerCase() === "get" &&
+    typeof config.url === "string"
+  ) {
     // 按去除 query 的 pathname 判断，兼容 C2 自身追加的 ?_t= 及任何既有 query
     const reqPath = config.url.split("?")[0];
     if (reqPath.endsWith(".json")) {
@@ -449,8 +453,8 @@ axiosInstance.interceptors.request.use((config) => {
 const fetchWithRetry = async <T,>(
   url: string,
   signal?: AbortSignal,
-  retries = 3,
-  delay = 1000,
+  retries = 2,
+  delay = 500,
 ): Promise<T> => {
   try {
     const response = await axiosInstance.get<T>(url, { signal });

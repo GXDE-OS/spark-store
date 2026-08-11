@@ -24,4 +24,6 @@ export interface UpdateCenterItem {
   migrationSource?: UpdateSource;
   migrationTarget?: UpdateSource;
   aptssVersion?: string;
+  // 更新发布时间（毫秒时间戳）；由上游解析填充，暂无则缺省
+  updateTime?: number;
 }

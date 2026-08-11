@@ -66,6 +66,7 @@
               :items="store.filteredItems.value"
               :tasks="store.snapshot.value.tasks"
               :selected-task-keys="store.selectedTaskKeys.value"
+              :apps="apps"
               @toggle-selection="emit('toggle-selection', $event)"
               @ignore-item="store.ignoreItem"
               @unignore-item="store.unignoreItem"
@@ -86,6 +87,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 
+import type { App } from "@/global/typedefinition";
 import type { UpdateCenterStore } from "@/modules/updateCenter";
 
 import UpdateCenterList from "./update-center/UpdateCenterList.vue";
@@ -103,6 +105,7 @@ const emit = defineEmits<{
 const props = defineProps<{
   show: boolean;
   store: UpdateCenterStore;
+  apps: App[];
 }>();
 
 const selectedCount = computed(() => props.store.getSelectedItems().length);

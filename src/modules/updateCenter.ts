@@ -90,7 +90,14 @@ export const createUpdateCenterStore = (): UpdateCenterStore => {
 
   const filteredItems = computed(() => {
     const query = searchQuery.value.trim();
-    return snapshot.value.items.filter((item) => matchesSearch(item, query));
+    const matched = snapshot.value.items.filter((item) =>
+      matchesSearch(item, query),
+    );
+    // 已忽略项沉底：非忽略在前、已忽略在后，各自保持原有顺序
+    return [
+      ...matched.filter((item) => item.ignored !== true),
+      ...matched.filter((item) => item.ignored === true),
+    ];
   });
 
   const allSelected = computed(() => {

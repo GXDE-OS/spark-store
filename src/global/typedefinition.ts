@@ -156,6 +156,8 @@ export interface UpdateCenterItem {
   migrationSource?: UpdateSource;
   migrationTarget?: UpdateSource;
   aptssVersion?: string;
+  // 更新发布时间（毫秒时间戳），用于列表显示「X天前」；暂无数据时前端降级为「—」
+  updateTime?: number;
 }
 
 export interface UpdateCenterTaskState {

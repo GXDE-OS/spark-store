@@ -483,6 +483,8 @@ async function createWindow() {
   mainWindow.on("close", (event) => {
     if (allowAppExit) {
       // 真正退出前同步保存最终窗口尺寸（防抖可能尚未触发）
+      // 先清除尚未触发的防抖定时器，避免旧定时器随后覆盖本次同步写入
+      if (saveBoundsTimer) clearTimeout(saveBoundsTimer);
       const { width, height, x, y } = mainWindow.getBounds();
       saveWindowState({
         width,

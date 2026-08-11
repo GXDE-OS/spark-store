@@ -1359,7 +1359,8 @@ ipcMain.handle(
     if (
       !pkgname ||
       typeof pkgname !== "string" ||
-      !PKGNAME_PATTERN.test(pkgname)
+      !PKGNAME_PATTERN.test(pkgname) ||
+      pkgname.length > 256
     ) {
       logger.warn(`Invalid pkgname provided for launch-app: ${pkgname}`);
       return { success: false, message: "Invalid package name" };
