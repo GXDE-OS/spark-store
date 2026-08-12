@@ -424,13 +424,19 @@ const getIconUrl = (app: App) => {
   return `${APM_STORE_BASE_URL}/${finalArch}/${app.category}/${app.pkgname}/icon.png`;
 };
 
-const canOpenDetail = (app: App) => {
+// 判断应用是否可打开详情页。满足以下任一条件即可展示"查看详情"：
+//   - 有明确分类（非 unknown）：详情页可按分类加载元数据
+//   - 有详细描述(more) / 官网(website) / 作者(author) 任一字段：详情有内容可展示
+//   - 有截图(img_urls)：详情页可渲染预览图
+// 这些字段缺失时详情页信息过空，故隐藏入口仅保留打开/卸载。
+const canOpenDetail = (app: App): boolean => {
+  const hasCategory = app.category !== "unknown";
+  const hasDescription = Boolean(app.more);
+  const hasWebsite = Boolean(app.website);
+  const hasAuthor = Boolean(app.author);
+  const hasScreenshots = (app.img_urls?.length ?? 0) > 0;
   return (
-    app.category !== "unknown" ||
-    Boolean(app.more) ||
-    Boolean(app.website) ||
-    Boolean(app.author) ||
-    (app.img_urls?.length ?? 0) > 0
+    hasCategory || hasDescription || hasWebsite || hasAuthor || hasScreenshots
   );
 };
 
@@ -461,12 +467,19 @@ const searchFilteredApps = computed(() => {
   );
 });
 
-const apmCount = computed(
-  () => searchFilteredApps.value.filter((a) => hasOrigin(a, "apm")).length,
-);
-const sparkCount = computed(
-  () => searchFilteredApps.value.filter((a) => hasOrigin(a, "spark")).length,
-);
+// 对搜索过滤后的列表做单次遍历，同时统计 APM / Spark 各自安装数。
+// 同一 pkgname 同时装两种来源时各计一次（双来源计数），避免对 props.apps 多次 filter 遍历。
+const appStats = computed(() => {
+  let apm = 0;
+  let spark = 0;
+  for (const a of searchFilteredApps.value) {
+    if (hasOrigin(a, "apm")) apm++;
+    if (hasOrigin(a, "spark")) spark++;
+  }
+  return { apm, spark };
+});
+const apmCount = computed(() => appStats.value.apm);
+const sparkCount = computed(() => appStats.value.spark);
 // 总数 = APM 包数 + Spark 包数（不同来源视为不同包，单独计数）
 const totalCount = computed(() => apmCount.value + sparkCount.value);
 
@@ -476,26 +489,23 @@ const filterOrigin = ref<"all" | "apm" | "spark">("all");
 // 搜索关键词（按名称/包名不区分大小写过滤已安装应用）
 const searchQuery = ref("");
 const filteredApps = computed(() => {
-  // 1. 先按搜索关键词过滤
+  // 单次遍历完成「搜索过滤 + 来源筛选」，避免多次 .filter() 创建中间数组。
+  // 来源判定统一用 hasOrigin（兼顾双来源 origins 数组，不能退化为 a.origin）。
   const q = searchQuery.value.trim().toLowerCase();
-  let list = props.apps;
-  if (q) {
-    list = list.filter(
-      (a) =>
-        a.name.toLowerCase().includes(q) || a.pkgname.toLowerCase().includes(q),
-    );
-  }
+  const originFilter = filterOrigin.value;
+  const matched = props.apps.filter((a) => {
+    if (originFilter === "apm" && !hasOrigin(a, "apm")) return false;
+    if (originFilter === "spark" && !hasOrigin(a, "spark")) return false;
+    if (q) {
+      const nameLower = a.name.toLowerCase();
+      const pkgLower = a.pkgname.toLowerCase();
+      if (!nameLower.includes(q) && !pkgLower.includes(q)) return false;
+    }
+    return true;
+  });
 
-  // 2. 再按来源筛选（默认 all = 不过滤）
-  if (filterOrigin.value === "apm") {
-    list = list.filter((a) => hasOrigin(a, "apm"));
-  } else if (filterOrigin.value === "spark") {
-    list = list.filter((a) => hasOrigin(a, "spark"));
-  }
-
-  // 3. 排序：APM 应用始终排在前面（默认全部视图也遵守此规则）
-  // 返回新数组，避免修改原始 props.apps
-  return [...list].sort((a, b) => {
+  // 返回新数组排序：APM 应用始终排在前面（默认全部视图也遵守此规则）
+  return [...matched].sort((a, b) => {
     const aApm = hasOrigin(a, "apm") ? 0 : 1;
     const bApm = hasOrigin(b, "apm") ? 0 : 1;
     if (aApm !== bApm) return aApm - bApm;

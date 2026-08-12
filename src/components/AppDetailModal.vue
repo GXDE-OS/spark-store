@@ -578,7 +578,6 @@ import {
 } from "../global/storeConfig";
 import {
   tagPriorityStrategyRef,
-  initTagPriorityStrategy,
   type TagPriorityStrategy,
 } from "../global/tagPriority";
 // 评论功能暂时关闭
@@ -690,7 +689,7 @@ const computeDefaultViewingOrigin = (
 //   - 策略变化（在设置页实时切换）→ 已打开且未手动切标签的详情页立即更新默认标签
 // 手动点标签页（selectOrigin）只是临时预览：置 manualOverride 标记，本次会话内保持，
 //   既不被策略变化强行拉回，也不跨重开持久（重开后会按设置重算）。
-initTagPriorityStrategy();
+// 注：initTagPriorityStrategy() 已在 App.vue 启动时统一调用，此处不再重复。
 const manualOverride = ref(false); // 用户是否手动切换过标签（本次会话）
 let lastPkgname: string | null = null; // 上一次计算对应的应用 pkgname，用于识别"新打开/重开"
 watch(
