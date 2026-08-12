@@ -4,6 +4,7 @@ import {
   ipcMain,
   Menu,
   nativeImage,
+  net,
   shell,
   Tray,
   nativeTheme,
@@ -437,10 +438,15 @@ async function createWindow() {
   });
   win = mainWindow;
 
-  // 不再自动恢复最大化状态（避免无法还原）；启动即居中显示，过大窗口已回退默认尺寸
+  // 设计意图（非缺陷，勿改为自动恢复 maximized）：
+  // 启动时不自动恢复最大化状态。原因——最大化窗口在多数屏幕上 bounds 会超过
+  // OVERSIZED_WINDOW_THRESHOLD(1600x900)，若强行恢复最大化会导致「启动即全屏、
+  // 还原按钮失效」的体验问题；故最大化/全屏状态在关闭后统一回退为默认尺寸并居中，
+  // 放大/还原交由标题栏按钮由用户主动控制。WindowState 仍保存 maximized 字段
+  // （供需要该信息的场景读取），但恢复阶段有意不调用 win.maximize()。
   logger.info(
     { saved, restoredWidth, restoredHeight, oversized },
-    "已恢复窗口状态（过大窗口回退默认尺寸并居中）",
+    "已恢复窗口状态（过大窗口回退默认尺寸并居中；最大化状态有意不自动恢复）",
   );
 
   // 窗口大小/位置/最大化变化后防抖保存，下次启动时恢复
@@ -687,6 +693,7 @@ app.whenReady().then(() => {
 const PRE_REFRESH_BACKOFF_MS = [2000, 4000, 8000];
 const PRE_REFRESH_MAX_RETRIES = 3;
 const PRE_REFRESH_FALLBACK_MS = 15_000; // 渲染信号未到达时的兜底，15s 后也跑
+const PRE_REFRESH_TIMEOUT_MS = 60_000; // 单次预刷新整体超时，避免 pkexec 卡死挂起
 let preRefreshStarted = false;
 
 // 按重试次数取退避毫秒（越界时回退到最大间隔）
@@ -694,13 +701,28 @@ const getPreRefreshBackoffDelay = (attempt: number): number =>
   PRE_REFRESH_BACKOFF_MS[attempt - 1] ??
   PRE_REFRESH_BACKOFF_MS[PRE_REFRESH_BACKOFF_MS.length - 1];
 
-// 确保预刷新只触发一次（渲染信号或兜底定时器 whichever first）
+// 确保预刷新只触发一次（渲染信号或兜底定时器 whichever first）。
+// 设计意图：单次会话仅预热一次（preRefreshStarted 置 true 后不再重置），
+// 避免用户在更新中心 Tab 间快速切换时重复触发 pkexec 弹窗造成困惑。
 const startSourcePreRefreshOnce = (attempt = 1): void => {
   if (preRefreshStarted) return;
   preRefreshStarted = true;
 
   const run = (): void => {
-    runSystemUpdateSources("both")
+    // 网络可用性前置检查：离线时不发起提权刷新（pkexec 弹窗无意义且困惑）
+    if (!net.isOnline()) {
+      logger.info("[UpdateCenter] 预刷新跳过：当前离线");
+      return;
+    }
+
+    const timeoutPromise = new Promise<never>((_, reject) =>
+      setTimeout(
+        () => reject(new Error("pre-refresh timeout")),
+        PRE_REFRESH_TIMEOUT_MS,
+      ),
+    );
+
+    Promise.race([runSystemUpdateSources("both"), timeoutPromise])
       .then((results) => {
         console.log("[UpdateCenter] pre-refresh done:", results);
       })

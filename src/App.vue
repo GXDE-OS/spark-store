@@ -344,6 +344,7 @@ import {
   getHybridDefaultOrigin,
   loadPriorityConfig,
 } from "./global/storeConfig";
+import { createCacheBusterInterceptor } from "./global/cacheBusterInterceptor";
 import {
   downloads,
   removeDownloadItem,
@@ -433,22 +434,10 @@ const axiosInstance = axios.create({
 });
 
 // C2：数据 JSON（applist / categories / sidebar-config 等）追加 ?_t 版本戳，
-// 使每次 URL 不同，穿透 CDN 边缘缓存，确保返回最新列表。
-// 与主进程 onBeforeSendHeaders 注入的 no-cache 互为兜底（C1 已对 Chromium 磁盘缓存生效）。
-axiosInstance.interceptors.request.use((config) => {
-  if (
-    config.method?.toLowerCase() === "get" &&
-    typeof config.url === "string"
-  ) {
-    // 按去除 query 的 pathname 判断，兼容 C2 自身追加的 ?_t= 及任何既有 query
-    const reqPath = config.url.split("?")[0];
-    if (reqPath.endsWith(".json")) {
-      const sep = config.url.includes("?") ? "&" : "?";
-      config.url = `${config.url}${sep}_t=${Date.now()}`;
-    }
-  }
-  return config;
-});
+// 穿透 CDN 边缘缓存，确保返回最新列表。复用共享缓存穿透拦截器（带 TTL 复用戳，
+// 避免同会话频繁击穿缓存）。与主进程 onBeforeSendHeaders 注入的 no-cache 互为兜底。
+// 这是有意的缓存击穿策略（非缺陷），用于解决商店目录强缓存导致的更新延迟。
+axiosInstance.interceptors.request.use(createCacheBusterInterceptor());
 
 const fetchWithRetry = async <T,>(
   url: string,

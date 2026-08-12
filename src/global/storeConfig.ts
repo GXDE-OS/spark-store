@@ -1,6 +1,7 @@
 import { ref } from "vue";
 import axios from "axios";
 import type { App, StoreMode } from "./typedefinition";
+import { createCacheBusterInterceptor } from "./cacheBusterInterceptor";
 
 export const APM_STORE_BASE_URL: string =
   import.meta.env.VITE_APM_STORE_BASE_URL || "";
@@ -13,18 +14,9 @@ const priorityConfigAxios = axios.create({
 });
 
 // C2：priority-config.json 走独立 axios 实例（不经过 axiosInstance），
-// 同样追加 ?_t 版本戳以穿透 CDN 边缘缓存，与 C1 的 no-cache 注入互为兜底。
-priorityConfigAxios.interceptors.request.use((config) => {
-  if (config.method?.toLowerCase() === "get" && typeof config.url === "string") {
-    // 按去除 query 的 pathname 判断，兼容 C2 自身追加的 ?_t= 及任何既有 query
-    const reqPath = config.url.split("?")[0];
-    if (reqPath.endsWith(".json")) {
-      const sep = config.url.includes("?") ? "&" : "?";
-      config.url = `${config.url}${sep}_t=${Date.now()}`;
-    }
-  }
-  return config;
-});
+// 复用共享缓存穿透拦截器（带 TTL 复用戳，避免同会话频繁击穿缓存）。
+// 与 C1（axiosInstance 的拦截器）为同一工厂生成，确保穿透策略与 TTL 行为一致。
+priorityConfigAxios.interceptors.request.use(createCacheBusterInterceptor());
 
 export const APM_STORE_STATS_BASE_URL: string =
   import.meta.env.VITE_APM_STORE_STATS_BASE_URL || "";
@@ -51,7 +43,10 @@ export const showApmInstallDialog = ref(false);
 
 export const currentStoreMode = ref<StoreMode>("hybrid");
 
-// 混合模式下默认优先安装的来源（当没有服务器配置或配置获取失败时使用）
+// 混合模式下默认优先安装的来源（当没有服务器配置或配置获取失败时使用）。
+// 设计意图：社区版当前主推 APM 来源（星火 APM 为新架构、deb 为传统来源），
+// 故默认优先级设为 "apm"。非临时回归，属既定产品方向；如后续调整需产品确认。
+// TODO: 产品确认默认 APM 优先是否长期保持。
 export const HYBRID_DEFAULT_PRIORITY: "apm" | "spark" = "apm";
 
 // 优先级规则配置接口
