@@ -313,6 +313,20 @@ ipcMain.on("queue-install", async (event, download_json) => {
     return;
   }
 
+  // metalinkUrl 来自渲染端（由目录 filename / 主进程解析的 downloadUrl 拼成）。
+  // 纵深防御：仅允许相对路径（拼接 baseURL）或以官方域名开头的绝对 URL，
+  // 拒绝任意外部地址，防止 axios 忽略 baseURL 发起 SSRF/任意源下载。
+  if (metalinkUrl) {
+    const isRelative = metalinkUrl.startsWith("/");
+    const isOfficial = metalinkUrl.startsWith(
+      "https://erotica.spark-app.store",
+    );
+    if (!isRelative && !isOfficial) {
+      logger.warn(`queue-install invalid metalinkUrl: ${metalinkUrl}`);
+      return;
+    }
+  }
+
   logger.info(`收到下载任务: ${id}, 软件包名称: ${pkgname}, 来源: ${origin}`);
 
   const webContents = event.sender;

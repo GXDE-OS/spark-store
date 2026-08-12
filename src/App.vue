@@ -509,17 +509,17 @@ const isInstalledAppInfo = (value: unknown): value is InstalledAppInfo => {
 const LIST_INSTALLED_TIMEOUT_MS = 15000;
 
 // 为 Promise 增加超时控制：超时即 reject，配合 Promise.allSettled 让单来源失败不影响其它来源。
+// 注意：promise 先 resolve 时必须 clearTimeout，否则 setTimeout 句柄泄漏。
 const withTimeout = <T,>(
   promise: Promise<T>,
   ms: number,
   label: string,
 ): Promise<T> => {
-  return Promise.race([
-    promise,
-    new Promise<T>((_, reject) =>
-      setTimeout(() => reject(new Error(`${label} 超时（${ms}ms）`)), ms),
-    ),
-  ]);
+  let timer: ReturnType<typeof setTimeout>;
+  const timeout = new Promise<T>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${label} 超时（${ms}ms）`)), ms);
+  });
+  return Promise.race([promise.finally(() => clearTimeout(timer)), timeout]);
 };
 
 // 响应式状态
@@ -1946,10 +1946,14 @@ const refreshInstalledApps = async () => {
 // 现改为 len 任意 >0 的正向变化都允许触发；密集分批推送由下方 300ms 防抖合并最后一次写入。
 // 每次变化都先自增 installedRefreshGeneration：即使上一轮刷新仍在加载中，也会立即失效，
 // 避免用陈旧目录数据覆盖已安装列表（清理不单纯依赖定时器，代次校验兜底）。
+// initialCatalogLoaded：初始目录分批加载期间（apps.length 频繁变化）跳过此 watcher，
+// 避免对未打开的模态框做无意义的已安装列表刷新 IPC。
+const initialCatalogLoaded = ref(false);
 let refreshDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 watch(
   () => apps.value.length,
   (len) => {
+    if (!initialCatalogLoaded.value) return;
     if (!showInstalledModal.value || len <= 0) {
       return;
     }
@@ -3234,12 +3238,15 @@ const loadApps = async (onFirstBatch?: () => void) => {
               );
 
               // 增量式更新，让用户尽快看到部分数据
-              apps.value.push(...normalizedApps);
+              // 用赋值替代 push(...)，避免对响应式数组逐元素触发 re-render
+              apps.value = [...apps.value, ...normalizedApps];
 
               // 只要有一个分类加载成功，就可以考虑关闭整体 loading（如果是首批逻辑）
               if (!firstBatchCallDone && typeof onFirstBatch === "function") {
                 firstBatchCallDone = true;
                 onFirstBatch();
+                // 标记初始目录加载完成，使 apps.length watcher 开始在目录变更时刷新已安装列表
+                initialCatalogLoaded.value = true;
               }
             } catch (error) {
               logger.warn(
