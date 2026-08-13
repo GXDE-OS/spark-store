@@ -23,6 +23,24 @@ axiosInstance.interceptors.request.use(createCacheBusterInterceptor());
 // 5xx / 网络错误 / 超时重试；4xx（如 404）快速失败
 const RETRYABLE_STATUS = new Set([502, 503, 504]);
 
+// 计算重试延迟：优先尊重服务端 Retry-After 头；429 限流用指数退避（封顶 30s）；
+// 其余 5xx 用固定延迟。避免对限流场景频繁重试浪费带宽。
+const calculateRetryDelay = (
+  status: number | undefined,
+  attempt: number,
+  retryAfterHeader?: string,
+  fixedDelayMs = 500,
+): number => {
+  if (retryAfterHeader) {
+    const seconds = Number.parseInt(retryAfterHeader, 10);
+    if (!Number.isNaN(seconds) && seconds > 0) return seconds * 1000;
+  }
+  if (status === 429) {
+    return Math.min(1000 * 2 ** attempt, 30000);
+  }
+  return fixedDelayMs;
+};
+
 export const fetchWithRetry = async <T>(
   path: string,
   signal?: AbortSignal,
@@ -46,7 +64,16 @@ export const fetchWithRetry = async <T>(
       if (!retryable || attempt === retries) {
         return null;
       }
-      await new Promise((r) => setTimeout(r, retryDelayMs));
+      const retryAfter = ae.response?.headers?.["retry-after"] as
+        | string
+        | undefined;
+      const delay = calculateRetryDelay(
+        status,
+        attempt,
+        retryAfter,
+        retryDelayMs,
+      );
+      await new Promise((r) => setTimeout(r, delay));
     }
   }
   return null;
