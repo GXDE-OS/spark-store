@@ -597,6 +597,11 @@ ipcMain.on("queue-install", async (event, download_json) => {
 
 // Cancel Handler
 ipcMain.on("cancel-install", (event, id) => {
+  // 防御性输入校验：id 应为整数，避免 Map 以非预期键查找导致逻辑异常
+  if (typeof id !== "number" || !Number.isInteger(id)) {
+    logger.warn(`cancel-install: invalid id type: ${typeof id}`);
+    return;
+  }
   const task = tasks.get(id);
   if (!task) return;
 

@@ -1,6 +1,9 @@
 import { spawn } from "node:child_process";
+import pino from "pino";
 
 import { BrowserWindow, ipcMain } from "electron";
+
+const logger = pino({ name: "updateCenter" });
 
 import { SHELL_CALLER_PATH } from "../shared-installer";
 import { findExecutable, SUPER_USER_COMMAND_CANDIDATES } from "../superuser";
@@ -165,9 +168,9 @@ const loadAptssItemMetadata = async (
   | { item: UpdateCenterItem; warning?: undefined }
   | { item: null; warning: string }
 > => {
-  console.log(`[DEBUG] Loading APTSS metadata for ${item.pkgname}`);
+  logger.debug(`[DEBUG] Loading APTSS metadata for ${item.pkgname}`);
   const printUrisCommand = getAptssPrintUrisCommand(item.pkgname);
-  console.log(
+  logger.debug(
     `[DEBUG] APTSS command: ${printUrisCommand.command} ${printUrisCommand.args.join(" ")}`,
   );
 
@@ -175,11 +178,11 @@ const loadAptssItemMetadata = async (
     printUrisCommand.command,
     printUrisCommand.args,
   );
-  console.log(`[DEBUG] APTSS metadata result code: ${metadataResult.code}`);
-  console.log(
+  logger.debug(`[DEBUG] APTSS metadata result code: ${metadataResult.code}`);
+  logger.debug(
     `[DEBUG] APTSS metadata stdout: ${metadataResult.stdout.substring(0, 500)}`,
   );
-  console.log(
+  logger.debug(
     `[DEBUG] APTSS metadata stderr: ${metadataResult.stderr.substring(0, 500)}`,
   );
 
@@ -188,18 +191,18 @@ const loadAptssItemMetadata = async (
     metadataResult,
   );
   if (commandError) {
-    console.log(`[DEBUG] APTSS metadata error: ${commandError}`);
+    logger.debug(`[DEBUG] APTSS metadata error: ${commandError}`);
     return { item: null, warning: commandError };
   }
 
   const metadata = parsePrintUrisOutput(metadataResult.stdout);
   if (metadata) {
-    console.log(`[DEBUG] APTSS parsed metadata:`, {
+    logger.debug(`[DEBUG] APTSS parsed metadata:`, {
       ...metadata,
       downloadUrl: `${metadata.downloadUrl}.metalink`,
     });
   } else {
-    console.log(`[DEBUG] APTSS parsed metadata:`, metadata);
+    logger.debug(`[DEBUG] APTSS parsed metadata:`, metadata);
   }
 
   if (!metadata) {
@@ -378,7 +381,7 @@ export const loadUpdateCenterItems = async (
   storeFilter: StoreFilter = "both",
   runCommand: UpdateCenterCommandRunner = runCommandCapture,
 ): Promise<UpdateCenterLoadItemsResult> => {
-  console.log(
+  logger.debug(
     `[UpdateCenter] loadUpdateCenterItems called with storeFilter=${storeFilter}`,
   );
   const [sparkEnabled, apmEnabled] = await Promise.all([
@@ -389,7 +392,7 @@ export const loadUpdateCenterItems = async (
       ? isCommandAvailable(runCommand, "apm")
       : Promise.resolve(false),
   ]);
-  console.log(
+  logger.debug(
     `[UpdateCenter] sparkEnabled=${sparkEnabled}, apmEnabled=${apmEnabled}`,
   );
 
@@ -415,16 +418,16 @@ export const loadUpdateCenterItems = async (
         : Promise.resolve({ code: 0, stdout: "", stderr: "" }),
     ]);
 
-  console.log(
+  logger.debug(
     `[UpdateCenter] aptssResult: code=${aptssResult.code}, stdout=${aptssResult.stdout.substring(0, 500)}, stderr=${aptssResult.stderr.substring(0, 500)}`,
   );
-  console.log(
+  logger.debug(
     `[UpdateCenter] apmResult: code=${apmResult.code}, stdout=${apmResult.stdout.substring(0, 500)}, stderr=${apmResult.stderr.substring(0, 500)}`,
   );
-  console.log(
+  logger.debug(
     `[UpdateCenter] aptssInstalledResult: code=${aptssInstalledResult.code}, stdout=${aptssInstalledResult.stdout.substring(0, 500)}`,
   );
-  console.log(
+  logger.debug(
     `[UpdateCenter] apmInstalledResult: code=${apmInstalledResult.code}, stdout=${apmInstalledResult.stdout.substring(0, 500)}`,
   );
 
@@ -452,11 +455,11 @@ export const loadUpdateCenterItems = async (
     apmEnabled && apmResult.code === 0
       ? parseApmUpgradableOutput(apmResult.stdout)
       : [];
-  console.log(
+  logger.debug(
     `[UpdateCenter] parsed aptssItems count=${aptssItems.length}`,
     aptssItems.map((i) => `${i.pkgname} ${i.currentVersion}->${i.nextVersion}`),
   );
-  console.log(
+  logger.debug(
     `[UpdateCenter] parsed apmItems count=${apmItems.length}`,
     apmItems.map((i) => `${i.pkgname} ${i.currentVersion}->${i.nextVersion}`),
   );
@@ -467,7 +470,7 @@ export const loadUpdateCenterItems = async (
       : "",
     apmInstalledResult.code === 0 ? apmInstalledResult.stdout : "",
   );
-  console.log(`[UpdateCenter] installedSources size=${installedSources.size}`);
+  logger.debug(`[UpdateCenter] installedSources size=${installedSources.size}`);
 
   const [categorizedAptssItems, categorizedApmItems] = await Promise.all([
     aptssAvailable ? enrichItemCategories(aptssItems) : Promise.resolve([]),
@@ -481,11 +484,11 @@ export const loadUpdateCenterItems = async (
       ? enrichApmItems(categorizedApmItems, runCommand)
       : Promise.resolve({ items: [], warnings: [] }),
   ]);
-  console.log(
+  logger.debug(
     `[UpdateCenter] enrichedAptssItems: count=${enrichedAptssItems.items.length}, warnings=${enrichedAptssItems.warnings.length}`,
     enrichedAptssItems.warnings,
   );
-  console.log(
+  logger.debug(
     `[UpdateCenter] enrichedApmItems: count=${enrichedApmItems.items.length}, warnings=${enrichedApmItems.warnings.length}`,
     enrichedApmItems.warnings,
   );
@@ -495,7 +498,7 @@ export const loadUpdateCenterItems = async (
     enrichItemIcons(enrichedApmItems.items),
     installedSources,
   );
-  console.log(
+  logger.debug(
     `[UpdateCenter] mergedItems count=${mergedItems.length}`,
     mergedItems.map(
       (i) => `${i.pkgname} (${i.source}) ${i.currentVersion}->${i.nextVersion}`,
@@ -606,7 +609,7 @@ const runCommandWithTimeout = (
 export const runSystemUpdateSources = async (
   storeFilter: StoreFilter = "both",
 ): Promise<{ aptss?: string; apm?: string }> => {
-  console.log(
+  logger.debug(
     `[UpdateCenter] runSystemUpdateSources called with storeFilter=${storeFilter}`,
   );
 
@@ -621,7 +624,7 @@ export const runSystemUpdateSources = async (
     const aptssAvailable =
       whichResult.code === 0 && whichResult.stdout.trim().length > 0;
     if (aptssAvailable) {
-      console.log("[UpdateCenter] Running: pkexec shell-caller aptss ssupdate");
+      logger.debug("[UpdateCenter] Running: pkexec shell-caller aptss ssupdate");
       const superUserCmd = await findExecutable(
         SUPER_USER_COMMAND_CANDIDATES[0],
       );
@@ -635,7 +638,7 @@ export const runSystemUpdateSources = async (
           result.code === 0
             ? "ok"
             : `failed: ${result.stderr.substring(0, 200)}`;
-        console.log("[UpdateCenter] aptss ssupdate result:", results.aptss);
+        logger.debug("[UpdateCenter] aptss ssupdate result:", results.aptss);
       } else {
         results.aptss = "failed: pkexec not found";
         console.warn("[UpdateCenter] pkexec not found, skipping aptss update");
@@ -650,7 +653,7 @@ export const runSystemUpdateSources = async (
     const apmAvailable =
       whichResult.code === 0 && whichResult.stdout.trim().length > 0;
     if (apmAvailable) {
-      console.log("[UpdateCenter] Running: pkexec shell-caller apm update");
+      logger.debug("[UpdateCenter] Running: pkexec shell-caller apm update");
       const superUserCmd = await findExecutable(
         SUPER_USER_COMMAND_CANDIDATES[0],
       );
@@ -664,7 +667,7 @@ export const runSystemUpdateSources = async (
           result.code === 0
             ? "ok"
             : `failed: ${result.stderr.substring(0, 200)}`;
-        console.log("[UpdateCenter] apm update result:", results.apm);
+        logger.debug("[UpdateCenter] apm update result:", results.apm);
       } else {
         results.apm = "failed: pkexec not found";
         console.warn("[UpdateCenter] pkexec not found, skipping apm update");
