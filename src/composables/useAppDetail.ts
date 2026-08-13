@@ -34,7 +34,6 @@ import {
   buildReviewTags,
 } from "../modules/appIdentity";
 import { loadFavoriteMetadataForDetail } from "./useFavorites";
-import { axiosInstance } from "./useHttp";
 import type { ReviewTags } from "../global/typedefinition";
 import type { Ref } from "vue";
 
@@ -54,9 +53,6 @@ const currentReviewTags = computed<ReviewTags | null>(() => {
     distro: systemInfo.value.distro,
   });
 });
-
-// 截图探测请求的中断控制器：每次打开新详情前取消旧探测，避免结果覆盖当前应用。
-let screenshotAbortController: AbortController | null = null;
 
 // 从仓库获取应用详细信息的辅助函数
 const fetchAppFromStore = async (
@@ -333,10 +329,8 @@ const openDetail = async (app: App | OpenDetailInput) => {
 
   currentApp.value = finalApp;
   currentScreenIndex.value = 0;
-  // 截图异步探测，详情页先弹出不阻塞；探测完成后截图区域自动刷新
-  loadScreenshots(displayAppForScreenshots).catch(() => {
-    // 异常（含取消）已在 loadScreenshots 内处理，此处仅避免未捕获 promise
-  });
+  // 截图直接采用后端 img_urls（已解析），同步赋值，详情页打开即显示正确数量
+  loadScreenshots(displayAppForScreenshots);
   showModal.value = true;
 
   currentAppSparkInstalled.value = false;
@@ -393,60 +387,31 @@ const checkAppInstalled = (app: App) => {
   }
 };
 
-// 探测单张截图是否真实存在：用 HEAD 请求，超时 3s，仅当返回 2xx 时视为有效。
-// 使用 axiosInstance 以便复用同源配置，但 HEAD PNG 不会触发 .json 缓存穿透拦截器。
-const checkScreenshotExists = async (
-  url: string,
-  signal?: AbortSignal,
-): Promise<boolean> => {
-  try {
-    await axiosInstance.head(url, { timeout: 3000, signal });
-    return true;
-  } catch {
-    return false;
+// 截图来源直接采用后端 app.img_urls（权威真实列表，微信 3 张即返回 3 个 URL）。
+// 无需前端再 HEAD 探测 screen_1~5.png —— 既消除每次打开详情的额外请求压力，
+// 又保证"实际有几张就预览几张"，边界由 ScreenPreview 的 length 自动收敛。
+// 兼容 img_urls 可能为字符串形式 JSON（类型声明为 string[]，运行时偶发字符串）。
+const loadScreenshots = (app: App) => {
+  let urls: string[] = [];
+  const raw = app.img_urls as unknown;
+  if (Array.isArray(raw)) {
+    urls = raw as string[];
+  } else if (typeof raw === "string" && raw.length > 0) {
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) urls = parsed as string[];
+    } catch {
+      urls = [];
+    }
   }
-};
-
-const loadScreenshots = async (app: App) => {
-  // 取消上一应用的截图探测，避免结果覆盖到当前应用
-  if (screenshotAbortController) {
-    screenshotAbortController.abort();
-  }
-  const controller = new AbortController();
-  screenshotAbortController = controller;
-
-  screenshots.value = [];
-  if (!app.category || app.category === "unknown") return;
-  const arch = window.apm_store.arch || "amd64";
-  const finalArch = app.origin === "spark" ? `${arch}-store` : `${arch}-apm`;
-
-  const candidates: string[] = [];
-  for (let i = 1; i <= 5; i++) {
-    candidates.push(
-      `${APM_STORE_BASE_URL}/${finalArch}/${app.category}/${app.pkgname}/screen_${i}.png`,
-    );
-  }
-
-  try {
-    // 并发探测 5 张候选截图，只保留真实存在的；失败视为无该图，不阻塞详情页打开。
-    const results = await Promise.all(
-      candidates.map((url) => checkScreenshotExists(url, controller.signal)),
-    );
-    const valid = candidates.filter((_, index) => results[index]);
-    screenshots.value = valid;
-  } catch {
-    // 当前轮次被新详情页取消或异常：不写入旧结果
-  }
+  screenshots.value = urls.filter(
+    (u): u is string => typeof u === "string" && u.length > 0,
+  );
 };
 
 const closeDetail = () => {
   showModal.value = false;
   currentApp.value = null;
-  // 关闭详情时取消正在进行的截图探测，避免结果写入已关闭的旧应用
-  if (screenshotAbortController) {
-    screenshotAbortController.abort();
-    screenshotAbortController = null;
-  }
 };
 
 const openScreenPreview = (index: number) => {
