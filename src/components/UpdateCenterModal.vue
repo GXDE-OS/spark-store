@@ -20,6 +20,7 @@
         <UpdateCenterToolbar
           :search-query="store.searchQuery.value"
           :selected-count="selectedCount"
+          :selectable-count="store.selectableCount.value"
           :all-selected="store.allSelected.value"
           :some-selected="store.someSelected.value"
           :loading="store.loading.value"
@@ -61,13 +62,24 @@
           >
             正在刷新更新列表…
           </div>
+
+          <div
+            v-if="heldLockedCount > 0"
+            class="mx-6 mt-4 rounded-2xl border border-amber-200 bg-amber-50/80 px-4 py-3 text-sm text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100"
+          >
+            <p class="leading-6">
+              检测到 {{ heldLockedCount }} 个软件被系统锁定（hold），默认不会升级。如需强制升级，请在对应软件上打开「强制安装」开关。
+            </p>
+          </div>
           <div class="flex min-h-0 flex-1">
             <UpdateCenterList
               :items="store.filteredItems.value"
               :tasks="store.snapshot.value.tasks"
               :selected-task-keys="store.selectedTaskKeys.value"
+              :forced-task-keys="store.forcedTaskKeys.value"
               :apps="apps"
               @toggle-selection="emit('toggle-selection', $event)"
+              @toggle-force="store.toggleForce"
               @ignore-item="store.ignoreItem"
               @unignore-item="store.unignoreItem"
             />
@@ -109,6 +121,15 @@ const props = defineProps<{
 }>();
 
 const selectedCount = computed(() => props.store.getSelectedItems().length);
+
+// 未开启强制安装的被锁定（held）软件数量，用于顶部提示
+const heldLockedCount = computed(
+  () =>
+    props.store.snapshot.value.items.filter(
+      (i) =>
+        i.held === true && !props.store.forcedTaskKeys.value.has(i.taskKey),
+    ).length,
+);
 
 const onOverlayWheel = (e: WheelEvent) => {
   const target = e.target as HTMLElement;

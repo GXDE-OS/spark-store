@@ -502,14 +502,54 @@ export const loadUpdateCenterItems = async (
     ),
   );
 
+  // 标记被系统锁定（apt-mark hold）的包：这类包被 apt 拒绝升级（除非 --allow-change-held-packages）。
+  // 更新中心据此默认禁用其勾选，并提示用户单独开启「强制安装」。
+  const heldItems = await markHeldPackages(mergedItems, runCommand);
+
   return {
-    items: mergedItems,
+    items: heldItems,
     warnings: [
       ...warnings,
       ...enrichedAptssItems.warnings,
       ...enrichedApmItems.warnings,
     ],
   };
+};
+
+// 通过 `apt-mark showhold` 获取系统锁定的包集合，给可升级项中匹配者打 held 标记。
+// 仅 spark（aptss/deb）源受 apt hold 影响；apm 源不经过 apt，无需标记。
+const markHeldPackages = async (
+  items: UpdateCenterItem[],
+  runCommand: UpdateCenterCommandRunner,
+): Promise<UpdateCenterItem[]> => {
+  const sparkItems = items.filter((item) => item.source === "aptss");
+  if (sparkItems.length === 0) {
+    return items;
+  }
+
+  const result = await runCommand("apt-mark", ["showhold"]);
+  if (result.code !== 0) {
+    // 查询失败不阻断更新列表，仅跳过 hold 标记
+    console.warn(`[UpdateCenter] apt-mark showhold failed: ${result.stderr}`);
+    return items;
+  }
+
+  const heldSet = new Set(
+    result.stdout
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0),
+  );
+
+  if (heldSet.size === 0) {
+    return items;
+  }
+
+  return items.map((item) =>
+    item.source === "aptss" && heldSet.has(item.pkgname)
+      ? { ...item, held: true }
+      : item,
+  );
 };
 
 // 子进程超时（毫秒）：网络慢/镜像源卡死时，避免命令永久挂起

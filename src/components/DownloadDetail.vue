@@ -9,38 +9,41 @@
   >
     <div
       v-if="show"
-      class="fixed inset-0 z-50 flex items-start justify-center bg-slate-900/70 px-4 py-10"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 px-4 py-6"
       @click="handleOverlayClick"
       @wheel="onOverlayWheel"
     >
       <div
-        class="scrollbar-nowidth scrollbar-thumb-slate-200 dark:scrollbar-thumb-slate-700 scrollbar-track-transparent w-full max-w-2xl max-h-[85vh] overflow-y-auto overscroll-contain rounded-3xl border border-white/10 bg-white/95 p-6 shadow-2xl dark:border-slate-800 dark:bg-slate-900"
+        class="scrollbar-nowidth scrollbar-thumb-slate-200 dark:scrollbar-thumb-slate-700 scrollbar-track-transparent flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden rounded-3xl border border-white/10 bg-white/95 shadow-2xl dark:border-slate-800 dark:bg-slate-900"
         @click.stop
       >
-        <div class="flex items-start justify-between">
+        <div class="flex items-start justify-between p-5 pb-3">
           <div>
-            <p class="text-2xl font-semibold text-slate-900 dark:text-white">
+            <p class="text-xl font-semibold text-slate-900 dark:text-white">
               下载详情
             </p>
-            <p class="text-sm text-slate-500 dark:text-slate-400">
+            <p class="text-xs text-slate-500 dark:text-slate-400">
               实时了解安装进度
             </p>
           </div>
           <button
             type="button"
-            class="inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-200/60 text-slate-500 transition hover:text-slate-900 dark:border-slate-700"
+            class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200/60 text-slate-500 transition hover:text-slate-900 dark:border-slate-700"
             @click="close"
           >
             <i class="fas fa-xmark"></i>
           </button>
         </div>
 
-        <div v-if="download" class="mt-6 space-y-6">
+        <div
+          v-if="download"
+          class="scrollbar-nowidth scrollbar-thumb-slate-200 dark:scrollbar-thumb-slate-700 scrollbar-track-transparent space-y-3 overflow-y-auto overscroll-contain px-5 pb-5"
+        >
           <div
-            class="flex items-center gap-4 rounded-2xl border border-slate-200/60 p-4 dark:border-slate-800/60"
+            class="flex items-center gap-3 rounded-2xl border border-slate-200/60 p-3 dark:border-slate-800/60"
           >
             <div
-              class="h-16 w-16 overflow-hidden rounded-2xl bg-slate-100 dark:bg-slate-800"
+              class="h-12 w-12 shrink-0 overflow-hidden rounded-2xl bg-slate-100 dark:bg-slate-800"
             >
               <img
                 :src="download.icon"
@@ -48,18 +51,18 @@
                 class="h-full w-full object-cover"
               />
             </div>
-            <div class="flex-1">
-              <p class="text-lg font-semibold text-slate-900 dark:text-white">
+            <div class="min-w-0 flex-1">
+              <p class="truncate text-base font-semibold text-slate-900 dark:text-white">
                 {{ download.name }}
               </p>
-              <p class="text-sm text-slate-500 dark:text-slate-400">
+              <p class="truncate text-xs text-slate-500 dark:text-slate-400">
                 {{ download.pkgname }} · {{ download.version }}
               </p>
             </div>
           </div>
 
           <div
-            class="space-y-4 rounded-2xl border border-slate-200/60 p-4 dark:border-slate-800/60"
+            class="space-y-3 rounded-2xl border border-slate-200/60 p-3 dark:border-slate-800/60"
           >
             <div class="flex items-center justify-between">
               <span class="text-sm font-medium text-slate-500">状态</span>
@@ -80,7 +83,7 @@
               </span>
             </div>
 
-            <div v-if="download.status === 'downloading'" class="space-y-3">
+            <div v-if="download.status === 'downloading'" class="space-y-2">
               <div class="h-2 rounded-full bg-slate-100 dark:bg-slate-800">
                 <div
                   class="h-full rounded-full bg-brand"
@@ -112,36 +115,42 @@
           </div>
 
           <div
-            class="rounded-2xl border border-slate-200/60 p-4 text-sm text-slate-600 dark:border-slate-800/60 dark:text-slate-300"
+            class="grid grid-cols-2 gap-x-4 gap-y-1 rounded-2xl border border-slate-200/60 p-3 text-sm text-slate-600 dark:border-slate-800/60 dark:text-slate-300"
           >
-            <div class="flex justify-between py-1">
-              <span class="text-slate-400">下载源</span>
-              <span class="font-medium text-slate-900 dark:text-white">{{
+            <div class="flex justify-between gap-2">
+              <span class="shrink-0 text-slate-400">下载源</span>
+              <span class="truncate font-medium text-slate-900 dark:text-white">{{
                 download.origin === "spark" ? "Spark Store" : "APM Store"
               }}</span>
             </div>
-            <div v-if="download.startTime" class="flex justify-between py-1">
-              <span class="text-slate-400">开始时间</span>
-              <span>{{ formatDate(download.startTime) }}</span>
+            <div
+              v-if="download.startTime"
+              class="flex justify-between gap-2"
+            >
+              <span class="shrink-0 text-slate-400">开始时间</span>
+              <span class="truncate">{{ formatDate(download.startTime) }}</span>
             </div>
-            <div v-if="download.endTime" class="flex justify-between py-1">
-              <span class="text-slate-400">完成时间</span>
-              <span>{{ formatDate(download.endTime) }}</span>
+            <div
+              v-if="download.endTime"
+              class="flex justify-between gap-2"
+            >
+              <span class="shrink-0 text-slate-400">完成时间</span>
+              <span class="truncate">{{ formatDate(download.endTime) }}</span>
             </div>
             <div
               v-if="download.error"
-              class="flex justify-between py-1 text-rose-500"
+              class="col-span-2 flex justify-between gap-2 text-rose-500"
             >
-              <span>错误信息</span>
-              <span class="text-right">{{ download.error }}</span>
+              <span class="shrink-0">错误信息</span>
+              <span class="truncate text-right">{{ download.error }}</span>
             </div>
           </div>
 
           <div
             v-if="download.logs && download.logs.length"
-            class="rounded-2xl border border-slate-200/60 p-4 dark:border-slate-800/60"
+            class="rounded-2xl border border-slate-200/60 p-3 dark:border-slate-800/60"
           >
-            <div class="mb-3 flex items-center justify-between">
+            <div class="mb-2 flex items-center justify-between">
               <span class="font-semibold text-slate-800 dark:text-slate-100"
                 >下载日志</span
               >
@@ -155,22 +164,22 @@
               </button>
             </div>
             <div
-              class="max-h-48 space-y-2 overflow-y-auto overscroll-contain rounded-2xl bg-slate-50/80 p-3 font-mono text-xs text-slate-600 dark:bg-slate-900/60 dark:text-slate-300"
+              class="max-h-32 space-y-1.5 overflow-y-auto overscroll-contain rounded-2xl bg-slate-50/80 p-3 font-mono text-xs text-slate-600 dark:bg-slate-900/60 dark:text-slate-300"
             >
               <div
                 v-for="(log, index) in download.logs"
                 :key="index"
                 class="flex gap-3"
               >
-                <span class="text-slate-400">{{
+                <span class="shrink-0 text-slate-400">{{
                   formatLogTime(log.time)
                 }}</span>
-                <span>{{ log.message }}</span>
+                <span class="break-all">{{ log.message }}</span>
               </div>
             </div>
           </div>
 
-          <div class="flex flex-wrap justify-end gap-3">
+          <div class="flex flex-wrap justify-end gap-3 pt-1">
             <button
               v-if="
                 download.status === 'downloading' ||

@@ -11,7 +11,7 @@
           集中管理 APM 与传统 deb 更新任务
         </p>
       </div>
-      <div class="flex items-center gap-2">
+      <div class="flex flex-wrap items-center justify-end gap-2">
         <button
           type="button"
           class="inline-flex items-center gap-2 rounded-2xl border border-slate-200/70 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 disabled:opacity-40 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
@@ -21,6 +21,37 @@
           <i class="fas fa-sync-alt" :class="{ 'animate-spin': loading }"></i>
           {{ loading ? "刷新中" : "刷新" }}
         </button>
+        <label
+          class="inline-flex cursor-pointer items-center gap-2 select-none rounded-2xl border border-slate-200/70 px-3 py-2 transition hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800"
+          :class="{
+            'cursor-not-allowed opacity-50 hover:bg-transparent dark:hover:bg-transparent':
+              selectableCount === 0,
+          }"
+          :title="
+            selectableCount === 0
+              ? '当前没有可更新项（全部被锁定未强制或已忽略）'
+              : '全选所有可更新项'
+          "
+        >
+          <input
+            ref="selectAllRef"
+            type="checkbox"
+            class="h-4 w-4 rounded border-slate-300 accent-brand focus:ring-brand disabled:cursor-not-allowed"
+            :checked="allSelected"
+            :disabled="selectableCount === 0"
+            @change="$emit('toggle-select-all')"
+          />
+          <span class="text-sm font-medium text-slate-700 dark:text-slate-200"
+            >全选</span
+          >
+        </label>
+        <span
+          class="text-sm text-slate-400 dark:text-slate-500"
+          :title="selectableCount === 0 ? '无可更新项' : '已选中的更新项数量'"
+        >
+          <template v-if="selectableCount === 0">无可更新项</template>
+          <template v-else>已选 {{ selectedCount }} 项</template>
+        </span>
         <button
           type="button"
           class="inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-brand to-brand-dark px-4 py-2 text-sm font-semibold text-white shadow-lg disabled:opacity-40"
@@ -39,24 +70,6 @@
           <i class="fas fa-xmark"></i>
         </button>
       </div>
-    </div>
-
-    <div class="flex items-center gap-3">
-      <label class="inline-flex cursor-pointer items-center gap-2 select-none">
-        <input
-          ref="selectAllRef"
-          type="checkbox"
-          class="h-4 w-4 rounded border-slate-300 accent-brand focus:ring-brand"
-          :checked="allSelected"
-          @change="$emit('toggle-select-all')"
-        />
-        <span class="text-sm font-medium text-slate-700 dark:text-slate-200"
-          >全选</span
-        >
-      </label>
-      <span class="text-sm text-slate-400 dark:text-slate-500">
-        已选 {{ selectedCount }} 项
-      </span>
     </div>
 
     <label class="block relative">
@@ -89,6 +102,7 @@ import { ref, watch } from "vue";
 const props = defineProps<{
   searchQuery: string;
   selectedCount: number;
+  selectableCount: number;
   allSelected: boolean;
   someSelected: boolean;
   loading?: boolean;

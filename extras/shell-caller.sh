@@ -85,6 +85,32 @@ case "$command_type" in
         fi
         ;;
 
+    "force-ssinstall")
+        # 强制安装被系统锁定（apt-mark hold）的包：在一次已提权的 pkexec 会话内
+        # 完成「解除锁定 → ssinstall 本地 .deb → 恢复锁定」，避免单独 pkexec apt-mark
+        # 触发额外权限框（apt-mark 不在 policykit 免密 exec.path 内）。
+        # 用法：force-ssinstall <pkgname> <deb路径> [ssinstall 额外参数...]
+        pkg="$2"
+        deb="$3"
+        shift 3
+        # 仅放行单包名（与前端 PKGNAME_PATTERN 一致，双引号防注入）
+        if [[ -z "$pkg" || -z "$deb" ]]; then
+            echo "错误：force-ssinstall 缺少包名或 deb 路径参数。"
+            exit 1
+        fi
+        # 安装前解除系统锁定（失败仅警告，不阻断）
+        apt-mark unhold "$pkg" 2>&1 || echo "警告：解除系统锁定 $pkg 失败，将继续尝试安装"
+        # 安装本地 .deb（--native 由本分支统一追加）
+        /usr/bin/ssinstall "$deb" "$@" --native 2>&1
+        exit_code=$?
+        # 安装后无论如何恢复系统锁定，保持用户原本的 hold 状态
+        apt-mark hold "$pkg" 2>&1 || echo "警告：恢复系统锁定 $pkg 失败，请手动检查"
+        if [[ "$exit_code" != "0" ]]; then
+            echo "安装失败，可尝试安装对应的 APM 版本应用；若无对应的 APM 版本应用，可提交用户反馈"
+        fi
+        exit $exit_code
+        ;;
+
     "aptss")
         # 针对 aptss 的特殊逻辑：如果是 remove 子命令，需要图形化确认
         if [[ "$2" == "remove" ]]; then

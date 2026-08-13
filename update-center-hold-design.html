@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>更新中心 · hold/强制安装 设计草图</title>
+<style>
+  :root{
+    --brand:#0071e3; --brand-dark:#0066cc; --brand-soft:#409cff;
+    --amber:#f59e0b; --amber-soft:#fbbf24;
+    --bg:#f5f7fb; --card:#fff; --line:#e2e8f0; --txt:#0f172a; --sub:#64748b;
+    --danger:#ef4444;
+  }
+  *{box-sizing:border-box;font-family:"Inter","system-ui","Microsoft YaHei",sans-serif;}
+  body{margin:0;background:var(--bg);color:var(--txt);padding:32px;}
+  h1{font-size:20px;margin:0 0 4px;}
+  .hint{color:var(--sub);font-size:13px;margin-bottom:24px;line-height:1.6;}
+  .modal{width:100%;max-width:960px;margin:0 auto;background:var(--card);border:1px solid var(--line);
+    border-radius:24px;overflow:hidden;box-shadow:0 20px 50px rgba(15,23,42,.12);}
+  .toolbar{display:flex;align-items:center;gap:12px;padding:18px 24px;border-bottom:1px solid var(--line);}
+  .toolbar .title{font-weight:700;font-size:16px;}
+  .toolbar .spacer{flex:1;}
+  .btn{border:1px solid var(--line);background:#fff;border-radius:12px;padding:8px 14px;font-size:13px;cursor:pointer;}
+  .btn-primary{background:var(--brand);color:#fff;border-color:var(--brand);}
+  .btn:disabled{opacity:.5;cursor:not-allowed;}
+  .warn{margin:16px 24px;background:#fffbeb;border:1px solid #fde68a;color:#92400e;
+    border-radius:16px;padding:12px 16px;font-size:13px;line-height:1.6;}
+  .list{padding:8px 16px 20px;}
+  .item{position:relative;display:flex;align-items:center;gap:12px;border:1px solid var(--line);
+    border-radius:16px;padding:12px 16px;margin-top:10px;}
+  .item.held{background:#fffdf5;border-color:#fde68a;}
+  .item.sel{background:rgba(0,113,227,.04);}
+  .chk{width:18px;height:18px;accent-color:var(--brand);}
+  .icon{width:40px;height:40px;border-radius:10px;background:#eef2f7;display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:18px;}
+  .main{flex:1;min-width:0;}
+  .name-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+  .name{font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .tag{font-size:10px;font-weight:600;border-radius:999px;padding:2px 8px;}
+  .tag-src{background:#eef2f7;color:#475569;}
+  .tag-held{background:#fef3c7;color:#b45309;}
+  .tag-ign{background:#e2e8f0;color:#64748b;}
+  .ver{font-size:12px;color:var(--sub);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .right{text-align:right;font-size:12px;color:#475569;white-space:nowrap;}
+  .right .t{color:var(--brand);font-weight:600;font-size:11px;}
+  .right .s{color:#94a3b8;font-size:10px;}
+  .actions{display:flex;align-items:center;gap:6px;}
+  .iconbtn{width:32px;height:32px;border-radius:10px;border:1px solid var(--line);background:#fff;
+    display:flex;align-items:center;justify-content:center;cursor:pointer;color:#475569;font-size:13px;}
+  .iconbtn.amber{color:var(--amber);}
+  .iconbtn.amber:hover{background:#fffbeb;}
+
+  /* 强制安装：开关样式 */
+  .force{display:flex;align-items:center;gap:6px;}
+  .switch{position:relative;width:34px;height:18px;border-radius:999px;background:#cbd5e1;transition:.2s;flex:none;}
+  .switch.on{background:var(--brand);}
+  .switch::after{content:"";position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:#fff;transition:.2s;}
+  .switch.on::after{left:18px;}
+  .force-label{font-size:11px;color:var(--sub);}
+
+  /* 底部说明条 */
+  .legend{margin:0 24px 20px;font-size:12px;color:var(--sub);line-height:1.8;
+    border-top:1px dashed var(--line);padding-top:14px;}
+  .legend b{color:var(--txt);}
+
+  /* 布局说明块 */
+  .notes{max-width:960px;margin:28px auto 0;background:#fff;border:1px solid var(--line);
+    border-radius:16px;padding:18px 22px;font-size:13px;line-height:1.8;color:#334155;}
+  .notes h2{font-size:15px;margin:0 0 10px;}
+  .notes code{background:#f1f5f9;padding:1px 6px;border-radius:6px;font-size:12px;color:#0f172a;}
+  .notes li{margin-bottom:6px;}
+</style>
+</head>
+<body>
+  <h1>更新中心 — hold 标签 & 强制安装（设计草图）</h1>
+  <p class="hint">
+    说明：与现有「忽略」机制一致 —— 被系统 <code>apt-mark hold</code> 的包在更新中心默认<b>不可选中</b>（复选框禁用），
+    并在软件上显示「已锁定 / hold」标签；同时该软件行提供<b>「强制安装」开关</b>，打开后该包可单独被选中并升级
+    （后端对 spark 源追加 <code>--allow-change-held-packages</code>）。其他功能（忽略、批量升级、进度）不变。
+  </p>
+
+  <div class="modal">
+    <div class="toolbar">
+      <span class="title">更新中心</span>
+      <span class="spacer"></span>
+      <button class="btn">全选</button>
+      <button class="btn">刷新</button>
+      <button class="btn" disabled>开始更新 (2)</button>
+      <button class="btn">关闭</button>
+    </div>
+
+    <div class="warn">
+      ⚠ 检测到 1 个软件被系统锁定（hold），默认不会升级。如需强制升级，请在对应软件上打开「强制安装」。
+    </div>
+
+    <div class="list">
+      <!-- 普通可升级项 -->
+      <div class="item sel">
+        <input type="checkbox" class="chk" checked />
+        <div class="icon">📦</div>
+        <div class="main">
+          <div class="name-row">
+            <span class="name">deepin-terminal</span>
+            <span class="tag tag-src">传统deb</span>
+          </div>
+          <div class="ver">6.0.1 → 6.0.2</div>
+        </div>
+        <div class="right"><div class="t">今天</div><div class="s">48 MB</div></div>
+        <div class="actions">
+          <div class="iconbtn amber" title="忽略更新">👁̶</div>
+        </div>
+      </div>
+
+      <!-- 被 hold 的软件：默认禁用复选框 + 显示 hold 标签 + 提供强制安装开关 -->
+      <div class="item held">
+        <input type="checkbox" class="chk" disabled title="已被系统锁定，需开启强制安装" />
+        <div class="icon">📦</div>
+        <div class="main">
+          <div class="name-row">
+            <span class="name">code</span>
+            <span class="tag tag-src">传统deb</span>
+            <span class="tag tag-held">已锁定</span>
+          </div>
+          <div class="ver">1.133.0 → 1.133.1</div>
+        </div>
+        <div class="right"><div class="t">3天前</div><div class="s">95 MB</div></div>
+        <div class="actions">
+          <!-- 强制安装开关 -->
+          <div class="force" title="强制安装被锁定的软件">
+            <div class="switch"></div>
+            <span class="force-label">强制</span>
+          </div>
+          <div class="iconbtn amber" title="忽略更新">👁̶</div>
+        </div>
+      </div>
+
+      <!-- 已开启强制安装的 hold 软件：复选框可用，标签变为「将强制」 -->
+      <div class="item held sel">
+        <input type="checkbox" class="chk" checked />
+        <div class="icon">📦</div>
+        <div class="main">
+          <div class="name-row">
+            <span class="name">code</span>
+            <span class="tag tag-src">传统deb</span>
+            <span class="tag tag-held">将强制</span>
+          </div>
+          <div class="ver">1.133.0 → 1.133.1</div>
+        </div>
+        <div class="right"><div class="t">3天前</div><div class="s">95 MB</div></div>
+        <div class="actions">
+          <div class="force" title="强制安装被锁定的软件">
+            <div class="switch on"></div>
+            <span class="force-label">强制</span>
+          </div>
+          <div class="iconbtn amber" title="忽略更新">👁̶</div>
+        </div>
+      </div>
+
+      <!-- 已忽略项（沉底，仅作对照） -->
+      <div class="item" style="opacity:.7;">
+        <input type="checkbox" class="chk" disabled />
+        <div class="icon">📦</div>
+        <div class="main">
+          <div class="name-row">
+            <span class="name">old-app</span>
+            <span class="tag tag-src">APM</span>
+            <span class="tag tag-ign">已忽略</span>
+          </div>
+          <div class="ver">2.1 → 2.2</div>
+        </div>
+        <div class="right"><div class="t">30天前</div><div class="s">—</div></div>
+        <div class="actions">
+          <div class="iconbtn" title="取消忽略">↺</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="legend">
+      <b>图例：</b>
+      ① <b>普通项</b>：可正常勾选升级；
+      ② <b>已锁定（hold）项</b>：复选框禁用、显示「已锁定」黄色标签，与「已忽略」一样沉底、不可随「全选」选中；
+      ③ 每行末的 <b>「强制」开关</b> 仅对被锁定的软件显示，打开后复选框启用、标签变「将强制」，可被单独勾选升级；
+      ④ <b>忽略</b>按钮（👁̶）对所有可操作项保留，逻辑不变。
+    </div>
+  </div>
+
+  <div class="notes">
+    <h2>实现逻辑（动手前请确认此方案）</h2>
+    <ul>
+      <li><b>数据来源</b>：后端 <code>service.ts</code> 构建 <code>UpdateCenterItem</code> 时，调用 <code>apt-mark showhold</code>（或 <code>dpkg</code>）检测该包是否被 hold，新增字段 <code>held?: boolean</code>；前端类型同步加该字段。</li>
+      <li><b>默认不可选</b>：与 <code>ignored</code> 一致——被 hold 的项的复选框 <code>:disabled</code>，<code>toggleSelection</code>/<code>selectableItems</code>/<code>filteredItems</code>/<code>start()</code> 中把它当作不可选（<code>held === true</code> 同 <code>ignored === true</code> 处理）。</li>
+      <li><b>强制开关</b>：前端 store 维护一个 <code>forcedTaskKeys: Set&lt;string&gt;</code>；开关打开的项，即使 <code>held</code> 也允许被 <code>selected</code>。<code>start()</code> 时把 <code>forced</code> 标记带入 <code>QueueInstallPayload</code>。</li>
+      <li><b>后端执行</b>：<code>install-manager.ts</code> 的 <code>addInstallTask</code> 收到 <code>forceHeld: true</code> 且 <code>origin==="spark"</code> 时，给 <code>ssinstall</code> 追加 <code>--allow-change-held-packages</code>（仅 spark 源；apm 源不涉及 apt hold）。</li>
+      <li><b>状态文案修复（顺带）</b>：前次日志「下载完成」误把安装失败当成功；本次如需一并修，可在 <code>processInstall.ts</code> 区分下载/安装完成文案，并让 <code>install-complete</code> 的 success 真实反映 apt 退出码（ssinstall 放弃安装却返回 0 的问题需另行处理）。<em>此项是否做，等你指示。</em></li>
+      <li><b>「强制」状态不持久化</b>：与选中态一样，仅本次弹窗会话内有效，刷新/重开恢复默认（避免用户忘记关掉强制）。</li>
+    </ul>
+  </div>
+</body>
+</html>

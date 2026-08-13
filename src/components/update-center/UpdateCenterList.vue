@@ -15,7 +15,9 @@
         :item="item"
         :task="taskMap.get(item.taskKey)"
         :selected="selectedTaskKeys.has(item.taskKey)"
+        :forced="forcedTaskKeys.has(item.taskKey)"
         @toggle-selection="$emit('toggle-selection', item.taskKey)"
+        @toggle-force="$emit('toggle-force', item.taskKey)"
         @ignore-item="$emit('ignore-item', item.packageName, item.newVersion)"
         @unignore-item="
           $emit('unignore-item', item.packageName, item.newVersion)
@@ -40,11 +42,13 @@ const props = defineProps<{
   items: UpdateCenterItemModel[];
   tasks: UpdateCenterTaskState[];
   selectedTaskKeys: Set<string>;
+  forcedTaskKeys: Set<string>;
   apps: App[];
 }>();
 
 defineEmits<{
   (e: "toggle-selection", taskKey: string): void;
+  (e: "toggle-force", taskKey: string): void;
   (e: "ignore-item", packageName: string, newVersion: string): void;
   (e: "unignore-item", packageName: string, newVersion: string): void;
 }>();

@@ -4,20 +4,22 @@
     :class="
       item.ignored === true
         ? 'border-slate-200/50 bg-slate-50/60 opacity-70 dark:border-slate-800/50 dark:bg-slate-900/40'
-        : 'border-slate-200/70 bg-white/90 dark:border-slate-800/70 dark:bg-slate-900/70'
+        : item.held === true
+          ? 'border-amber-300/70 bg-amber-50/70 dark:border-amber-500/30 dark:bg-amber-500/10'
+          : 'border-slate-200/70 bg-white/90 dark:border-slate-800/70 dark:bg-slate-900/70'
     "
   >
     <input
       type="checkbox"
       class="h-4 w-4 shrink-0 rounded border-slate-300 accent-brand focus:ring-brand"
       :checked="selected"
-      :disabled="item.ignored === true"
+      :disabled="isSelectionLocked"
       @change="$emit('toggle-selection')"
     />
 
     <div
       class="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-md bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-500"
-      :class="item.ignored === true ? 'opacity-60' : ''"
+      :class="item.ignored === true || item.held === true ? 'opacity-60' : ''"
     >
       <img
         :src="iconSrc"
@@ -50,6 +52,18 @@
         >
           已忽略
         </span>
+        <span
+          v-else-if="item.held === true && !forced"
+          class="shrink-0 rounded-full bg-amber-200 px-2 py-0.5 text-[10px] font-semibold text-amber-700 dark:bg-amber-500/20 dark:text-amber-200"
+        >
+          已锁定
+        </span>
+        <span
+          v-else-if="item.held === true && forced"
+          class="shrink-0 rounded-full bg-amber-500 px-2 py-0.5 text-[10px] font-semibold text-white dark:bg-amber-500"
+        >
+          将强制
+        </span>
       </div>
       <p class="mt-0.5 truncate text-xs text-slate-500 dark:text-slate-400">
         {{ item.packageName }} · {{ item.currentVersion }} →
@@ -66,7 +80,7 @@
     </div>
 
     <div
-      v-if="item.ignored !== true"
+      v-if="item.ignored !== true && !task"
       class="flex shrink-0 flex-col items-end gap-0.5"
     >
       <span class="text-[11px] font-semibold text-brand dark:text-amber-300">{{
@@ -74,11 +88,37 @@
       }}</span>
       <span class="text-[10px] text-slate-400">{{ sizeLabel }}</span>
     </div>
-    <div v-else class="flex shrink-0 flex-col items-end gap-0.5">
+    <div
+      v-else-if="!task"
+      class="flex shrink-0 flex-col items-end gap-0.5"
+    >
       <span class="text-[11px] font-semibold text-slate-400">{{
         timeLabel
       }}</span>
       <span class="text-[10px] text-slate-400">{{ sizeLabel }}</span>
+    </div>
+
+    <!-- 强制安装开关：仅对被系统锁定（held）的包显示 -->
+    <div
+      v-if="item.held === true && !task"
+      class="flex shrink-0 items-center gap-1"
+      :title="forced ? '已开启强制安装' : '强制安装被锁定的软件'"
+    >
+      <button
+        type="button"
+        class="relative inline-flex h-[18px] w-[34px] items-center rounded-full transition"
+        :class="forced ? 'bg-brand' : 'bg-slate-300 dark:bg-slate-600'"
+        role="switch"
+        :aria-checked="forced"
+        aria-label="强制安装"
+        @click.stop="$emit('toggle-force')"
+      >
+        <span
+          class="inline-block h-3.5 w-3.5 transform rounded-full bg-white transition"
+          :class="forced ? 'translate-x-[16px]' : 'translate-x-[2px]'"
+        ></span>
+      </button>
+      <span class="text-[10px] text-slate-400">强制</span>
     </div>
 
     <button
@@ -124,6 +164,8 @@ const props = defineProps<{
   item: UpdateCenterItem;
   task?: UpdateCenterTaskState;
   selected: boolean;
+  // 是否已开启强制安装（仅对 held 项有意义）
+  forced?: boolean;
 }>();
 
 const PLACEHOLDER_ICON =
@@ -134,7 +176,13 @@ defineEmits<{
   (e: "toggle-selection"): void;
   (e: "ignore-item"): void;
   (e: "unignore-item"): void;
+  (e: "toggle-force"): void;
 }>();
+
+// 被锁定且未强制时，复选框禁用（与「已忽略」一样不可被选中）
+const isSelectionLocked = computed(
+  () => props.item.ignored === true || (props.item.held === true && !props.forced),
+);
 
 const normalizeIconSrc = (icon: string): string => {
   if (/^[a-z]+:\/\//i.test(icon)) {

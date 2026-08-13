@@ -71,6 +71,8 @@ export interface UpdateCenterIgnorePayload {
 export interface UpdateCenterStartTask {
   taskKey: string;
   id: number;
+  // 强制安装被系统锁定（apt-mark hold）的包
+  forceHeld?: boolean;
 }
 
 export interface UpdateCenterService {
@@ -119,6 +121,7 @@ const toState = (
     migrationSource: item.migrationSource,
     migrationTarget: item.migrationTarget,
     aptssVersion: item.aptssVersion,
+    held: item.held,
   })),
   tasks: [], // 不再展示任务日志
   warnings: [...snapshot.warnings],
@@ -221,14 +224,9 @@ export const createUpdateCenterService = (
     },
     async start(tasks) {
       const snapshot = queue.getSnapshot();
-      const taskIdByKey = new Map(tasks.map((task) => [task.taskKey, task.id]));
-      const selectedItems = snapshot.items.filter(
-        (item) => taskIdByKey.has(getTaskKey(item)) && !item.ignored,
+      const taskByKey = new Map(
+        tasks.map((task) => [task.taskKey, task] as const),
       );
-
-      if (selectedItems.length === 0) {
-        return;
-      }
 
       // 获取主窗口的 webContents
       const mainWindow = BrowserWindow.getAllWindows()[0];
@@ -239,14 +237,54 @@ export const createUpdateCenterService = (
         return;
       }
 
-      // 获取当前 items
-      let currentItems = snapshot.items;
+      // 分类：可启动项 vs 被锁定（held）且未开启强制安装的项。
+      // 被锁定的项需用户单独开启「强制安装」才能升级，否则明确告知失败，避免静默卡在「开始更新」。
+      const startableItems: typeof snapshot.items = [];
+      const heldBlocked: Array<{
+        item: (typeof snapshot.items)[number];
+        id: number;
+      }> = [];
 
-      for (const item of selectedItems) {
-        const updateTaskId = taskIdByKey.get(getTaskKey(item));
-        if (!updateTaskId) {
+      for (const item of snapshot.items) {
+        const updateTask = taskByKey.get(getTaskKey(item));
+        if (!updateTask || item.ignored) continue;
+        if (item.held === true && !updateTask.forceHeld) {
+          heldBlocked.push({ item, id: updateTask.id });
           continue;
         }
+        startableItems.push(item);
+      }
+
+      // 对「被锁定未强制」的选中项，向前端发送明确失败通知（而非静默跳过）
+      for (const blocked of heldBlocked) {
+        webContents.send("install-complete", {
+          id: blocked.id,
+          success: false,
+          time: Date.now(),
+          exitCode: -1,
+          message: JSON.stringify({
+            message: `软件包 ${blocked.item.pkgname} 被系统锁定（hold），已在更新中心默认跳过。如需升级，请在该软件行开启「强制安装」开关后重试。`,
+            stdout: "",
+            stderr: "",
+          }),
+        });
+      }
+
+      if (startableItems.length === 0) {
+        return;
+      }
+
+      // 获取当前 items 的副本，启动成功后从更新中心列表移除已交出的项，
+      // 避免同一包同时出现在更新中心与下载队列（更新中心只展示待更新的项）。
+      let currentItems = snapshot.items;
+
+      for (const item of startableItems) {
+        const updateTask = taskByKey.get(getTaskKey(item));
+        if (!updateTask) {
+          continue;
+        }
+
+        const { id: updateTaskId, forceHeld } = updateTask;
 
         // 构建 metalink URL
         const metalinkUrl = item.downloadUrl
@@ -263,19 +301,18 @@ export const createUpdateCenterService = (
           upgradeOnly: true,
           origin: item.source === "apm" ? "apm" : "spark",
           retry: false,
+          forceHeld: item.held === true ? forceHeld : false,
         };
 
         await addInstallTask(installTaskData, webContents);
 
-        // 从更新中心的 items 中移除该应用（不再显示在更新列表中）
+        // 启动成功后从更新中心列表移除该项（被 hold 未强制拦截的项不会进入此处，仍保留）。
         currentItems = currentItems.filter(
           (i) => getTaskKey(i) !== getTaskKey(item),
         );
       }
 
-      // 更新队列中的 items
       queue.setItems(currentItems);
-
       emit();
     },
     async cancel(taskKey) {

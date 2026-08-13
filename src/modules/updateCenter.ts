@@ -24,10 +24,12 @@ export interface UpdateCenterStore {
   showMigrationConfirm: Ref<boolean>;
   searchQuery: Ref<string>;
   selectedTaskKeys: Ref<Set<string>>;
+  forcedTaskKeys: Ref<Set<string>>;
   snapshot: Ref<UpdateCenterSnapshot>;
   filteredItems: ComputedRef<UpdateCenterItem[]>;
   allSelected: ComputedRef<boolean>;
   someSelected: ComputedRef<boolean>;
+  selectableCount: ComputedRef<number>;
   bind: () => void;
   unbind: () => void;
   open: (storeFilter?: StoreFilter) => Promise<void>;
@@ -35,6 +37,7 @@ export interface UpdateCenterStore {
   ignoreItem: (packageName: string, newVersion: string) => Promise<void>;
   unignoreItem: (packageName: string, newVersion: string) => Promise<void>;
   toggleSelection: (taskKey: string) => void;
+  toggleForce: (taskKey: string) => void;
   toggleSelectAll: () => void;
   getSelectedItems: () => UpdateCenterItem[];
   closeNow: () => void;
@@ -60,21 +63,32 @@ export const createUpdateCenterStore = (): UpdateCenterStore => {
   const showMigrationConfirm = ref(false);
   const searchQuery = ref("");
   const selectedTaskKeys = ref(new Set<string>());
+  // 强制安装集合：仅当前会话内有效（刷新/重开更新中心即重置），不持久化。
+  // 仅对被系统锁定（held）的项有意义：开启后该 held 项可被单独选中并升级。
+  const forcedTaskKeys = ref(new Set<string>());
   const snapshot = ref<UpdateCenterSnapshot>(EMPTY_SNAPSHOT);
   let lastStoreFilter: StoreFilter = "both";
+
+  // 判断某 item 是否可被选中：未被忽略，且（未被锁定 或 已开启强制安装）
+  const isSelectable = (item: UpdateCenterItem): boolean => {
+    if (item.ignored === true) return false;
+    if (item.held === true && !forcedTaskKeys.value.has(item.taskKey)) {
+      return false;
+    }
+    return true;
+  };
 
   const resetSessionState = (): void => {
     showCloseConfirm.value = false;
     showMigrationConfirm.value = false;
     searchQuery.value = "";
     selectedTaskKeys.value = new Set();
+    forcedTaskKeys.value = new Set();
   };
 
   const applySnapshot = (nextSnapshot: UpdateCenterSnapshot): void => {
     const selectableTaskKeys = new Set(
-      nextSnapshot.items
-        .filter((item) => item.ignored !== true)
-        .map((item) => item.taskKey),
+      nextSnapshot.items.filter(isSelectable).map((item) => item.taskKey),
     );
     selectedTaskKeys.value = new Set(
       [...selectedTaskKeys.value].filter((taskKey) =>
@@ -85,7 +99,7 @@ export const createUpdateCenterStore = (): UpdateCenterStore => {
   };
 
   const selectableItems = computed(() =>
-    snapshot.value.items.filter((item) => item.ignored !== true),
+    snapshot.value.items.filter(isSelectable),
   );
 
   const filteredItems = computed(() => {
@@ -93,10 +107,11 @@ export const createUpdateCenterStore = (): UpdateCenterStore => {
     const matched = snapshot.value.items.filter((item) =>
       matchesSearch(item, query),
     );
-    // 已忽略项沉底：非忽略在前、已忽略在后，各自保持原有顺序
+    // 已忽略项沉底：可选（含已强制的锁定项）在前、不可选（已忽略 / 未强制的锁定项）在后，
+    // 各自保持原有顺序
     return [
-      ...matched.filter((item) => item.ignored !== true),
-      ...matched.filter((item) => item.ignored === true),
+      ...matched.filter(isSelectable),
+      ...matched.filter((item) => !isSelectable(item)),
     ];
   });
 
@@ -115,6 +130,9 @@ export const createUpdateCenterStore = (): UpdateCenterStore => {
       selectable.some((item) => selectedTaskKeys.value.has(item.taskKey))
     );
   });
+
+  // 可选项数量：被忽略 / 被锁定未强制的项不计入。用于全选按钮可用性判断。
+  const selectableCount = computed(() => selectableItems.value.length);
 
   const handleState = (nextSnapshot: UpdateCenterSnapshot): void => {
     applySnapshot(nextSnapshot);
@@ -240,7 +258,7 @@ export const createUpdateCenterStore = (): UpdateCenterStore => {
     const item = snapshot.value.items.find(
       (entry) => entry.taskKey === taskKey,
     );
-    if (!item || item.ignored === true) {
+    if (!item || !isSelectable(item)) {
       return;
     }
 
@@ -252,6 +270,32 @@ export const createUpdateCenterStore = (): UpdateCenterStore => {
     }
 
     selectedTaskKeys.value = nextSelection;
+  };
+
+  // 切换「强制安装」开关（仅对被系统锁定的包有意义）。
+  // 关闭强制时，若该包已被选中则同步取消其选中态。
+  const toggleForce = (taskKey: string): void => {
+    const item = snapshot.value.items.find(
+      (entry) => entry.taskKey === taskKey,
+    );
+    if (!item || item.held !== true) {
+      return;
+    }
+
+    const nextForced = new Set(forcedTaskKeys.value);
+    if (nextForced.has(taskKey)) {
+      nextForced.delete(taskKey);
+      // 取消强制后该包不可再被选中，移出选中集
+      if (selectedTaskKeys.value.has(taskKey)) {
+        const nextSelection = new Set(selectedTaskKeys.value);
+        nextSelection.delete(taskKey);
+        selectedTaskKeys.value = nextSelection;
+      }
+    } else {
+      nextForced.add(taskKey);
+    }
+
+    forcedTaskKeys.value = nextForced;
   };
 
   const toggleSelectAll = (): void => {
@@ -266,7 +310,7 @@ export const createUpdateCenterStore = (): UpdateCenterStore => {
   const getSelectedItems = (): UpdateCenterItem[] => {
     return snapshot.value.items.filter(
       (item) =>
-        selectedTaskKeys.value.has(item.taskKey) && item.ignored !== true,
+        selectedTaskKeys.value.has(item.taskKey) && isSelectable(item),
     );
   };
 
@@ -328,6 +372,7 @@ export const createUpdateCenterStore = (): UpdateCenterStore => {
         startTasks.push({
           taskKey: item.taskKey,
           id: downloadId,
+          forceHeld: item.held === true,
         });
       }
     });
@@ -351,10 +396,12 @@ export const createUpdateCenterStore = (): UpdateCenterStore => {
     showMigrationConfirm,
     searchQuery,
     selectedTaskKeys,
+    forcedTaskKeys,
     snapshot,
     filteredItems,
     allSelected,
     someSelected,
+    selectableCount,
     bind,
     unbind,
     open,
@@ -362,6 +409,7 @@ export const createUpdateCenterStore = (): UpdateCenterStore => {
     ignoreItem,
     unignoreItem,
     toggleSelection,
+    toggleForce,
     toggleSelectAll,
     getSelectedItems,
     closeNow,

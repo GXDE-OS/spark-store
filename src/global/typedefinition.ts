@@ -158,6 +158,8 @@ export interface UpdateCenterItem {
   aptssVersion?: string;
   // 更新发布时间（毫秒时间戳），用于列表显示「X天前」；暂无数据时前端降级为「—」
   updateTime?: number;
+  // 是否被系统锁定（apt-mark hold）。被锁定项默认不可批量选中，需用户单独开启强制安装
+  held?: boolean;
 }
 
 export interface UpdateCenterTaskState {
@@ -175,6 +177,8 @@ export interface UpdateCenterTaskState {
 export interface UpdateCenterStartTask {
   taskKey: string;
   id: number;
+  // 强制安装被系统锁定（apt-mark hold）的包
+  forceHeld?: boolean;
 }
 
 export interface UpdateCenterSnapshot {

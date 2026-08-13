@@ -58,6 +58,8 @@ export interface QueueInstallPayload {
   origin?: "spark" | "apm";
   upgradeOnly?: boolean;
   retry?: boolean;
+  // 强制安装被系统锁定（apt-mark hold）的包：spark 源安装时追加 --allow-change-held-packages
+  forceHeld?: boolean;
 }
 
 type InstallTask = {
@@ -74,6 +76,7 @@ type InstallTask = {
   origin: "spark" | "apm";
   upgradeOnly?: boolean;
   cancelled?: boolean;
+  forceHeld?: boolean;
   phase: "queued-download" | "downloading" | "queued-install" | "installing";
 };
 
@@ -302,40 +305,144 @@ export const addInstallTask = async (
   download: QueueInstallPayload,
   sender: WebContents | null,
 ): Promise<boolean> => {
-  const { id, pkgname, metalinkUrl, filename, origin, upgradeOnly } = download;
+  const webContents = sender;
+  const { id, pkgname, filename, origin, upgradeOnly, forceHeld } = download;
+  // metalinkUrl 可能在下方校验时被规范化（折叠 ./ 段），故用 let
+  let { metalinkUrl } = download;
 
   if (!id || !pkgname) {
     logger.warn("addInstallTask: passed arguments missing id or pkgname");
+    webContents?.send("install-complete", {
+      id: id ?? 0,
+      success: false,
+      time: Date.now(),
+      exitCode: -1,
+      message: JSON.stringify({
+        message: "任务参数缺失 id 或 pkgname",
+        stdout: "",
+        stderr: "",
+      }),
+    });
     return false;
   }
 
   // 包名/文件名白名单校验：防止路径遍历（如 ../../）或非法字符进入下载目录与安装命令构建
   if (!PKGNAME_PATTERN.test(pkgname)) {
     logger.warn(`addInstallTask invalid pkgname: ${pkgname}`);
+    webContents?.send("install-complete", {
+      id,
+      success: false,
+      time: Date.now(),
+      exitCode: -1,
+      message: JSON.stringify({
+        message: `包名包含非法字符: ${pkgname}`,
+        stdout: "",
+        stderr: "",
+      }),
+    });
     return false;
   }
   if (filename && !PKGNAME_PATTERN.test(filename)) {
     logger.warn(`addInstallTask invalid filename: ${filename}`);
+    webContents?.send("install-complete", {
+      id,
+      success: false,
+      time: Date.now(),
+      exitCode: -1,
+      message: JSON.stringify({
+        message: `文件名包含非法字符: ${filename}`,
+        stdout: "",
+        stderr: "",
+      }),
+    });
     return false;
   }
 
   // metalinkUrl 来自渲染端（由目录 filename / 主进程解析的 downloadUrl 拼成）。
-  // 纵深防御：仅允许相对路径（拼接 baseURL）或以官方域名开头的绝对 URL，
-  // 拒绝任意外部地址，防止 axios 忽略 baseURL 发起 SSRF/任意源下载。
+  // 纵深防御：仅允许 https 协议、官方域名（含任意子域 *.spark-app.store）的绝对 URL，
+  // 或以 "/" 开头的相对路径（后续由 axios baseURL 拼接官方域名）。
+  // 先解析并规范化 path 中的 "./" 段（浏览器/Node 实际请求时会自动折叠，此处显式处理，
+  // 避免把合法的 "./" 误判为非法），再拒绝 ".." 路径遍历越界与外部域名（防 SSRF）。
   if (metalinkUrl) {
-    const isRelative = metalinkUrl.startsWith("/");
-    const isOfficial = metalinkUrl.startsWith(
-      "https://erotica.spark-app.store",
-    );
-    if (!isRelative && !isOfficial) {
-      logger.warn(`addInstallTask invalid metalinkUrl: ${metalinkUrl}`);
+    let parsed: URL;
+    try {
+      // 相对路径以官方域为基进行解析
+      parsed = new URL(metalinkUrl, "https://erotica.spark-app.store");
+    } catch {
+      logger.warn(`addInstallTask invalid metalinkUrl (parse failed): ${metalinkUrl}`);
+      webContents?.send("install-complete", {
+        id,
+        success: false,
+        time: Date.now(),
+        exitCode: -1,
+        message: JSON.stringify({
+          message: `Metalink URL 不合法: ${metalinkUrl}`,
+          stdout: "",
+          stderr: "",
+        }),
+      });
       return false;
     }
+
+    if (parsed.protocol !== "https:") {
+      logger.warn(`addInstallTask invalid metalinkUrl (not https): ${metalinkUrl}`);
+      webContents?.send("install-complete", {
+        id,
+        success: false,
+        time: Date.now(),
+        exitCode: -1,
+        message: JSON.stringify({
+          message: `Metalink URL 协议不合法: ${metalinkUrl}`,
+          stdout: "",
+          stderr: "",
+        }),
+      });
+      return false;
+    }
+
+    // 仅允许官方域名（主域 spark-app.store 及其任意子域，如 erotica/d/store 等）
+    const host = parsed.hostname;
+    const isOfficial =
+      host === "spark-app.store" || host.endsWith(".spark-app.store");
+    if (!isOfficial) {
+      logger.warn(`addInstallTask invalid metalinkUrl (host not official): ${host}`);
+      webContents?.send("install-complete", {
+        id,
+        success: false,
+        time: Date.now(),
+        exitCode: -1,
+        message: JSON.stringify({
+          message: `Metalink URL 域名不合法: ${metalinkUrl}`,
+          stdout: "",
+          stderr: "",
+        }),
+      });
+      return false;
+    }
+
+    // 规范化 path：折叠 "." / ".." 段，拒绝越界路径遍历
+    const normalizedPath = path.posix.normalize(parsed.pathname);
+    if (normalizedPath.split("/").includes("..")) {
+      logger.warn(`addInstallTask invalid metalinkUrl (path traversal): ${metalinkUrl}`);
+      webContents?.send("install-complete", {
+        id,
+        success: false,
+        time: Date.now(),
+        exitCode: -1,
+        message: JSON.stringify({
+          message: `Metalink URL 含路径遍历: ${metalinkUrl}`,
+          stdout: "",
+          stderr: "",
+        }),
+      });
+      return false;
+    }
+    parsed.pathname = normalizedPath;
+    // 用规范化后的 URL 继续（去除 "./" 段，与实际请求行为一致）
+    metalinkUrl = parsed.href;
   }
 
   logger.info(`收到下载任务: ${id}, 软件包名称: ${pkgname}, 来源: ${origin}`);
-
-  const webContents = sender;
 
   // 避免重复添加同一任务（检查 pkgname + origin），但允许重试下载
   if (!download.retry) {
@@ -397,13 +504,29 @@ export const addInstallTask = async (
     if (superUserCmd) execParams.push(SHELL_CALLER_PATH);
 
     if (metalinkUrl && filename) {
-      execParams.push(
-        "ssinstall",
-        `${downloadDir}/${filename}`,
-        "--delete-after-install",
-        "--no-create-desktop-entry",
-        "--native",
-      );
+      const localDeb = `${downloadDir}/${filename}`;
+      if (forceHeld) {
+        // 强制安装被系统锁定（hold）的包：合并为单次免密 pkexec（复用商店已有的
+        // shell-caller 提权配置），由 shell-caller 的 force-ssinstall 分支内部完成
+        // apt-mark unhold → ssinstall 本地 .deb → apt-mark hold，避免单独 pkexec apt-mark
+        // 触发额外权限框（apt-mark 不在 policykit 免密 exec.path 内）。
+        execParams.push(
+          "force-ssinstall",
+          pkgname,
+          localDeb,
+          "--delete-after-install",
+          "--no-create-desktop-entry",
+        );
+      } else {
+        // 本地 .deb 文件模式：已下载的 .deb 通过 ssinstall 安装。
+        execParams.push(
+          "ssinstall",
+          localDeb,
+          "--delete-after-install",
+          "--no-create-desktop-entry",
+          "--native",
+        );
+      }
     } else {
       execParams.push(
         "ssinstall",
@@ -447,6 +570,7 @@ export const addInstallTask = async (
     filename,
     origin: origin || "apm",
     upgradeOnly: Boolean(upgradeOnly),
+    forceHeld: Boolean(forceHeld),
     phase: metalinkUrl ? "queued-download" : "queued-install",
   };
   tasks.set(id, task);
@@ -773,6 +897,7 @@ async function runDownloadPhase(task: InstallTask) {
 /**
  * 安装阶段：执行安装命令，安装一次只允许一个。
  */
+
 async function runInstallPhase(task: InstallTask) {
   const { webContents, id } = task;
 
@@ -858,9 +983,32 @@ async function runInstallPhase(task: InstallTask) {
     });
 
     // Completion
-    const success = result.code === 0;
+    // ssinstall（spark 源）在 dry-run 失败放弃安装时仍可能以退出码 0 结束，
+    // 需从输出识别明确的失败标志，避免误判为安装成功（否则前端会显示「完成」）。
+    let success = result.code === 0;
+    let failureDetail = "";
+    if (success && task.origin === "spark") {
+      const failMarkers = [
+        "放弃安装",
+        "dry-run测试仍然失败",
+        "包管理器以错误代码退出",
+        "Package manager quit with exit code",
+      ];
+      if (
+        failMarkers.some(
+          (marker) =>
+            result.stdout.includes(marker) || result.stderr.includes(marker),
+        )
+      ) {
+        success = false;
+        failureDetail =
+          "ssinstall 放弃安装（可能因软件包被系统锁定 hold，需在更新中心开启「强制安装」）";
+      }
+    }
     const msgObj = {
-      message: success ? "安装完成" : `安装失败，退出码 ${result.code}`,
+      message: success
+        ? "安装完成"
+        : `安装失败：${failureDetail || `退出码 ${result.code}`}`,
       stdout: result.stdout,
       stderr: result.stderr,
     };
