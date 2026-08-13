@@ -69,6 +69,35 @@ export const loadCategories = async () => {
   }
 };
 
+// 远程 sidebar-config.json 入口的类型守卫：在写入渲染层前拦截异常字段。
+// 字段类型/长度限制防止畸形数据（如超长 name 撑破布局、非法 type 触发未知分支）。
+// type 白名单必须与 global/typedefinition.ts 的 SidebarEntry.type 保持一致。
+const VALID_SIDEBAR_TYPES = ["category", "search", "link", "homeList"] as const;
+const isValidSidebarEntry = (e: unknown): e is SidebarEntry => {
+  if (typeof e !== "object" || e === null) return false;
+  const entry = e as Record<string, unknown>;
+  if (
+    typeof entry.id !== "string" ||
+    entry.id.length === 0 ||
+    entry.id.length > 64
+  )
+    return false;
+  if (
+    typeof entry.name !== "string" ||
+    entry.name.length === 0 ||
+    entry.name.length > 128
+  )
+    return false;
+  if (entry.icon !== undefined && typeof entry.icon !== "string") return false;
+  if (
+    entry.type !== undefined &&
+    !VALID_SIDEBAR_TYPES.includes(entry.type as (typeof VALID_SIDEBAR_TYPES)[number])
+  )
+    return false;
+  if (entry.value !== undefined && typeof entry.value !== "string") return false;
+  return true;
+};
+
 export const loadSidebarConfig = async () => {
   try {
     const arch = window.apm_store.arch || "amd64";
@@ -86,23 +115,23 @@ export const loadSidebarConfig = async () => {
         const entries = Array.isArray(data) ? data : data.entries || [];
 
         for (const entry of entries) {
-          if (entry.id && entry.name) {
-            const existing = entryMap.get(entry.id);
-            if (existing) {
-              // 多仓库共有入口，合并来源
-              if (existing.origins && !existing.origins.includes(mode)) {
-                existing.origins.push(mode);
-              }
-            } else {
-              entryMap.set(entry.id, {
-                id: entry.id,
-                name: entry.name,
-                icon: entry.icon || "",
-                type: entry.type || "category",
-                value: entry.value || entry.id,
-                origins: [mode],
-              });
+          // 严格校验远程配置，避免畸形/恶意字段进入渲染层（Vue 模板自动转义已兜底 XSS）
+          if (!isValidSidebarEntry(entry)) continue;
+          const existing = entryMap.get(entry.id);
+          if (existing) {
+            // 多仓库共有入口，合并来源
+            if (existing.origins && !existing.origins.includes(mode)) {
+              existing.origins.push(mode);
             }
+          } else {
+            entryMap.set(entry.id, {
+              id: entry.id,
+              name: entry.name,
+              icon: entry.icon ?? "",
+              type: entry.type ?? "category",
+              value: entry.value ?? entry.id,
+              origins: [mode],
+            });
           }
         }
       } catch (e) {

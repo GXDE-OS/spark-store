@@ -455,6 +455,11 @@ const props = defineProps<{
 const hasOrigin = (app: App, origin: "spark" | "apm"): boolean =>
   app.origins?.includes(origin) ?? app.origin === origin;
 
+// 来源排序优先级：APM 始终排在前面（值越小越靠前），与排序比较函数共用，避免魔法数字
+const ORIGIN_PRIORITY: Record<"spark" | "apm", number> = { apm: 0, spark: 1 };
+const originPriority = (app: App): number =>
+  hasOrigin(app, "apm") ? ORIGIN_PRIORITY.apm : ORIGIN_PRIORITY.spark;
+
 // APM / Spark 分别统计实际安装的包数量（同一 pkgname 同时装两种来源时各计一次）
 // 搜索过滤后的全量（不叠加来源筛选），用于顶部统计徽章实时同步搜索结果，
 // 避免搜索时列表缩减而徽章数字仍显示全量造成误导。
@@ -506,9 +511,9 @@ const filteredApps = computed(() => {
 
   // 返回新数组排序：APM 应用始终排在前面（默认全部视图也遵守此规则）
   return [...matched].sort((a, b) => {
-    const aApm = hasOrigin(a, "apm") ? 0 : 1;
-    const bApm = hasOrigin(b, "apm") ? 0 : 1;
-    if (aApm !== bApm) return aApm - bApm;
+    const pa = originPriority(a);
+    const pb = originPriority(b);
+    if (pa !== pb) return pa - pb;
     // 同类内保持原有的字母序，体验更一致
     return a.pkgname.localeCompare(b.pkgname);
   });
