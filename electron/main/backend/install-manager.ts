@@ -50,6 +50,16 @@ const isOriginEnabled = (
   return storeFilter === "both" || storeFilter === origin;
 };
 
+export interface QueueInstallPayload {
+  id: number;
+  pkgname: string;
+  metalinkUrl?: string;
+  filename?: string;
+  origin?: "spark" | "apm";
+  upgradeOnly?: boolean;
+  retry?: boolean;
+}
+
 type InstallTask = {
   id: number;
   pkgname: string;
@@ -283,34 +293,30 @@ const parseUpgradableList = (output: string) => {
   return apps;
 };
 
-// Listen for download requests from renderer process
-ipcMain.on("queue-install", async (event, download_json) => {
-  let download: unknown;
-  try {
-    download =
-      typeof download_json === "string"
-        ? JSON.parse(download_json)
-        : download_json;
-  } catch (err) {
-    logger.error({ err }, "queue-install: invalid JSON payload, ignoring task");
-    return;
-  }
-  const { id, pkgname, metalinkUrl, filename, origin, upgradeOnly } =
-    download || {};
+/**
+ * 将任务加入安装/下载队列。被 IPC 监听与更新中心等内部模块共享使用。
+ * 入队前会执行包名、文件名、metalinkUrl 的校验，并检查重复任务。
+ * @returns 是否成功入队
+ */
+export const addInstallTask = async (
+  download: QueueInstallPayload,
+  sender: WebContents | null,
+): Promise<boolean> => {
+  const { id, pkgname, metalinkUrl, filename, origin, upgradeOnly } = download;
 
   if (!id || !pkgname) {
-    logger.warn("passed arguments missing id or pkgname");
-    return;
+    logger.warn("addInstallTask: passed arguments missing id or pkgname");
+    return false;
   }
 
   // 包名/文件名白名单校验：防止路径遍历（如 ../../）或非法字符进入下载目录与安装命令构建
   if (!PKGNAME_PATTERN.test(pkgname)) {
-    logger.warn(`queue-install invalid pkgname: ${pkgname}`);
-    return;
+    logger.warn(`addInstallTask invalid pkgname: ${pkgname}`);
+    return false;
   }
   if (filename && !PKGNAME_PATTERN.test(filename)) {
-    logger.warn(`queue-install invalid filename: ${filename}`);
-    return;
+    logger.warn(`addInstallTask invalid filename: ${filename}`);
+    return false;
   }
 
   // metalinkUrl 来自渲染端（由目录 filename / 主进程解析的 downloadUrl 拼成）。
@@ -322,14 +328,14 @@ ipcMain.on("queue-install", async (event, download_json) => {
       "https://erotica.spark-app.store",
     );
     if (!isRelative && !isOfficial) {
-      logger.warn(`queue-install invalid metalinkUrl: ${metalinkUrl}`);
-      return;
+      logger.warn(`addInstallTask invalid metalinkUrl: ${metalinkUrl}`);
+      return false;
     }
   }
 
   logger.info(`收到下载任务: ${id}, 软件包名称: ${pkgname}, 来源: ${origin}`);
 
-  const webContents = event.sender;
+  const webContents = sender;
 
   // 避免重复添加同一任务（检查 pkgname + origin），但允许重试下载
   if (!download.retry) {
@@ -337,12 +343,12 @@ ipcMain.on("queue-install", async (event, download_json) => {
       (t) => t.pkgname === pkgname && t.origin === origin,
     );
     if (existingTask) {
-      webContents.send("install-log", {
+      webContents?.send("install-log", {
         id,
         time: Date.now(),
         message: `任务 ${pkgname} (${origin}) 已在列表中，忽略重复添加`,
       });
-      webContents.send("install-complete", {
+      webContents?.send("install-complete", {
         id,
         success: false,
         time: Date.now(),
@@ -353,12 +359,12 @@ ipcMain.on("queue-install", async (event, download_json) => {
           stderr: "",
         }),
       });
-      return;
+      return false;
     }
   }
   const superUserCmd = await checkSuperUserCommand();
   let execCommand = "";
-  const execParams = [];
+  const execParams: string[] = [];
   const downloadDir = path.join(
     os.tmpdir(),
     `spark-store-${process.pid}`,
@@ -370,8 +376,8 @@ ipcMain.on("queue-install", async (event, download_json) => {
   if (origin === "apm") {
     const hasApm = await checkApmAvailable();
     if (!hasApm) {
-      webContents.send("trigger-apm-install-dialog");
-      webContents.send("install-complete", {
+      webContents?.send("trigger-apm-install-dialog");
+      webContents?.send("install-complete", {
         id,
         success: false,
         time: Date.now(),
@@ -382,7 +388,7 @@ ipcMain.on("queue-install", async (event, download_json) => {
           stderr: "",
         }),
       });
-      return;
+      return false;
     }
   }
 
@@ -420,7 +426,7 @@ ipcMain.on("queue-install", async (event, download_json) => {
       const safeFilename = path.basename(filename);
       if (safeFilename !== filename) {
         logger.warn(`ssinstall filename contains path traversal: ${filename}`);
-        return;
+        return false;
       }
       execParams.push("ssinstall", path.join(downloadDir, safeFilename));
     } else {
@@ -446,6 +452,23 @@ ipcMain.on("queue-install", async (event, download_json) => {
   tasks.set(id, task);
   processNextDownload();
   processNextInstall();
+  return true;
+};
+
+// Listen for download requests from renderer process
+ipcMain.on("queue-install", async (event, download_json) => {
+  let download: unknown;
+  try {
+    download =
+      typeof download_json === "string"
+        ? JSON.parse(download_json)
+        : download_json;
+  } catch (err) {
+    logger.error({ err }, "queue-install: invalid JSON payload, ignoring task");
+    return;
+  }
+
+  await addInstallTask(download as QueueInstallPayload, event.sender);
 });
 
 // Cancel Handler

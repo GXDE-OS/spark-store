@@ -1,5 +1,9 @@
 import { BrowserWindow } from "electron";
 import {
+  addInstallTask,
+  type QueueInstallPayload,
+} from "../install-manager";
+import {
   IGNORE_CONFIG_PATH,
   applyIgnoredEntries,
   createIgnoreKey,
@@ -249,8 +253,9 @@ export const createUpdateCenterService = (
           ? `${item.downloadUrl}.metalink`
           : undefined;
 
-        // 发送到主下载队列
-        const installTaskData = {
+        // 直接加入主下载队列（之前用 webContents.send("queue-install") 只会发给渲染端，
+        // 主进程 ipcMain 监听不到自己发出的 send，导致任务实际未启动而卡死）。
+        const installTaskData: QueueInstallPayload = {
           id: updateTaskId,
           pkgname: item.pkgname,
           metalinkUrl,
@@ -260,8 +265,7 @@ export const createUpdateCenterService = (
           retry: false,
         };
 
-        // 通过 IPC 发送到主下载队列
-        webContents.send("queue-install", JSON.stringify(installTaskData));
+        await addInstallTask(installTaskData, webContents);
 
         // 从更新中心的 items 中移除该应用（不再显示在更新列表中）
         currentItems = currentItems.filter(

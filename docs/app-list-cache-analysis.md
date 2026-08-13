@@ -236,3 +236,33 @@
 
 ### 8.4 验证边界
 本机 headless 无法真实触发 aria2c 下载与 GUI 日志面板；已通过 `vue-tsc` 类型检查与 `read_lints` 0 错误。真实失败场景（如 Metalink 404、网络中断）下的日志连贯性需用户在真机验证。
+
+---
+
+## 9. 附加修复：更新中心点击"更新"后卡"开始更新..."
+
+### 9.1 现象（用户反馈）
+在软件更新中心选择 Visual Studio Code: 点击更新后，下载详情弹窗日志停在：
+```
+[09:23:41] 开始更新...
+```
+状态为 `queued`，后续无进展、无错误，界面卡死。
+
+### 9.2 根因
+更新中心 `electron/main/backend/update-center/service.ts` 的 `start()` 方法，把任务通过 `webContents.send("queue-install", JSON.stringify(installTaskData))` 发送给主下载队列。
+
+**但 `webContents.send` 是从主进程向渲染进程发消息，渲染进程的 `ipcRenderer.on("queue-install")` 能收到，而主进程的 `ipcMain.on("queue-install") 监听的是渲染进程 `ipcRenderer.send` 的消息，监听不到自己 `webContents.send` 的消息。**
+
+结果：任务根本没有进入 `install-manager.ts` 的下载队列，`processNextDownload()` 永远不会执行，UI 自然卡在"开始更新...」。
+
+### 9.3 修复（已提交）
+- **I1（抽离可复用的入队函数）**：在 `electron/main/backend/install-manager.ts` 新增导出 `addInstallTask(payload, sender)`，把原来 `ipcMain.on("queue-install")` 里的解析、校验、去重、APM 检查、命令构建、入队逻辑全部抽到该函数。`ipcMain.on` 本身只做 JSON 解析并调用 `addInstallTask`。
+- **I2（更新中心直接调用入队）**：`electron/main/backend/update-center/service.ts` 的 `start()` 不再 `webContents.send("queue-install")`，而是直接 `await addInstallTask(installTaskData, webContents)`，使任务真正进入主下载队列。
+- **I3（类型安全）**：新增 `QueueInstallPayload` 接口，避免 `any`。
+
+改动文件：
+- `electron/main/backend/install-manager.ts`（I1、I3）
+- `electron/main/backend/update-center/service.ts`（I2）
+
+### 9.4 验证边界
+本机 headless 无法启动 GUI 触发真实更新下载；已通过 `vue-tsc` 与 `read_lints` 0 错误。真机需在软件更新中心勾选一项更新并点击"更新"，确认日志从"开始更新..."推进到"正在获取 Metalink 文件"、下载进度增加，最终进入安装或明确失败。
