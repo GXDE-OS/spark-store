@@ -629,9 +629,22 @@ ipcMain.on("cancel-install", (event, id) => {
   const isRunning = task.phase === "downloading" || task.phase === "installing";
 
   if (isRunning) {
-    // 运行中的任务：终止进程，由对应的阶段处理器在 finally 中清理计数器与队列
-    task.download_process?.kill();
-    task.install_process?.kill();
+    // 运行中的任务：先发 SIGTERM 优雅终止；若 5s 内未退出，降级 SIGKILL 强制杀除，
+    // 避免子进程忽略 SIGTERM 变成僵尸进程（改进项：进程取消需 SIGKILL 降级处理）。
+    const forceKill = (proc: ChildProcess | null, label: string) => {
+      if (!proc || proc.killed) return;
+      proc.kill("SIGTERM");
+      const pid = proc.pid;
+      setTimeout(() => {
+        if (proc && !proc.killed) {
+          logger.warn(`任务 ${id} 的 ${label} 进程(${pid}) 未响应 SIGTERM，发送 SIGKILL`);
+          proc.kill("SIGKILL");
+        }
+      }, 5000);
+    };
+    forceKill(task.download_process, "下载");
+    forceKill(task.install_process, "安装");
+    // 由对应的阶段处理器在 finally 中清理计数器与队列
   } else {
     // 排队中的任务（未开始执行）：直接清理并调度
     tasks.delete(id);
