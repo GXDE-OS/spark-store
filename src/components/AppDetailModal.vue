@@ -644,8 +644,15 @@ const closeMetaModal = () => {
 };
 
 const openWebsite = (url: string) => {
-  if (url) {
-    window.open(url, "_blank");
+  if (!url) return;
+  try {
+    const parsed = new URL(url);
+    // 仅允许 http/https 协议，杜绝 javascript:/data: 等危险协议
+    if (parsed.protocol === "https:" || parsed.protocol === "http:") {
+      window.open(url, "_blank", "noopener,noreferrer");
+    }
+  } catch {
+    // 无效 URL，不打开
   }
 };
 

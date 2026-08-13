@@ -473,9 +473,26 @@ async function createWindow() {
     logger.info("Renderer process is ready.");
   });
 
-  // Make all links open with the browser, not with the application
+  // 仅允许可信域名的 https 链接通过浏览器打开，避免钓鱼/恶意站。
+  // 协议前缀 + 域名后缀白名单双重校验；非法/无效 URL 一律拒绝。
+  const ALLOWED_EXTERNAL_HOSTS = [
+    "spark-app.store",
+    "gitee.com",
+    "bbs.spark-app.store",
+    "spark-app.cn",
+  ];
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    if (url.startsWith("https:")) shell.openExternal(url);
+    try {
+      const parsed = new URL(url);
+      if (
+        parsed.protocol === "https:" &&
+        ALLOWED_EXTERNAL_HOSTS.some((h) => parsed.hostname === h || parsed.hostname.endsWith(`.${h}`))
+      ) {
+        shell.openExternal(url);
+      }
+    } catch {
+      // 无效 URL，拒绝打开
+    }
     return { action: "deny" };
   });
   // win.webContents.on('will-navigate', (event, url) => { }) #344

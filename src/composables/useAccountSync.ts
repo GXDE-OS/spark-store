@@ -319,11 +319,24 @@ const openRestoreFromAccount = async (): Promise<void> => {
   }
 };
 
-const installCloudItems = (items: SyncedAppListItem[]): void => {
-  for (const item of items) {
-    const app = resolveCloudInstallCandidate(item, apps.value);
-    if (!app) continue;
-    void onDetailInstall(app);
+// 批量云端安装：分批触发（每批 3 个），收集每个安装的结果并反馈失败项。
+// onDetailInstall 内部本身已串行排队，这里仅限制"同时发起"的并发，避免一次注入大量任务。
+const installCloudItems = async (items: SyncedAppListItem[]): Promise<void> => {
+  const BATCH_SIZE = 3;
+  let failedCount = 0;
+  for (let i = 0; i < items.length; i += BATCH_SIZE) {
+    const batch = items.slice(i, i + BATCH_SIZE);
+    const results = await Promise.allSettled(
+      batch.map(async (item) => {
+        const app = resolveCloudInstallCandidate(item, apps.value);
+        if (!app) return;
+        await onDetailInstall(app);
+      }),
+    );
+    failedCount += results.filter((r) => r.status === "rejected").length;
+  }
+  if (failedCount > 0) {
+    console.error(`批量云端安装中有 ${failedCount} 项失败`);
   }
   showRestoreModal.value = false;
 };
