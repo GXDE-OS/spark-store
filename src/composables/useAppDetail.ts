@@ -417,7 +417,12 @@ const checkScreenshotExists = async (
     await axiosInstance.head(url, { timeout: 3000, signal });
     screenshotExistenceCache.set(url, true);
     return true;
-  } catch {
+  } catch (err) {
+    // 请求被主动取消（用户快速切换/关闭详情触发 abort）时，不应把该 URL 误记为
+    // "不存在"污染缓存——否则同进程内再打开该应用会少显示图片，直到重启才恢复。
+    // 取消错误直接上抛，由 loadScreenshots 的 Promise.all reject 被 openDetail 吞掉，
+    // 既不写缓存也不覆盖 screenshots，后续成功的轮次（新 controller）会正确填充。
+    if (signal?.aborted) throw err;
     screenshotExistenceCache.set(url, false);
     return false;
   }
