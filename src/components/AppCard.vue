@@ -1,10 +1,24 @@
 <template>
   <div
     @click="openDetail"
-    class="group flex cursor-pointer gap-3 rounded-xl border border-slate-200/70 bg-white/90 p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-brand/50 hover:shadow-md dark:border-slate-800/60 dark:bg-slate-900/60"
+    class="group relative flex cursor-pointer transition hover:border-brand/50"
+    :class="
+      compact
+        ? 'gap-2 rounded-lg border border-slate-200/70 bg-white/90 p-2 shadow-none hover:shadow-sm dark:border-slate-800/60 dark:bg-slate-900/60'
+        : 'gap-3 rounded-xl border border-slate-200/70 bg-white/90 p-4 shadow-sm hover:-translate-y-0.5 hover:shadow-md dark:border-slate-800/60 dark:bg-slate-900/60'
+    "
   >
+    <!-- 排名徽标（排行榜/荣耀榜使用；前 3 名金/银/铜） -->
     <div
-      class="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-gradient-to-b from-slate-100 to-slate-200 shadow-inner dark:from-slate-800 dark:to-slate-700"
+      v-if="rank"
+      class="pointer-events-none absolute -left-1.5 -top-1.5 z-10 flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold shadow-md ring-2 ring-white transition-transform duration-200 group-hover:scale-110 dark:ring-slate-900"
+      :class="rankClass"
+    >
+      {{ rank }}
+    </div>
+    <div
+      class="flex shrink-0 items-center justify-center overflow-hidden bg-gradient-to-b from-slate-100 to-slate-200 shadow-inner dark:from-slate-800 dark:to-slate-700"
+      :class="compact ? 'h-9 w-9 rounded-md' : 'h-14 w-14 rounded-xl'"
     >
       <img
         ref="iconImg"
@@ -17,7 +31,8 @@
     <div class="flex flex-1 flex-col gap-1 overflow-hidden">
       <div class="flex items-center gap-2">
         <div
-          class="truncate text-base font-semibold text-slate-900 dark:text-white"
+          class="truncate font-semibold text-slate-900 dark:text-white"
+          :class="compact ? 'text-xs' : 'text-base'"
         >
           {{ app.name || "" }}
         </div>
@@ -43,12 +58,21 @@
             </span>
           </template>
         </div>
+        <span
+          v-if="downloadCount"
+          class="ml-auto shrink-0 text-[10px] text-slate-400 dark:text-slate-500"
+          >{{ formatDownloads(downloadCount) }}</span
+        >
       </div>
-      <div class="text-sm text-slate-500 dark:text-slate-400 leading-tight">
+      <div
+        class="leading-tight text-slate-500 dark:text-slate-400"
+        :class="compact ? 'text-xs' : 'text-sm'"
+      >
         {{ app.pkgname || "" }} · {{ app.version || "" }}
       </div>
       <div
-        class="truncate text-xs text-slate-500 dark:text-slate-400 leading-tight"
+        class="truncate leading-tight text-slate-500 dark:text-slate-400"
+        :class="compact ? 'text-[11px]' : 'text-xs'"
       >
         {{ description || "\u00A0" }}
       </div>
@@ -65,6 +89,12 @@ const props = defineProps<{
   app: App;
   // 是否显示来源标识（仅在混合模式下显示）
   showOrigin?: boolean;
+  // 紧凑模式（用于首页精选板块等空间受限区域）
+  compact?: boolean;
+  // 下载量（用于下载排行；>=0 时在标题行右侧显示）
+  downloadCount?: number;
+  // 排名（用于排行榜/荣耀榜，左上角显示徽标）
+  rank?: number;
 }>();
 
 const emit = defineEmits<{
@@ -109,6 +139,27 @@ const iconPath = computed(() => {
 const description = computed(() => {
   const more = props.app.more || "";
   return more.substring(0, 80) + (more.length > 80 ? "..." : "");
+});
+
+// 下载量格式化：>=1万 显示 "x.x万"
+const formatDownloads = (n?: number): string => {
+  if (!n || n <= 0) return "0";
+  if (n >= 10000) {
+    const wan = n / 10000;
+    return `${wan.toFixed(1).replace(/\.0$/, "")}万`;
+  }
+  return n.toLocaleString();
+};
+
+// 排名徽标配色（前 3 名金/银/铜，其余灰色）
+const rankClass = computed(() => {
+  if (props.rank === 1)
+    return "bg-amber-400 text-white shadow-amber-400/40";
+  if (props.rank === 2)
+    return "bg-slate-300 text-slate-700 shadow-slate-400/40";
+  if (props.rank === 3)
+    return "bg-amber-600 text-white shadow-amber-600/40";
+  return "bg-slate-500/90 text-white shadow-slate-500/30";
 });
 
 const openDetail = () => {

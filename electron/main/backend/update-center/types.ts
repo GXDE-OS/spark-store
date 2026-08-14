@@ -24,4 +24,8 @@ export interface UpdateCenterItem {
   migrationSource?: UpdateSource;
   migrationTarget?: UpdateSource;
   aptssVersion?: string;
+  // 更新发布时间（毫秒时间戳）；由上游解析填充，暂无则缺省
+  updateTime?: number;
+  // 是否被系统锁定（apt-mark hold）。被锁定的包默认不可批量选中，需用户单独开启「强制安装」
+  held?: boolean;
 }

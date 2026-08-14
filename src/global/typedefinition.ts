@@ -115,6 +115,9 @@ export interface App {
   sparkApp?: App; // Optional reference to the spark version
   apmApp?: App; // Optional reference to the apm version
   viewingOrigin?: "spark" | "apm"; // Currently viewed origin inside the app modal
+  forceViewingOrigin?: boolean; // true 表示 viewingOrigin 为父组件显式指定（如从已安装页按特定来源打开），优先级高于用户标签策略；未设置或 false 时由标签策略决定默认展示
+  origins?: Array<"spark" | "apm">; // 实际安装来源集合（同时以 APM 与 Spark 安装时含两项）
+  downloadCount?: number; // 下载量（用于下载排行，由 download-times.txt 解析）
 }
 
 export interface UpdateAppItem {
@@ -153,6 +156,10 @@ export interface UpdateCenterItem {
   migrationSource?: UpdateSource;
   migrationTarget?: UpdateSource;
   aptssVersion?: string;
+  // 更新发布时间（毫秒时间戳），用于列表显示「X天前」；暂无数据时前端降级为「—」
+  updateTime?: number;
+  // 是否被系统锁定（apt-mark hold）。被锁定项默认不可批量选中，需用户单独开启强制安装
+  held?: boolean;
 }
 
 export interface UpdateCenterTaskState {
@@ -170,6 +177,8 @@ export interface UpdateCenterTaskState {
 export interface UpdateCenterStartTask {
   taskKey: string;
   id: number;
+  // 强制安装被系统锁定（apt-mark hold）的包
+  forceHeld?: boolean;
 }
 
 export interface UpdateCenterSnapshot {
@@ -223,18 +232,19 @@ export interface CategoryInfo {
   zh: string;
   origins?: string[];
   origin?: "spark" | "apm";
-  [k: string]: unknown;
+  // 保留扩展点，避免使用宽泛的索引签名削弱类型安全
+  extra?: Record<string, unknown>;
 }
 
 export interface HomeLink {
   name: string;
   url: string;
-  icon: string;
+  // 数据源（homelinks.json）并不提供 icon 字段，图片统一由 imgUrl 提供，故设为可选
+  icon?: string;
   more?: string;
   imgUrl?: string;
   type?: string;
   origin?: "spark" | "apm";
-  [k: string]: unknown;
 }
 
 export interface SidebarEntry {

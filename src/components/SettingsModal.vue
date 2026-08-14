@@ -118,6 +118,51 @@
               />
             </button>
           </div>
+
+          <!-- 标签优先显示策略 -->
+          <div
+            class="rounded-2xl border border-slate-200/60 bg-slate-50/50 px-4 py-4 dark:border-slate-800/60 dark:bg-slate-800/50"
+          >
+            <div class="flex items-start gap-3">
+              <div
+                class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400"
+              >
+                <i class="fas fa-tags"></i>
+              </div>
+              <div class="min-w-0 flex-1">
+                <p
+                  class="text-sm font-medium text-slate-800 dark:text-slate-200"
+                >
+                  标签优先显示策略
+                </p>
+                <p class="text-xs text-slate-500 dark:text-slate-400">
+                  进入应用详情页时默认展示的来源标签
+                </p>
+                <div
+                  class="mt-3 inline-flex w-full overflow-hidden rounded-lg border border-slate-200 dark:border-slate-700"
+                  role="radiogroup"
+                  aria-label="标签优先显示策略"
+                >
+                  <button
+                    v-for="opt in strategyOptions"
+                    :key="opt.value"
+                    type="button"
+                    role="radio"
+                    :aria-checked="tagPriorityStrategy === opt.value"
+                    class="flex-1 px-2 py-1.5 text-xs font-medium transition-colors"
+                    :class="
+                      tagPriorityStrategy === opt.value
+                        ? 'bg-brand text-white'
+                        : 'bg-white text-slate-500 hover:bg-slate-100 dark:bg-slate-700 dark:text-slate-400 dark:hover:bg-slate-600'
+                    "
+                    @click="selectStrategy(opt.value)"
+                  >
+                    {{ opt.label }}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
         <!-- 底部提示 -->
@@ -135,6 +180,11 @@
 
 <script setup lang="ts">
 import { ref, watch, onMounted } from "vue";
+import {
+  getTagPriorityStrategy,
+  setTagPriorityStrategy,
+  type TagPriorityStrategy,
+} from "../global/tagPriority";
 
 const props = defineProps<{
   show: boolean;
@@ -148,6 +198,26 @@ interface Settings {
   enableUpdateCheck: boolean;
   enableCreateDesktop: boolean;
 }
+
+// 标签优先显示策略选项（默认选中「自动选择」）
+const strategyOptions: Array<{ value: TagPriorityStrategy; label: string }> = [
+  { value: "auto", label: "自动选择" },
+  { value: "spark", label: "Spark 优先" },
+  { value: "apm", label: "APM 优先" },
+];
+
+const tagPriorityStrategy = ref<TagPriorityStrategy>("auto");
+
+// 加载标签优先显示策略（从持久化读取）
+const loadTagPriority = () => {
+  tagPriorityStrategy.value = getTagPriorityStrategy();
+};
+
+// 选择并保存策略
+const selectStrategy = (value: TagPriorityStrategy) => {
+  tagPriorityStrategy.value = value;
+  setTagPriorityStrategy(value);
+};
 
 const settings = ref<Settings>({
   enableUpdateCheck: true,
@@ -208,6 +278,7 @@ watch(
   (newVal) => {
     if (newVal) {
       loadSettings();
+      loadTagPriority();
     }
   },
 );
@@ -215,6 +286,7 @@ watch(
 onMounted(() => {
   if (props.show) {
     loadSettings();
+    loadTagPriority();
   }
 });
 </script>

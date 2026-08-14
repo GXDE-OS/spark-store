@@ -219,10 +219,29 @@ window.ipcRenderer.on("install-log", (_event, log: InstallLog) => {
 window.ipcRenderer.on("install-complete", (_event, log: DownloadResult) => {
   const downloadObj = downloads.value.find((d) => d.id === log.id);
   if (downloadObj) {
+    // 更新中心来源的任务用「更新」语义，其余（普通安装）用「安装」语义，
+    // 避免把安装结果误报为「下载完成」。
+    const isUpdate = (downloadObj.source ?? "").toLowerCase().includes("update");
+    const doneLabel = isUpdate ? "更新完成" : "安装完成";
+    const failVerb = isUpdate ? "更新失败" : "安装失败";
+
     if (log.success) {
       downloadObj.status = "completed";
+      downloadObj.logs.push({ time: Date.now(), message: doneLabel });
     } else {
       downloadObj.status = "failed";
+      // 将失败原因写入日志，避免 UI 停在"正在获取 Metalink"等中间日志后突兀结束
+      let reason = "未知错误";
+      try {
+        const parsed = JSON.parse(log.message);
+        reason = parsed?.message || reason;
+      } catch {
+        reason = log.message || reason;
+      }
+      downloadObj.logs.push({
+        time: Date.now(),
+        message: `${failVerb}: ${reason}`,
+      });
     }
   }
 });

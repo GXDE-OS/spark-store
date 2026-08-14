@@ -1,51 +1,5 @@
 <template>
   <div class="flex h-full flex-col gap-6">
-    <div class="flex items-start justify-between gap-3">
-      <div ref="accountMenuRoot" class="relative min-w-0 flex-1">
-        <button
-          type="button"
-          class="flex w-full min-w-0 items-center gap-2 rounded-2xl p-1 text-left transition hover:bg-slate-100 dark:hover:bg-slate-800"
-          :aria-label="accountLabel"
-          @click="handleAccountClick"
-        >
-          <img
-            :src="amberLogo"
-            alt="星火应用商店"
-            class="h-11 w-11 shrink-0 rounded-2xl bg-white/70 p-2 shadow-sm ring-1 ring-slate-900/5 dark:bg-slate-800"
-          />
-          <div data-testid="account-text" class="flex min-w-0 flex-col">
-            <span
-              class="truncate text-base font-semibold text-slate-900 dark:text-white"
-              >{{ accountLabel }}</span
-            >
-            <span
-              class="truncate text-[10px] uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500"
-              >社区版</span
-            >
-          </div>
-        </button>
-        <AccountQuickMenu
-          v-if="currentUser && showAccountMenu"
-          @open-user-management="emitAccountAction('open-user-management')"
-          @open-favorites="emitAccountAction('open-favorites')"
-          @open-forum="emitAccountAction('open-forum')"
-          @edit-profile="emitAccountAction('edit-profile')"
-          @logout="emitAccountAction('logout')"
-        />
-      </div>
-      <div class="flex items-center gap-1">
-        <ThemeToggle :theme-mode="themeMode" @toggle="toggleTheme" />
-        <button
-          type="button"
-          class="inline-flex h-10 w-10 items-center justify-center rounded-2xl text-slate-400 hover:bg-slate-100 lg:hidden dark:hover:bg-slate-800"
-          @click="$emit('close')"
-          title="关闭侧边栏"
-        >
-          <i class="fas fa-times"></i>
-        </button>
-      </div>
-    </div>
-
     <div class="flex-1 space-y-1 overflow-y-auto scrollbar-muted px-1 py-1">
       <button
         type="button"
@@ -69,6 +23,29 @@
           class="ml-auto rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-500 dark:bg-slate-800/70 dark:text-slate-300"
           >{{ categoryCounts.all || 0 }}</span
         >
+      </button>
+
+      <!-- 排行榜 / 荣耀榜：暂时隐藏入口（代码保留，后续按需恢复） -->
+      <button
+        v-if="false"
+        type="button"
+        class="sidebar-tab"
+        :class="{ 'sidebar-tab-active': activeTab === 'ranking' }"
+        @click="selectTab('ranking')"
+      >
+        <span class="sidebar-tab-icon"><i class="fas fa-trophy"></i></span>
+        <span class="sidebar-tab-label">排行榜</span>
+      </button>
+
+      <button
+        v-if="false"
+        type="button"
+        class="sidebar-tab"
+        :class="{ 'sidebar-tab-active': activeTab === 'honor' }"
+        @click="selectTab('honor')"
+      >
+        <span class="sidebar-tab-icon"><i class="fas fa-medal"></i></span>
+        <span class="sidebar-tab-label">荣耀榜</span>
       </button>
 
       <div
@@ -129,10 +106,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from "vue";
-import AccountQuickMenu from "./AccountQuickMenu.vue";
-import ThemeToggle from "./ThemeToggle.vue";
-import amberLogo from "../assets/imgs/spark-store.svg";
+import { computed } from "vue";
 import type { SidebarEntry, SparkUser } from "../global/typedefinition";
 
 const props = defineProps<{
@@ -162,50 +136,6 @@ const emit = defineEmits<{
   (e: "logout"): void;
 }>();
 
-const showAccountMenu = ref(false);
-const accountMenuRoot = ref<HTMLElement | null>(null);
-
-const accountLabel = computed(() => "星火应用商店");
-
-const handleAccountClick = () => {
-  // 登录功能暂时关闭
-};
-
-const handleDocumentPointerDown = (event: MouseEvent) => {
-  if (!showAccountMenu.value) return;
-  const target = event.target;
-  if (target instanceof Node && accountMenuRoot.value?.contains(target)) return;
-  showAccountMenu.value = false;
-};
-
-onMounted(() => {
-  document.addEventListener("mousedown", handleDocumentPointerDown);
-});
-
-onUnmounted(() => {
-  document.removeEventListener("mousedown", handleDocumentPointerDown);
-});
-
-const emitAccountAction = (
-  action:
-    | "open-user-management"
-    | "open-favorites"
-    | "open-forum"
-    | "edit-profile"
-    | "logout",
-) => {
-  showAccountMenu.value = false;
-  if (action === "open-user-management") emit("open-user-management");
-  else if (action === "open-favorites") emit("open-favorites");
-  else if (action === "open-forum") emit("open-forum");
-  else if (action === "edit-profile") emit("edit-profile");
-  else emit("logout");
-};
-
-const toggleTheme = () => {
-  emit("toggle-theme");
-};
-
 const canManageApps = computed(() => {
   return (
     (props.storeFilter !== "apm" && props.sparkAvailable) ||
@@ -216,12 +146,10 @@ const canManageApps = computed(() => {
 const canOpenUpdateCenter = canManageApps;
 
 const selectTab = (tab: string) => {
-  showAccountMenu.value = false;
   emit("select-tab", tab);
 };
 
 const emitSidebarAction = (action: "list" | "update" | "submit") => {
-  showAccountMenu.value = false;
   if (action === "list") emit("list");
   else if (action === "update") emit("update");
   else emit("submit");

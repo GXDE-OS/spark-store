@@ -1,100 +1,153 @@
 <template>
   <label
-    class="flex flex-col gap-4 rounded-2xl border border-slate-200/70 bg-white/90 p-4 shadow-sm dark:border-slate-800/70 dark:bg-slate-900/70"
+    class="relative flex items-center gap-3 rounded-xl border p-2.5 shadow-sm transition"
+    :class="
+      item.ignored === true
+        ? 'border-slate-200/50 bg-slate-50/60 opacity-70 dark:border-slate-800/50 dark:bg-slate-900/40'
+        : item.held === true
+          ? 'border-amber-300/70 bg-amber-50/70 dark:border-amber-500/30 dark:bg-amber-500/10'
+          : 'border-slate-200/70 bg-white/90 dark:border-slate-800/70 dark:bg-slate-900/70'
+    "
   >
-    <div class="flex items-start gap-3">
-      <input
-        type="checkbox"
-        class="mt-1 h-4 w-4 rounded border-slate-300 accent-brand focus:ring-brand"
-        :checked="selected"
-        :disabled="item.ignored === true"
-        @change="$emit('toggle-selection')"
+    <input
+      type="checkbox"
+      class="h-4 w-4 shrink-0 rounded border-slate-300 accent-brand focus:ring-brand"
+      :checked="selected"
+      :disabled="isSelectionLocked"
+      @change="$emit('toggle-selection')"
+    />
+
+    <div
+      class="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-md bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-500"
+      :class="item.ignored === true || item.held === true ? 'opacity-60' : ''"
+    >
+      <img
+        :src="iconSrc"
+        :alt="`${item.displayName} 图标`"
+        class="h-full w-full object-cover"
+        @error="handleIconError"
       />
-      <div
-        class="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-500"
-      >
-        <img
-          :src="iconSrc"
-          :alt="`${item.displayName} 图标`"
-          class="h-full w-full object-cover"
-          @error="handleIconError"
-        />
-      </div>
-      <div class="min-w-0 flex-1">
-        <div class="flex flex-wrap items-center gap-2">
-          <p class="font-semibold text-slate-900 dark:text-white">
-            {{ item.displayName }}
-          </p>
-          <span
-            class="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-200"
-          >
-            {{ sourceLabel }}
-          </span>
-          <span
-            v-if="item.isMigration"
-            class="rounded-full bg-brand/10 px-2.5 py-1 text-xs font-semibold text-brand"
-          >
-            将迁移到 APM
-          </span>
-          <span
-            v-if="item.ignored === true"
-            class="rounded-full bg-slate-200 px-2.5 py-1 text-xs font-semibold text-slate-500 dark:bg-slate-800 dark:text-slate-300"
-          >
-            已忽略
-          </span>
-        </div>
-        <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
-          {{ item.packageName }} · 当前 {{ item.currentVersion }} · 更新至
-          {{ item.newVersion }}
-        </p>
+    </div>
+
+    <div class="min-w-0 flex-1">
+      <div class="flex flex-wrap items-center gap-2">
         <p
-          v-if="item.ignored === true"
-          class="mt-2 text-xs font-medium text-slate-500 dark:text-slate-400"
+          class="truncate font-semibold"
+          :class="
+            item.ignored === true
+              ? 'text-sm text-slate-400 dark:text-slate-500'
+              : 'text-sm text-slate-900 dark:text-white'
+          "
         >
-          已忽略的更新不会加入本次任务。
+          {{ item.displayName }}
         </p>
+        <span
+          class="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-200"
+        >
+          {{ sourceLabel }}
+        </span>
+        <span
+          v-if="item.ignored === true"
+          class="shrink-0 rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-semibold text-slate-500 dark:bg-slate-800 dark:text-slate-300"
+        >
+          已忽略
+        </span>
+        <span
+          v-else-if="item.held === true && !forced"
+          class="shrink-0 rounded-full bg-amber-200 px-2 py-0.5 text-[10px] font-semibold text-amber-700 dark:bg-amber-500/20 dark:text-amber-200"
+        >
+          已锁定
+        </span>
+        <span
+          v-else-if="item.held === true && forced"
+          class="shrink-0 rounded-full bg-amber-500 px-2 py-0.5 text-[10px] font-semibold text-white dark:bg-amber-500"
+        >
+          将强制
+        </span>
       </div>
-      <div
-        v-if="task"
-        class="text-right text-sm font-semibold text-slate-600 dark:text-slate-300"
-      >
-        <p>{{ statusLabel }}</p>
-        <p v-if="showProgress" class="mt-1">{{ progressText }}</p>
-      </div>
+      <p class="mt-0.5 truncate text-xs text-slate-500 dark:text-slate-400">
+        {{ item.packageName }} · {{ item.currentVersion }} →
+        {{ item.newVersion }}
+      </p>
     </div>
 
-    <div class="flex justify-end">
-      <button
-        v-if="item.ignored === true"
-        type="button"
-        class="inline-flex items-center gap-2 rounded-2xl border border-slate-300/80 px-3 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
-        aria-label="取消忽略"
-        @click.stop="$emit('unignore-item')"
-      >
-        <i class="fas fa-rotate-left"></i>
-        取消忽略
-      </button>
-      <button
-        v-else
-        type="button"
-        class="inline-flex items-center gap-2 rounded-2xl border border-amber-300/80 px-3 py-2 text-sm font-semibold text-amber-700 transition hover:bg-amber-50 dark:border-amber-500/40 dark:text-amber-300 dark:hover:bg-amber-500/10"
-        aria-label="忽略更新"
-        @click.stop="$emit('ignore-item')"
-      >
-        <i class="fas fa-eye-slash"></i>
-        忽略更新
-      </button>
+    <div
+      v-if="task"
+      class="shrink-0 text-right text-xs font-semibold text-slate-600 dark:text-slate-300"
+    >
+      <p>{{ statusLabel }}</p>
+      <p v-if="showProgress" class="mt-0.5">{{ progressText }}</p>
     </div>
 
-    <div v-if="showProgress" class="space-y-2">
-      <div
-        class="h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800"
+    <div
+      v-if="item.ignored !== true && !task"
+      class="flex shrink-0 flex-col items-end gap-0.5"
+    >
+      <span class="text-[11px] font-semibold text-brand dark:text-amber-300">{{
+        timeLabel
+      }}</span>
+      <span class="text-[10px] text-slate-400">{{ sizeLabel }}</span>
+    </div>
+    <div
+      v-else-if="!task"
+      class="flex shrink-0 flex-col items-end gap-0.5"
+    >
+      <span class="text-[11px] font-semibold text-slate-400">{{
+        timeLabel
+      }}</span>
+      <span class="text-[10px] text-slate-400">{{ sizeLabel }}</span>
+    </div>
+
+    <!-- 强制安装开关：仅对被系统锁定（held）的包显示 -->
+    <div
+      v-if="item.held === true && !task"
+      class="flex shrink-0 items-center gap-1"
+      :title="forced ? '已开启强制安装' : '强制安装被锁定的软件'"
+    >
+      <button
+        type="button"
+        class="relative inline-flex h-[18px] w-[34px] items-center rounded-full transition"
+        :class="forced ? 'bg-brand' : 'bg-slate-300 dark:bg-slate-600'"
+        role="switch"
+        :aria-checked="forced"
+        aria-label="强制安装"
+        @click.stop="$emit('toggle-force')"
       >
-        <div
-          class="h-full rounded-full bg-gradient-to-r from-brand to-brand-dark"
-          :style="progressStyle"
-        ></div>
-      </div>
+        <span
+          class="inline-block h-3.5 w-3.5 transform rounded-full bg-white transition"
+          :class="forced ? 'translate-x-[16px]' : 'translate-x-[2px]'"
+        ></span>
+      </button>
+      <span class="text-[10px] text-slate-400">强制</span>
+    </div>
+
+    <button
+      v-if="item.ignored === true"
+      type="button"
+      class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-slate-300/80 text-slate-500 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+      aria-label="取消忽略"
+      @click.stop="$emit('unignore-item')"
+    >
+      <i class="fas fa-rotate-left text-xs"></i>
+    </button>
+    <button
+      v-else
+      type="button"
+      class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-amber-600 transition hover:bg-amber-50 dark:text-amber-300 dark:hover:bg-amber-500/10"
+      aria-label="忽略更新"
+      @click.stop="$emit('ignore-item')"
+    >
+      <i class="fas fa-eye-slash text-xs"></i>
+    </button>
+
+    <div
+      v-if="showProgress"
+      class="absolute inset-x-0 bottom-0 h-1 overflow-hidden rounded-b-xl bg-slate-200 dark:bg-slate-800"
+    >
+      <div
+        class="h-full rounded-full bg-gradient-to-r from-brand to-brand-dark"
+        :style="progressStyle"
+      ></div>
     </div>
   </label>
 </template>
@@ -111,6 +164,8 @@ const props = defineProps<{
   item: UpdateCenterItem;
   task?: UpdateCenterTaskState;
   selected: boolean;
+  // 是否已开启强制安装（仅对 held 项有意义）
+  forced?: boolean;
 }>();
 
 const PLACEHOLDER_ICON =
@@ -121,7 +176,13 @@ defineEmits<{
   (e: "toggle-selection"): void;
   (e: "ignore-item"): void;
   (e: "unignore-item"): void;
+  (e: "toggle-force"): void;
 }>();
+
+// 被锁定且未强制时，复选框禁用（与「已忽略」一样不可被选中）
+const isSelectionLocked = computed(
+  () => props.item.ignored === true || (props.item.held === true && !props.forced),
+);
 
 const normalizeIconSrc = (icon: string): string => {
   if (/^[a-z]+:\/\//i.test(icon)) {
@@ -185,4 +246,27 @@ const showProgress = computed(() => {
 
 const progressText = computed(() => `${props.task?.progress ?? 0}%`);
 const progressStyle = computed(() => ({ width: progressText.value }));
+
+// 相对时间（如「3天前」），无数据降级为 「—」
+const timeLabel = computed(() => {
+  const t = props.item.updateTime;
+  if (!t || typeof t !== "number") return "—";
+  const diff = Date.now() - t;
+  const day = 24 * 60 * 60 * 1000;
+  if (diff < 0) return "刚刚";
+  if (diff < day) return "今天";
+  if (diff < 2 * day) return "昨天";
+  if (diff < 30 * day) return `${Math.floor(diff / day)}天前`;
+  if (diff < 365 * day) return `${Math.floor(diff / (30 * day))}个月前`;
+  return `${Math.floor(diff / (365 * day))}年前`;
+});
+
+// 大小格式化（如 45 MB / 1.2 GB）
+const sizeLabel = computed(() => {
+  const size = props.item.size;
+  if (!size || size <= 0) return "—";
+  const mb = size / (1024 * 1024);
+  if (mb >= 1024) return `${(mb / 1024).toFixed(1)} GB`;
+  return `${Math.round(mb)} MB`;
+});
 </script>

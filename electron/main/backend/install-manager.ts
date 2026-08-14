@@ -12,6 +12,26 @@ import { findExecutable, SUPER_USER_COMMAND_CANDIDATES } from "./superuser";
 
 const logger = pino({ name: "install-manager" });
 
+// 包名白名单：仅允许合法包名字符，杜绝命令注入（spawn 用 shell:false 仍须校验）。
+const PKGNAME_PATTERN = /^[a-zA-Z0-9._+-]+$/;
+
+// 解析并校验应用类 IPC 的 payload（可能是旧版字符串或对象）。
+// 返回规范化后的 { pkgname, origin }，pkgname 非法时返回 null。
+const parseAppPayload = (
+  payload: unknown,
+): { pkgname: string; origin: "spark" | "apm" } | null => {
+  if (typeof payload === "string") {
+    if (!PKGNAME_PATTERN.test(payload)) return null;
+    return { pkgname: payload, origin: "spark" };
+  }
+  if (typeof payload !== "object" || payload === null) return null;
+  const p = payload as Record<string, unknown>;
+  const pkgname = typeof p.pkgname === "string" ? p.pkgname : "";
+  if (!PKGNAME_PATTERN.test(pkgname)) return null;
+  const origin: "spark" | "apm" = p.origin === "apm" ? "apm" : "spark";
+  return { pkgname, origin };
+};
+
 const getStoreFilterFromArgv = (): "spark" | "apm" | "both" => {
   const argv = process.argv;
   const noApm = argv.includes("--no-apm");
@@ -30,6 +50,18 @@ const isOriginEnabled = (
   return storeFilter === "both" || storeFilter === origin;
 };
 
+export interface QueueInstallPayload {
+  id: number;
+  pkgname: string;
+  metalinkUrl?: string;
+  filename?: string;
+  origin?: "spark" | "apm";
+  upgradeOnly?: boolean;
+  retry?: boolean;
+  // 强制安装被系统锁定（apt-mark hold）的包：spark 源安装时追加 --allow-change-held-packages
+  forceHeld?: boolean;
+}
+
 type InstallTask = {
   id: number;
   pkgname: string;
@@ -44,6 +76,7 @@ type InstallTask = {
   origin: "spark" | "apm";
   upgradeOnly?: boolean;
   cancelled?: boolean;
+  forceHeld?: boolean;
   phase: "queued-download" | "downloading" | "queued-install" | "installing";
 };
 
@@ -263,23 +296,153 @@ const parseUpgradableList = (output: string) => {
   return apps;
 };
 
-// Listen for download requests from renderer process
-ipcMain.on("queue-install", async (event, download_json) => {
-  const download =
-    typeof download_json === "string"
-      ? JSON.parse(download_json)
-      : download_json;
-  const { id, pkgname, metalinkUrl, filename, origin, upgradeOnly } =
-    download || {};
+/**
+ * 将任务加入安装/下载队列。被 IPC 监听与更新中心等内部模块共享使用。
+ * 入队前会执行包名、文件名、metalinkUrl 的校验，并检查重复任务。
+ * @returns 是否成功入队
+ */
+export const addInstallTask = async (
+  download: QueueInstallPayload,
+  sender: WebContents | null,
+): Promise<boolean> => {
+  const webContents = sender;
+  const { id, pkgname, filename, origin, upgradeOnly, forceHeld } = download;
+  // metalinkUrl 可能在下方校验时被规范化（折叠 ./ 段），故用 let
+  let { metalinkUrl } = download;
 
   if (!id || !pkgname) {
-    logger.warn("passed arguments missing id or pkgname");
-    return;
+    logger.warn("addInstallTask: passed arguments missing id or pkgname");
+    webContents?.send("install-complete", {
+      id: id ?? 0,
+      success: false,
+      time: Date.now(),
+      exitCode: -1,
+      message: JSON.stringify({
+        message: "任务参数缺失 id 或 pkgname",
+        stdout: "",
+        stderr: "",
+      }),
+    });
+    return false;
+  }
+
+  // 包名/文件名白名单校验：防止路径遍历（如 ../../）或非法字符进入下载目录与安装命令构建
+  if (!PKGNAME_PATTERN.test(pkgname)) {
+    logger.warn(`addInstallTask invalid pkgname: ${pkgname}`);
+    webContents?.send("install-complete", {
+      id,
+      success: false,
+      time: Date.now(),
+      exitCode: -1,
+      message: JSON.stringify({
+        message: `包名包含非法字符: ${pkgname}`,
+        stdout: "",
+        stderr: "",
+      }),
+    });
+    return false;
+  }
+  if (filename && !PKGNAME_PATTERN.test(filename)) {
+    logger.warn(`addInstallTask invalid filename: ${filename}`);
+    webContents?.send("install-complete", {
+      id,
+      success: false,
+      time: Date.now(),
+      exitCode: -1,
+      message: JSON.stringify({
+        message: `文件名包含非法字符: ${filename}`,
+        stdout: "",
+        stderr: "",
+      }),
+    });
+    return false;
+  }
+
+  // metalinkUrl 来自渲染端（由目录 filename / 主进程解析的 downloadUrl 拼成）。
+  // 纵深防御：仅允许 https 协议、官方域名（含任意子域 *.spark-app.store）的绝对 URL，
+  // 或以 "/" 开头的相对路径（后续由 axios baseURL 拼接官方域名）。
+  // 先解析并规范化 path 中的 "./" 段（浏览器/Node 实际请求时会自动折叠，此处显式处理，
+  // 避免把合法的 "./" 误判为非法），再拒绝 ".." 路径遍历越界与外部域名（防 SSRF）。
+  if (metalinkUrl) {
+    let parsed: URL;
+    try {
+      // 相对路径以官方域为基进行解析
+      parsed = new URL(metalinkUrl, "https://erotica.spark-app.store");
+    } catch {
+      logger.warn(`addInstallTask invalid metalinkUrl (parse failed): ${metalinkUrl}`);
+      webContents?.send("install-complete", {
+        id,
+        success: false,
+        time: Date.now(),
+        exitCode: -1,
+        message: JSON.stringify({
+          message: `Metalink URL 不合法: ${metalinkUrl}`,
+          stdout: "",
+          stderr: "",
+        }),
+      });
+      return false;
+    }
+
+    if (parsed.protocol !== "https:") {
+      logger.warn(`addInstallTask invalid metalinkUrl (not https): ${metalinkUrl}`);
+      webContents?.send("install-complete", {
+        id,
+        success: false,
+        time: Date.now(),
+        exitCode: -1,
+        message: JSON.stringify({
+          message: `Metalink URL 协议不合法: ${metalinkUrl}`,
+          stdout: "",
+          stderr: "",
+        }),
+      });
+      return false;
+    }
+
+    // 仅允许官方域名（主域 spark-app.store 及其任意子域，如 erotica/d/store 等）
+    const host = parsed.hostname;
+    const isOfficial =
+      host === "spark-app.store" || host.endsWith(".spark-app.store");
+    if (!isOfficial) {
+      logger.warn(`addInstallTask invalid metalinkUrl (host not official): ${host}`);
+      webContents?.send("install-complete", {
+        id,
+        success: false,
+        time: Date.now(),
+        exitCode: -1,
+        message: JSON.stringify({
+          message: `Metalink URL 域名不合法: ${metalinkUrl}`,
+          stdout: "",
+          stderr: "",
+        }),
+      });
+      return false;
+    }
+
+    // 规范化 path：折叠 "." / ".." 段，拒绝越界路径遍历
+    const normalizedPath = path.posix.normalize(parsed.pathname);
+    if (normalizedPath.split("/").includes("..")) {
+      logger.warn(`addInstallTask invalid metalinkUrl (path traversal): ${metalinkUrl}`);
+      webContents?.send("install-complete", {
+        id,
+        success: false,
+        time: Date.now(),
+        exitCode: -1,
+        message: JSON.stringify({
+          message: `Metalink URL 含路径遍历: ${metalinkUrl}`,
+          stdout: "",
+          stderr: "",
+        }),
+      });
+      return false;
+    }
+    parsed.pathname = normalizedPath;
+    // 用规范化后的 URL 继续（去除 "./" 段，与实际请求行为一致）
+    metalinkUrl = parsed.href;
   }
 
   logger.info(`收到下载任务: ${id}, 软件包名称: ${pkgname}, 来源: ${origin}`);
-
-  const webContents = event.sender;
 
   // 避免重复添加同一任务（检查 pkgname + origin），但允许重试下载
   if (!download.retry) {
@@ -287,12 +450,12 @@ ipcMain.on("queue-install", async (event, download_json) => {
       (t) => t.pkgname === pkgname && t.origin === origin,
     );
     if (existingTask) {
-      webContents.send("install-log", {
+      webContents?.send("install-log", {
         id,
         time: Date.now(),
         message: `任务 ${pkgname} (${origin}) 已在列表中，忽略重复添加`,
       });
-      webContents.send("install-complete", {
+      webContents?.send("install-complete", {
         id,
         success: false,
         time: Date.now(),
@@ -303,20 +466,25 @@ ipcMain.on("queue-install", async (event, download_json) => {
           stderr: "",
         }),
       });
-      return;
+      return false;
     }
   }
   const superUserCmd = await checkSuperUserCommand();
   let execCommand = "";
-  const execParams = [];
-  const downloadDir = `/tmp/spark-store/download/${pkgname}`;
+  const execParams: string[] = [];
+  const downloadDir = path.join(
+    os.tmpdir(),
+    `spark-store-${process.pid}`,
+    "download",
+    pkgname,
+  );
 
   // APM 应用：若本机没有 apm 命令，通知前端弹窗引导安装 APM
   if (origin === "apm") {
     const hasApm = await checkApmAvailable();
     if (!hasApm) {
-      webContents.send("trigger-apm-install-dialog");
-      webContents.send("install-complete", {
+      webContents?.send("trigger-apm-install-dialog");
+      webContents?.send("install-complete", {
         id,
         success: false,
         time: Date.now(),
@@ -327,7 +495,7 @@ ipcMain.on("queue-install", async (event, download_json) => {
           stderr: "",
         }),
       });
-      return;
+      return false;
     }
   }
 
@@ -336,13 +504,29 @@ ipcMain.on("queue-install", async (event, download_json) => {
     if (superUserCmd) execParams.push(SHELL_CALLER_PATH);
 
     if (metalinkUrl && filename) {
-      execParams.push(
-        "ssinstall",
-        `${downloadDir}/${filename}`,
-        "--delete-after-install",
-        "--no-create-desktop-entry",
-        "--native",
-      );
+      const localDeb = `${downloadDir}/${filename}`;
+      if (forceHeld) {
+        // 强制安装被系统锁定（hold）的包：合并为单次免密 pkexec（复用商店已有的
+        // shell-caller 提权配置），由 shell-caller 的 force-ssinstall 分支内部完成
+        // apt-mark unhold → ssinstall 本地 .deb → apt-mark hold，避免单独 pkexec apt-mark
+        // 触发额外权限框（apt-mark 不在 policykit 免密 exec.path 内）。
+        execParams.push(
+          "force-ssinstall",
+          pkgname,
+          localDeb,
+          "--delete-after-install",
+          "--no-create-desktop-entry",
+        );
+      } else {
+        // 本地 .deb 文件模式：已下载的 .deb 通过 ssinstall 安装。
+        execParams.push(
+          "ssinstall",
+          localDeb,
+          "--delete-after-install",
+          "--no-create-desktop-entry",
+          "--native",
+        );
+      }
     } else {
       execParams.push(
         "ssinstall",
@@ -360,7 +544,14 @@ ipcMain.on("queue-install", async (event, download_json) => {
     execParams.push("apm");
 
     if (metalinkUrl && filename) {
-      execParams.push("ssinstall", `${downloadDir}/${filename}`);
+      // 防御性深度校验：即便 PKGNAME_PATTERN 已挡掉路径遍历字符，仍用 path.basename
+      // 确保 filename 为纯文件名、不含目录分量（belt-and-suspenders）
+      const safeFilename = path.basename(filename);
+      if (safeFilename !== filename) {
+        logger.warn(`ssinstall filename contains path traversal: ${filename}`);
+        return false;
+      }
+      execParams.push("ssinstall", path.join(downloadDir, safeFilename));
     } else {
       execParams.push("install", "-y", pkgname);
     }
@@ -379,15 +570,38 @@ ipcMain.on("queue-install", async (event, download_json) => {
     filename,
     origin: origin || "apm",
     upgradeOnly: Boolean(upgradeOnly),
+    forceHeld: Boolean(forceHeld),
     phase: metalinkUrl ? "queued-download" : "queued-install",
   };
   tasks.set(id, task);
   processNextDownload();
   processNextInstall();
+  return true;
+};
+
+// Listen for download requests from renderer process
+ipcMain.on("queue-install", async (event, download_json) => {
+  let download: unknown;
+  try {
+    download =
+      typeof download_json === "string"
+        ? JSON.parse(download_json)
+        : download_json;
+  } catch (err) {
+    logger.error({ err }, "queue-install: invalid JSON payload, ignoring task");
+    return;
+  }
+
+  await addInstallTask(download as QueueInstallPayload, event.sender);
 });
 
 // Cancel Handler
 ipcMain.on("cancel-install", (event, id) => {
+  // 防御性输入校验：id 应为整数，避免 Map 以非预期键查找导致逻辑异常
+  if (typeof id !== "number" || !Number.isInteger(id)) {
+    logger.warn(`cancel-install: invalid id type: ${typeof id}`);
+    return;
+  }
   const task = tasks.get(id);
   if (!task) return;
 
@@ -420,9 +634,22 @@ ipcMain.on("cancel-install", (event, id) => {
   const isRunning = task.phase === "downloading" || task.phase === "installing";
 
   if (isRunning) {
-    // 运行中的任务：终止进程，由对应的阶段处理器在 finally 中清理计数器与队列
-    task.download_process?.kill();
-    task.install_process?.kill();
+    // 运行中的任务：先发 SIGTERM 优雅终止；若 5s 内未退出，降级 SIGKILL 强制杀除，
+    // 避免子进程忽略 SIGTERM 变成僵尸进程（改进项：进程取消需 SIGKILL 降级处理）。
+    const forceKill = (proc: ChildProcess | null, label: string) => {
+      if (!proc || proc.killed) return;
+      proc.kill("SIGTERM");
+      const pid = proc.pid;
+      setTimeout(() => {
+        if (proc && !proc.killed) {
+          logger.warn(`任务 ${id} 的 ${label} 进程(${pid}) 未响应 SIGTERM，发送 SIGKILL`);
+          proc.kill("SIGKILL");
+        }
+      }, 5000);
+    };
+    forceKill(task.download_process, "下载");
+    forceKill(task.install_process, "安装");
+    // 由对应的阶段处理器在 finally 中清理计数器与队列
   } else {
     // 排队中的任务（未开始执行）：直接清理并调度
     tasks.delete(id);
@@ -499,20 +726,30 @@ async function runDownloadPhase(task: InstallTask) {
 
       sendLog(`正在获取 Metalink 文件: ${task.metalinkUrl}`);
 
-      const response = await axios.get(task.metalinkUrl, {
-        baseURL: "https://erotica.spark-app.store",
-        responseType: "stream",
-      });
+      let response: Awaited<ReturnType<typeof axios.get>>;
+      try {
+        response = await axios.get(task.metalinkUrl, {
+          baseURL: "https://erotica.spark-app.store",
+          responseType: "stream",
+        });
+      } catch (err) {
+        // Metalink 请求失败（网络/404/超时等）：明确回传渲染端，避免 UI 停在"正在获取"后突兀退出
+        const reason = err instanceof Error ? err.message : String(err);
+        logger.error(`Task ${id} Metalink 下载请求失败: ${reason}`);
+        sendLog(`获取 Metalink 失败: ${reason}`);
+        throw new Error(`获取 Metalink 失败: ${reason}`);
+      }
 
       const writer = fs.createWriteStream(metalinkPath);
       response.data.pipe(writer);
 
       await new Promise<void>((resolve, reject) => {
-        writer.on("finish", resolve);
+        writer.on("finish", () => {
+          sendLog("Metalink 文件下载完成");
+          resolve();
+        });
         writer.on("error", reject);
       });
-
-      sendLog("Metalink 文件下载完成");
 
       // 清理下载目录中的旧文件（保留 .metalink 文件），防止 aria2c 因同名文件卡住
       const existingFiles = fs.readdirSync(downloadDir);
@@ -627,6 +864,7 @@ async function runDownloadPhase(task: InstallTask) {
             });
             child.on("error", (err) => {
               clearInterval(timeoutChecker);
+              sendLog(`aria2c 启动失败: ${err.message}`);
               reject(err);
             });
           });
@@ -677,6 +915,7 @@ async function runDownloadPhase(task: InstallTask) {
 /**
  * 安装阶段：执行安装命令，安装一次只允许一个。
  */
+
 async function runInstallPhase(task: InstallTask) {
   const { webContents, id } = task;
 
@@ -762,9 +1001,32 @@ async function runInstallPhase(task: InstallTask) {
     });
 
     // Completion
-    const success = result.code === 0;
+    // ssinstall（spark 源）在 dry-run 失败放弃安装时仍可能以退出码 0 结束，
+    // 需从输出识别明确的失败标志，避免误判为安装成功（否则前端会显示「完成」）。
+    let success = result.code === 0;
+    let failureDetail = "";
+    if (success && task.origin === "spark") {
+      const failMarkers = [
+        "放弃安装",
+        "dry-run测试仍然失败",
+        "包管理器以错误代码退出",
+        "Package manager quit with exit code",
+      ];
+      if (
+        failMarkers.some(
+          (marker) =>
+            result.stdout.includes(marker) || result.stderr.includes(marker),
+        )
+      ) {
+        success = false;
+        failureDetail =
+          "ssinstall 放弃安装（可能因软件包被系统锁定 hold，需在更新中心开启「强制安装」）";
+      }
+    }
     const msgObj = {
-      message: success ? "安装完成" : `安装失败，退出码 ${result.code}`,
+      message: success
+        ? "安装完成"
+        : `安装失败：${failureDetail || `退出码 ${result.code}`}`,
       stdout: result.stdout,
       stderr: result.stderr,
     };
@@ -815,15 +1077,13 @@ async function runInstallPhase(task: InstallTask) {
   }
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-ipcMain.handle("check-installed", async (_event, payload: any) => {
-  const pkgname = typeof payload === "string" ? payload : payload.pkgname;
-  const origin = typeof payload === "string" ? "spark" : payload.origin;
-
-  if (!pkgname) {
-    logger.warn("check-installed missing pkgname");
+ipcMain.handle("check-installed", async (_event, payload: unknown) => {
+  const parsed = parseAppPayload(payload);
+  if (!parsed) {
+    logger.warn("check-installed invalid payload");
     return false;
   }
+  const { pkgname, origin } = parsed;
 
   logger.info(`检查应用是否已安装: ${pkgname} (来源: ${origin})`);
 
@@ -890,13 +1150,12 @@ ipcMain.handle("check-installed", async (_event, payload: any) => {
 
 ipcMain.on("remove-installed", async (_event, payload) => {
   const webContents = _event.sender;
-  const pkgname = typeof payload === "string" ? payload : payload.pkgname;
-  const origin = typeof payload === "string" ? "spark" : payload.origin;
-
-  if (!pkgname) {
-    logger.warn("remove-installed missing pkgname");
+  const parsed = parseAppPayload(payload);
+  if (!parsed) {
+    logger.warn("remove-installed invalid payload");
     return;
   }
+  const { pkgname, origin } = parsed;
   logger.info(`卸载已安装应用: ${pkgname} (来源: ${origin})`);
 
   let execCommand = "";
@@ -1242,54 +1501,54 @@ ipcMain.handle("show-apm-install-dialog", async (event) => {
   return { success: false, cancelled: true };
 });
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-ipcMain.handle("uninstall-installed", async (_event, payload: any) => {
-  const pkgname = typeof payload === "string" ? payload : payload.pkgname;
-  const origin = typeof payload === "string" ? "spark" : payload.origin;
+ipcMain.handle(
+  "uninstall-installed",
+  async (
+    _event,
+    payload: unknown,
+  ): Promise<{ success: boolean; message?: string }> => {
+    const parsed = parseAppPayload(payload);
+    if (!parsed) {
+      logger.warn("uninstall-installed invalid payload");
+      return { success: false, message: "invalid payload" };
+    }
+    const { pkgname, origin } = parsed;
 
-  if (!pkgname) {
-    logger.warn("uninstall-installed missing pkgname");
-    return { success: false, message: "missing pkgname" };
-  }
+    const superUserCmd = await checkSuperUserCommand();
+    const execCommand = superUserCmd || SHELL_CALLER_PATH;
+    const execParams = superUserCmd ? [SHELL_CALLER_PATH] : [];
 
-  const superUserCmd = await checkSuperUserCommand();
-  const execCommand = superUserCmd || SHELL_CALLER_PATH;
-  const execParams = superUserCmd ? [SHELL_CALLER_PATH] : [];
+    if (origin === "apm") {
+      execParams.push("apm", "remove", "-y", pkgname);
+    } else {
+      execParams.push("aptss", "remove", "-y", pkgname);
+    }
 
-  if (origin === "apm") {
-    execParams.push("apm", "remove", "-y", pkgname);
-  } else {
-    execParams.push("aptss", "remove", "-y", pkgname);
-  }
+    const { code, stdout, stderr } = await runCommandCapture(
+      execCommand,
+      execParams,
+    );
+    const success = code === 0;
 
-  const { code, stdout, stderr } = await runCommandCapture(
-    execCommand,
-    execParams,
-  );
-  const success = code === 0;
+    if (success) {
+      logger.info(`卸载完成: ${pkgname}`);
+    } else {
+      logger.error(`卸载失败: ${pkgname} ${stderr || stdout}`);
+    }
 
-  if (success) {
-    logger.info(`卸载完成: ${pkgname}`);
-  } else {
-    logger.error(`卸载失败: ${pkgname} ${stderr || stdout}`);
-  }
-
-  return {
-    success,
-    message: success
-      ? "卸载完成"
-      : stderr || stdout || `卸载失败，退出码 ${code}`,
-  };
-});
+    return {
+      success,
+      message: success
+        ? "卸载完成"
+        : stderr || stdout || `卸载失败，退出码 ${code}`,
+    };
+  },
+);
 
 interface LaunchAppPayload {
   pkgname: string;
   origin?: "spark" | "apm";
 }
-
-// 合法包名字符（Debian 包名规范 + Spark 应用包名常见字符），
-// 用于拦截包含特殊字符的非法输入，避免命令注入。
-const PKGNAME_PATTERN = /^[a-zA-Z0-9._+-]+$/;
 
 ipcMain.handle(
   "launch-app",
@@ -1303,7 +1562,8 @@ ipcMain.handle(
     if (
       !pkgname ||
       typeof pkgname !== "string" ||
-      !PKGNAME_PATTERN.test(pkgname)
+      !PKGNAME_PATTERN.test(pkgname) ||
+      pkgname.length > 256
     ) {
       logger.warn(`Invalid pkgname provided for launch-app: ${pkgname}`);
       return { success: false, message: "Invalid package name" };

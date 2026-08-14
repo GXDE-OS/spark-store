@@ -1,5 +1,18 @@
 <template>
+  <!-- 空队列：仅显示右下角小按钮 -->
+  <button
+    v-if="downloads.length === 0"
+    type="button"
+    class="fixed bottom-4 right-4 z-40 inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-200/70 bg-white text-slate-500 shadow-lg transition hover:-translate-y-0.5 hover:text-brand dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400 dark:hover:text-white sm:bottom-6 sm:right-6"
+    title="暂无下载任务"
+    aria-label="下载队列（空）"
+  >
+    <i class="fas fa-download"></i>
+  </button>
+
+  <!-- 有任务：展开为完整面板（默认展开，可点 chevron 折叠列表） -->
   <div
+    v-else
     class="fixed inset-x-4 bottom-4 z-40 rounded-3xl border border-slate-200/70 bg-white shadow-2xl transition-all duration-200 dark:border-slate-800/70 dark:bg-slate-900 sm:left-auto sm:right-6 sm:w-96"
   >
     <div
@@ -53,14 +66,7 @@
         v-show="isExpanded"
         class="max-h-96 overflow-y-auto overscroll-contain px-3 pb-4"
       >
-        <div
-          v-if="downloads.length === 0"
-          class="flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-200/80 px-4 py-12 text-slate-500 dark:border-slate-800/80 dark:text-slate-400"
-        >
-          <i class="fas fa-inbox text-3xl"></i>
-          <p class="mt-3 text-sm">暂无下载任务</p>
-        </div>
-        <div v-else class="space-y-2">
+        <div class="space-y-2">
           <div
             v-for="download in downloads"
             :key="download.id"
@@ -130,7 +136,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, ref, watch } from "vue";
 import type { DownloadItem } from "../global/typedefinition";
 
 const props = defineProps<{
@@ -146,7 +152,7 @@ const emit = defineEmits<{
   (e: "show-detail", download: DownloadItem): void;
 }>();
 
-const isExpanded = ref(false);
+const isExpanded = ref(true);
 
 const completedDownloads = computed(() => {
   return props.downloads.filter((d) => d.status === "completed").length;
@@ -167,4 +173,12 @@ const clearCompleted = () => {
 const showDownloadDetail = (download: DownloadItem) => {
   emit("show-detail", download);
 };
+
+// 从无任务到有任务时，自动展开面板（"有任务时再向左边伸出"）
+watch(
+  () => props.downloads.length > 0,
+  (hasTasks) => {
+    if (hasTasks) isExpanded.value = true;
+  },
+);
 </script>

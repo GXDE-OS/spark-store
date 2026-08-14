@@ -210,7 +210,11 @@ const parseUpgradableOutput = (
     const arch = tokens[2] ?? "";
     const currentVersion =
       trimmed.match(CURRENT_VERSION_PATTERN)?.[1] ?? tokens[5] ?? "";
-    if (!pkgname || nextVersion === currentVersion) {
+    // 仅当包名缺失或当前版本解析失败时才跳过。
+    // 注意：不再因 nextVersion === currentVersion 而跳过——aptss 已判定该项为
+    // upgradable，应信任上游判断；否则当仓库元数据出现"同版本重新发布"等情况时，
+    // 真实的更新项会被无声隐藏，导致"软件更新"列表空白。
+    if (!pkgname || !currentVersion) {
       continue;
     }
 

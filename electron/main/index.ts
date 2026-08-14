@@ -4,6 +4,7 @@ import {
   ipcMain,
   Menu,
   nativeImage,
+  net,
   shell,
   Tray,
   nativeTheme,
@@ -19,7 +20,10 @@ import { handleCommandLine } from "./deeplink.js";
 import { isLoaded } from "../global.js";
 import { tasks } from "./backend/install-manager.js";
 import { sendTelemetryOnce } from "./backend/telemetry.js";
-import { initializeUpdateCenter } from "./backend/update-center/index.js";
+import {
+  initializeUpdateCenter,
+  runSystemUpdateSources,
+} from "./backend/update-center/index.js";
 import {
   getMainWindowCloseAction,
   type MainWindowCloseGuardState,
@@ -96,6 +100,10 @@ const FLARUM_TOKEN_URL = "https://bbs.spark-app.store/api/token";
 export const MAIN_DIST = path.join(process.env.APP_ROOT, "dist-electron");
 export const RENDERER_DIST = path.join(process.env.APP_ROOT, "dist");
 export const VITE_DEV_SERVER_URL = process.env.VITE_DEV_SERVER_URL;
+
+// 进程专属临时目录，避免多实例/残留进程互相影响
+// 退出时由 will-quit 统一清理
+export const TEMP_BASE = path.join(os.tmpdir(), `spark-store-${process.pid}`);
 
 process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL
   ? path.join(process.env.APP_ROOT, "public")
@@ -272,9 +280,10 @@ const requestApplicationExit = (): void => {
   app.quit();
 };
 
-const showAndFocusMainWindow = (): void => {
+const showAndFocusMainWindow = async (): Promise<void> => {
   if (!win || win.isDestroyed()) {
-    createWindow();
+    // 等待窗口创建完成，创建失败时调用方可通过异常感知
+    await createWindow();
     return;
   }
 
@@ -289,6 +298,8 @@ const showAndFocusMainWindow = (): void => {
 // 窗口尺寸持久化：保存/恢复上一次调整后的窗口大小，避免每次打开都使用默认尺寸
 const DEFAULT_WINDOW_SIZE = { width: 1366, height: 768 };
 const MIN_WINDOW_SIZE = { width: 800, height: 500 };
+// 超过该尺寸的窗口（通常为全屏/最大化状态）在恢复时回退到默认尺寸，避免「启动即全屏、还原按钮失效」
+const OVERSIZED_WINDOW_THRESHOLD = { width: 1600, height: 900 };
 
 interface WindowState {
   width?: number;
@@ -305,21 +316,22 @@ function getWindowStatePath(): string {
 
 // 校验保存的窗口位置是否至少部分落在某个显示器可见区域内，避免窗口跑到屏幕外
 function isVisible(bounds: WindowState): boolean {
+  // 解构为局部常量后，控制流收窄（const 不可变）可穿透到下方嵌套闭包，
+  // 消除 x/y/width/height 的 “可能为未定义” 告警
+  const { x, y, width, height } = bounds;
   if (
-    bounds.width === undefined ||
-    bounds.height === undefined ||
-    bounds.x === undefined ||
-    bounds.y === undefined
+    x === undefined ||
+    y === undefined ||
+    width === undefined ||
+    height === undefined
   ) {
     return false;
   }
   const displays = screen.getAllDisplays();
   return displays.some((display) => {
-    const { x, y, width, height } = display.workArea;
-    const horizontally =
-      bounds.x < x + width && bounds.x + bounds.width > x;
-    const vertically =
-      bounds.y < y + height && bounds.y + bounds.height > y;
+    const w = display.workArea;
+    const horizontally = x < w.x + w.width && x + width > w.x;
+    const vertically = y < w.y + w.height && y + height > w.y;
     return horizontally && vertically;
   });
 }
@@ -328,9 +340,7 @@ function loadWindowState(): WindowState {
   try {
     const file = getWindowStatePath();
     if (fs.existsSync(file)) {
-      const parsed = JSON.parse(
-        fs.readFileSync(file, "utf-8"),
-      ) as WindowState;
+      const parsed = JSON.parse(fs.readFileSync(file, "utf-8")) as WindowState;
       if (
         parsed.width !== undefined &&
         parsed.height !== undefined &&
@@ -358,6 +368,16 @@ function saveWindowState(state: WindowState): void {
 }
 
 let saveBoundsTimer: NodeJS.Timeout | null = null;
+function flushSaveBounds(): void {
+  if (saveBoundsTimer) {
+    clearTimeout(saveBoundsTimer);
+    saveBoundsTimer = null;
+  }
+  if (win && !win.isDestroyed()) {
+    const { width, height, x, y } = win.getBounds();
+    saveWindowState({ width, height, x, y, maximized: win.isMaximized() });
+  }
+}
 function scheduleSaveBounds(winInstance: BrowserWindow): void {
   if (saveBoundsTimer) clearTimeout(saveBoundsTimer);
   saveBoundsTimer = setTimeout(() => {
@@ -373,14 +393,34 @@ function scheduleSaveBounds(winInstance: BrowserWindow): void {
   }, 400);
 }
 
+// 应用退出前立即持久化（防抖 400ms 可能在快速关闭时丢失最后一次状态）
+app.on("before-quit", () => {
+  flushSaveBounds();
+});
+
 async function createWindow() {
   const saved = loadWindowState();
+  // 恢复时：若上次窗口过大（>1600x900，通常为全屏/最大化），回退到默认尺寸并居中，
+  // 避免「启动即全屏、还原按钮失效」；其余情况保留上次记录的实际尺寸（并居中）。
+  // 放大/还原仍交由标题栏按钮控制。
+  const oversized =
+    (saved.width ?? 0) > OVERSIZED_WINDOW_THRESHOLD.width ||
+    (saved.height ?? 0) > OVERSIZED_WINDOW_THRESHOLD.height;
+  const restoredWidth = oversized
+    ? DEFAULT_WINDOW_SIZE.width
+    : Math.max(saved.width ?? DEFAULT_WINDOW_SIZE.width, MIN_WINDOW_SIZE.width);
+  const restoredHeight = oversized
+    ? DEFAULT_WINDOW_SIZE.height
+    : Math.max(
+        saved.height ?? DEFAULT_WINDOW_SIZE.height,
+        MIN_WINDOW_SIZE.height,
+      );
+
   const mainWindow = new BrowserWindow({
     title: "星火应用商店",
-    width: saved.width ?? DEFAULT_WINDOW_SIZE.width,
-    height: saved.height ?? DEFAULT_WINDOW_SIZE.height,
-    x: saved.x,
-    y: saved.y,
+    width: restoredWidth,
+    height: restoredHeight,
+    center: true,
     minWidth: MIN_WINDOW_SIZE.width,
     minHeight: MIN_WINDOW_SIZE.height,
     frame: false,
@@ -398,11 +438,16 @@ async function createWindow() {
   });
   win = mainWindow;
 
-  // 恢复上一次的最大化状态
-  if (saved.maximized) {
-    mainWindow.maximize();
-  }
-  logger.info({ saved }, "已恢复窗口状态");
+  // 设计意图（非缺陷，勿改为自动恢复 maximized）：
+  // 启动时不自动恢复最大化状态。原因——最大化窗口在多数屏幕上 bounds 会超过
+  // OVERSIZED_WINDOW_THRESHOLD(1600x900)，若强行恢复最大化会导致「启动即全屏、
+  // 还原按钮失效」的体验问题；故最大化/全屏状态在关闭后统一回退为默认尺寸并居中，
+  // 放大/还原交由标题栏按钮由用户主动控制。WindowState 仍保存 maximized 字段
+  // （供需要该信息的场景读取），但恢复阶段有意不调用 win.maximize()。
+  logger.info(
+    { saved, restoredWidth, restoredHeight, oversized },
+    "已恢复窗口状态（过大窗口回退默认尺寸并居中；最大化状态有意不自动恢复）",
+  );
 
   // 窗口大小/位置/最大化变化后防抖保存，下次启动时恢复
   // 位置/最大化变化由主进程事件保存；尺寸变化由渲染端 DOM resize 经 IPC 兜底保存
@@ -428,9 +473,26 @@ async function createWindow() {
     logger.info("Renderer process is ready.");
   });
 
-  // Make all links open with the browser, not with the application
+  // 仅允许可信域名的 https 链接通过浏览器打开，避免钓鱼/恶意站。
+  // 协议前缀 + 域名后缀白名单双重校验；非法/无效 URL 一律拒绝。
+  const ALLOWED_EXTERNAL_HOSTS = [
+    "spark-app.store",
+    "gitee.com",
+    "bbs.spark-app.store",
+    "spark-app.cn",
+  ];
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    if (url.startsWith("https:")) shell.openExternal(url);
+    try {
+      const parsed = new URL(url);
+      if (
+        parsed.protocol === "https:" &&
+        ALLOWED_EXTERNAL_HOSTS.some((h) => parsed.hostname === h || parsed.hostname.endsWith(`.${h}`))
+      ) {
+        shell.openExternal(url);
+      }
+    } catch {
+      // 无效 URL，拒绝打开
+    }
     return { action: "deny" };
   });
   // win.webContents.on('will-navigate', (event, url) => { }) #344
@@ -444,6 +506,8 @@ async function createWindow() {
   mainWindow.on("close", (event) => {
     if (allowAppExit) {
       // 真正退出前同步保存最终窗口尺寸（防抖可能尚未触发）
+      // 先清除尚未触发的防抖定时器，避免旧定时器随后覆盖本次同步写入
+      if (saveBoundsTimer) clearTimeout(saveBoundsTimer);
       const { width, height, x, y } = mainWindow.getBounds();
       saveWindowState({
         width,
@@ -613,6 +677,15 @@ app.whenReady().then(() => {
   // Set User-Agent for client
   session.defaultSession.webRequest.onBeforeSendHeaders((details, callback) => {
     details.requestHeaders["User-Agent"] = getUserAgent();
+    // 数据 JSON（applist / categories / priority-config / sidebar-config 等）禁用客户端缓存。
+    // nginx 默认不发 Cache-Control，Chromium 会按启发式 TTL（≈(now-LastModified)/10）复用陈旧副本，
+    // 导致服务端上新应用后商店内仍搜不到、且重启无效（仅删 Cache 目录才生效）。
+    // 注意：C2 会给 URL 追加 ?_t=... 版本戳，故需按 query 前的 pathname 判断，而非 endsWith(".json")。
+    const dataUrlPath = details.url.split("?")[0];
+    if (dataUrlPath.endsWith(".json")) {
+      details.requestHeaders["Cache-Control"] = "no-cache";
+      details.requestHeaders["Pragma"] = "no-cache";
+    }
     callback({ cancel: false, requestHeaders: details.requestHeaders });
   });
   createWindow();
@@ -620,7 +693,67 @@ app.whenReady().then(() => {
   initializeUpdateCenter();
   // 启动后执行一次遥测（仅 Linux，不阻塞）
   sendTelemetryOnce(getAppVersion());
+
+  // 注册“渲染进程首页加载完成”信号：收到后立即开始后台刷新软件源，
+  // 趁系统负载不高时提前刷新 aptss/apm 源，用户稍后打开“软件更新”即可秒出。
+  // 同时保留一个兜底定时器，防止渲染进程未发信号时完全不刷新。
+  ipcMain.on("update-center-trigger-prefetch", () => {
+    startSourcePreRefreshOnce();
+  });
+  setTimeout(startSourcePreRefreshOnce, PRE_REFRESH_FALLBACK_MS);
 });
+
+// 启动后空闲预刷新软件源（带重试），不阻塞启动流程
+// 与 src/modules/updateCenter.ts 的 backgroundRefresh 重试为【对称设计】，非代码遗漏：
+// 主进程负责“启动预热”，前端负责“打开兜底”，
+// 两者进程/守卫/调用目标不同，故各自保留一份，勿抽共享。
+const PRE_REFRESH_BACKOFF_MS = [2000, 4000, 8000];
+const PRE_REFRESH_MAX_RETRIES = 3;
+const PRE_REFRESH_FALLBACK_MS = 15_000; // 渲染信号未到达时的兜底，15s 后也跑
+const PRE_REFRESH_TIMEOUT_MS = 60_000; // 单次预刷新整体超时，避免 pkexec 卡死挂起
+let preRefreshStarted = false;
+
+// 按重试次数取退避毫秒（越界时回退到最大间隔）
+const getPreRefreshBackoffDelay = (attempt: number): number =>
+  PRE_REFRESH_BACKOFF_MS[attempt - 1] ??
+  PRE_REFRESH_BACKOFF_MS[PRE_REFRESH_BACKOFF_MS.length - 1];
+
+// 确保预刷新只触发一次（渲染信号或兜底定时器 whichever first）。
+// 设计意图：单次会话仅预热一次（preRefreshStarted 置 true 后不再重置），
+// 避免用户在更新中心 Tab 间快速切换时重复触发 pkexec 弹窗造成困惑。
+const startSourcePreRefreshOnce = (attempt = 1): void => {
+  if (preRefreshStarted) return;
+  preRefreshStarted = true;
+
+  const run = (): void => {
+    // 网络可用性前置检查：离线时不发起提权刷新（pkexec 弹窗无意义且困惑）
+    if (!net.isOnline()) {
+      logger.info("[UpdateCenter] 预刷新跳过：当前离线");
+      return;
+    }
+
+    const timeoutPromise = new Promise<never>((_, reject) =>
+      setTimeout(
+        () => reject(new Error("pre-refresh timeout")),
+        PRE_REFRESH_TIMEOUT_MS,
+      ),
+    );
+
+    Promise.race([runSystemUpdateSources("both"), timeoutPromise])
+      .then((results) => {
+        console.log("[UpdateCenter] pre-refresh done:", results);
+      })
+      .catch((error) => {
+        console.warn("[UpdateCenter] pre-refresh failed:", error);
+        if (attempt < PRE_REFRESH_MAX_RETRIES) {
+          const delay = getPreRefreshBackoffDelay(attempt);
+          setTimeout(() => startSourcePreRefreshOnce(attempt + 1), delay);
+        }
+      });
+  };
+
+  run();
+};
 
 app.on("window-all-closed", () => {
   win = null;
@@ -629,17 +762,17 @@ app.on("window-all-closed", () => {
 });
 
 app.on("second-instance", () => {
-  showAndFocusMainWindow();
+  void showAndFocusMainWindow();
 });
 
 app.on("activate", () => {
-  showAndFocusMainWindow();
+  void showAndFocusMainWindow();
 });
 
 app.on("will-quit", () => {
-  // Clean up temp dir
+  // 清理本进程专属临时目录（PID 隔离，不影响其他实例）
   logger.info("Cleaning up temp dir");
-  fs.rmSync("/tmp/spark-store/", { recursive: true, force: true });
+  fs.rmSync(TEMP_BASE, { recursive: true, force: true });
   logger.info("Done, exiting");
 });
 
@@ -686,7 +819,7 @@ app.whenReady().then(() => {
     {
       label: "显示主界面",
       click: () => {
-        showAndFocusMainWindow();
+        void showAndFocusMainWindow();
       },
     },
     {
@@ -705,7 +838,7 @@ app.whenReady().then(() => {
       win.hide();
       win.setSkipTaskbar(true);
     } else {
-      showAndFocusMainWindow();
+      void showAndFocusMainWindow();
     }
   });
 });
