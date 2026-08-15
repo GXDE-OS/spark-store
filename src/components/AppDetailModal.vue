@@ -501,69 +501,69 @@
         </div>
       </div>
     </div>
+  </Transition>
 
-    <!-- 双来源安装：打开时选择 APM 还是 Spark -->
-    <Transition
-      enter-active-class="duration-200 ease-out"
-      enter-from-class="opacity-0 scale-95"
-      enter-to-class="opacity-100 scale-100"
-      leave-active-class="duration-150 ease-in"
-      leave-from-class="opacity-100 scale-100"
-      leave-to-class="opacity-0 scale-95"
+  <!-- 双来源安装：打开时选择 APM 还是 Spark -->
+  <Transition
+    enter-active-class="duration-200 ease-out"
+    enter-from-class="opacity-0 scale-95"
+    enter-to-class="opacity-100 scale-100"
+    leave-active-class="duration-150 ease-in"
+    leave-from-class="opacity-100 scale-100"
+    leave-to-class="opacity-0 scale-95"
+  >
+    <div
+      v-if="openChoiceVisible"
+      class="fixed inset-0 z-[85] flex items-center justify-center bg-slate-900/70 p-4"
+      @click.self="openChoiceVisible = false"
     >
       <div
-        v-if="openChoiceVisible"
-        class="fixed inset-0 z-[85] flex items-center justify-center bg-slate-900/70 p-4"
-        @click.self="openChoiceVisible = false"
+        class="relative w-full max-w-sm overflow-hidden rounded-3xl border border-white/10 bg-white/95 p-6 shadow-2xl dark:border-slate-800 dark:bg-slate-900"
       >
-        <div
-          class="relative w-full max-w-sm overflow-hidden rounded-3xl border border-white/10 bg-white/95 p-6 shadow-2xl dark:border-slate-800 dark:bg-slate-900"
-        >
-          <div class="mb-5 flex items-start gap-3">
-            <div
-              class="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-sky-100 to-indigo-50 shadow-inner dark:from-sky-900/30 dark:to-indigo-800/20"
-            >
-              <i class="fas fa-external-link-alt text-xl text-sky-500"></i>
-            </div>
-            <div>
-              <h3 class="text-lg font-bold text-slate-900 dark:text-white">
-                打开应用
-              </h3>
-              <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                该应用同时通过 APM 与 Spark 安装，请选择要打开的来源：
-              </p>
-            </div>
+        <div class="mb-5 flex items-start gap-3">
+          <div
+            class="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-sky-100 to-indigo-50 shadow-inner dark:from-sky-900/30 dark:to-indigo-800/20"
+          >
+            <i class="fas fa-external-link-alt text-xl text-sky-500"></i>
           </div>
-          <div class="flex gap-3">
-            <button
-              type="button"
-              class="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-amber-300/70 px-4 py-2.5 text-sm font-semibold text-amber-700 transition hover:bg-amber-50 dark:border-amber-500/40 dark:text-amber-300 dark:hover:bg-amber-500/10"
-              @click="confirmOpen('apm')"
-            >
-              <i class="fas fa-box-open"></i>
-              打开 APM 版
-            </button>
-            <button
-              type="button"
-              class="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-sky-300/70 px-4 py-2.5 text-sm font-semibold text-sky-700 transition hover:bg-sky-50 dark:border-sky-500/40 dark:text-sky-300 dark:hover:bg-sky-500/10"
-              @click="confirmOpen('spark')"
-            >
-              <i class="fas fa-bolt"></i>
-              打开 Spark 版
-            </button>
-          </div>
-          <div class="mt-4 flex justify-end">
-            <button
-              type="button"
-              class="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
-              @click="openChoiceVisible = false"
-            >
-              取消
-            </button>
+          <div>
+            <h3 class="text-lg font-bold text-slate-900 dark:text-white">
+              打开应用
+            </h3>
+            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
+              该应用同时通过 APM 与 Spark 安装，请选择要打开的来源：
+            </p>
           </div>
         </div>
+        <div class="flex gap-3">
+          <button
+            type="button"
+            class="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-amber-300/70 px-4 py-2.5 text-sm font-semibold text-amber-700 transition hover:bg-amber-50 dark:border-amber-500/40 dark:text-amber-300 dark:hover:bg-amber-500/10"
+            @click="confirmOpen('apm')"
+          >
+            <i class="fas fa-box-open"></i>
+            打开 APM 版
+          </button>
+          <button
+            type="button"
+            class="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-sky-300/70 px-4 py-2.5 text-sm font-semibold text-sky-700 transition hover:bg-sky-50 dark:border-sky-500/40 dark:text-sky-300 dark:hover:bg-sky-500/10"
+            @click="confirmOpen('spark')"
+          >
+            <i class="fas fa-bolt"></i>
+            打开 Spark 版
+          </button>
+        </div>
+        <div class="mt-4 flex justify-end">
+          <button
+            type="button"
+            class="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
+            @click="openChoiceVisible = false"
+          >
+            取消
+          </button>
+        </div>
       </div>
-    </Transition>
+    </div>
   </Transition>
 </template>
 
@@ -656,13 +656,15 @@ const openWebsite = (url: string) => {
   }
 };
 
-// 根据「标签优先显示策略」与应用的可用来源标签，计算默认展示的来源
+// 根据「标签优先显示策略」、本地安装状态与应用的可用来源标签，计算默认展示的来源
 const computeDefaultViewingOrigin = (
   app: App,
   strategy: TagPriorityStrategy,
+  sparkInstalled: boolean,
+  apmInstalled: boolean,
 ): "spark" | "apm" => {
   // 父组件显式指定展示来源（如从已安装应用页按特定来源打开）时优先级最高，
-  // 此时强制覆盖用户标签策略；否则交由下方策略逻辑决定。
+  // 此时强制覆盖用户标签策略与本地安装状态；否则交由下方策略逻辑决定。
   // 注意：被强制的应用（forceViewingOrigin=true）在详情页保持打开期间，
   // 即使设置页切换标签策略也不会实时变更其展示来源（已安装来源高于策略，属设计行为）。
   if (app.forceViewingOrigin && app.viewingOrigin) return app.viewingOrigin;
@@ -677,7 +679,15 @@ const computeDefaultViewingOrigin = (
   if (available.length === 0) return app.origin; // 兜底
   if (available.length === 1) return available[0]; // 仅有一个标签时默认展示该标签
 
-  // 按策略优先选择对应标签
+  // 本地只安装了某一个版本时，优先展开已安装的版本，保证打开应用时能直接使用
+  // 已安装来源（例如 WeChat 默认 APM，但本机只装了 Spark 版时默认展开 Spark）。
+  const installed: Array<"spark" | "apm"> = [];
+  if (sparkInstalled && app.sparkApp) installed.push("spark");
+  if (apmInstalled && app.apmApp) installed.push("apm");
+  if (installed.length === 1) return installed[0];
+
+  // 都安装 / 都未安装时，继续按用户策略或应用配置的优先级展示：
+  //  - 按策略优先选择对应标签
   const preferred: "spark" | "apm" | null =
     strategy === "spark" ? "spark" : strategy === "apm" ? "apm" : null;
   if (preferred && available.includes(preferred)) {
@@ -690,18 +700,29 @@ const computeDefaultViewingOrigin = (
   return available.includes(auto) ? auto : available[0];
 };
 
-// 进入详情页时按「标签优先显示策略」计算默认来源标签。
-// 同时监听 props.app 与共享策略 ref：
+// 进入详情页时按「标签优先显示策略」与本地安装状态计算默认来源标签。
+// 同时监听 props.app、共享策略 ref 与安装状态：
 //   - props.app 变化（重开/切换应用）→ 始终按当前策略重算（手动切标签仅本次会话预览，不持久）
 //   - 策略变化（在设置页实时切换）→ 已打开且未手动切标签的详情页立即更新默认标签
+//   - 安装状态异步返回（如仅 Spark 已安装）→ 已打开且未手动切标签时自动切换到已安装版本
 // 手动点标签页（selectOrigin）只是临时预览：置 manualOverride 标记，本次会话内保持，
 //   既不被策略变化强行拉回，也不跨重开持久（重开后会按设置重算）。
 // 注：initTagPriorityStrategy() 已在 App.vue 启动时统一调用，此处不再重复。
 const manualOverride = ref(false); // 用户是否手动切换过标签（本次会话）
 let lastPkgname: string | null = null; // 上一次计算对应的应用 pkgname，用于识别"新打开/重开"
 watch(
-  [() => props.app, tagPriorityStrategyRef],
-  ([newApp]: [App | null, TagPriorityStrategy]) => {
+  [
+    () => props.app,
+    tagPriorityStrategyRef,
+    () => props.sparkInstalled,
+    () => props.apmInstalled,
+  ],
+  ([newApp, strategy, sparkInstalled, apmInstalled]: [
+    App | null,
+    TagPriorityStrategy,
+    boolean,
+    boolean,
+  ]) => {
     isIconLoaded.value = false;
     if (!newApp) {
       // 详情页关闭：清空会话状态，确保下次打开按最新策略重算
@@ -710,20 +731,24 @@ watch(
       return;
     }
     if (newApp.pkgname !== lastPkgname) {
-      // 新应用（含重开后再次打开同一应用）：重置手动标记，按当前策略计算
+      // 新应用（含重开后再次打开同一应用）：重置手动标记，按当前策略/安装状态计算
       lastPkgname = newApp.pkgname;
       manualOverride.value = false;
       viewingOrigin.value = computeDefaultViewingOrigin(
         newApp,
-        tagPriorityStrategyRef.value,
+        strategy,
+        sparkInstalled,
+        apmInstalled,
       );
     } else if (manualOverride.value || newApp.forceViewingOrigin) {
       // 同一应用且用户正在手动预览 / 父组件强制来源：保留当前标签，不重算
     } else {
-      // 同一应用、无手动预览、策略变化 → 实时按新策略更新默认标签
+      // 同一应用、无手动预览、策略/安装状态变化 → 实时按新状态更新默认标签
       viewingOrigin.value = computeDefaultViewingOrigin(
         newApp,
-        tagPriorityStrategyRef.value,
+        strategy,
+        sparkInstalled,
+        apmInstalled,
       );
     }
   },

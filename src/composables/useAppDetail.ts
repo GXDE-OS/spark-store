@@ -260,6 +260,7 @@ const openDetail = async (app: App | OpenDetailInput) => {
   }
 
   // 检查 Spark/APM 安装状态，已安装的版本优先展示
+  let installedStateKnown = false;
   if (finalApp.isMerged && (finalApp.sparkApp || finalApp.apmApp)) {
     const [sparkInstalled, apmInstalled] = await Promise.all([
       finalApp.sparkApp
@@ -275,13 +276,17 @@ const openDetail = async (app: App | OpenDetailInput) => {
           }) as Promise<boolean>)
         : Promise.resolve(false),
     ]);
+    installedStateKnown = true;
+
     // 来源默认展示规则：
     //   1) 已安装页打开：按安装类型打开。
     //        - 仅一个来源已安装 → 强制展示该已装来源（无需策略覆盖）
-    //        - 多个来源已安装 → 按「设置的优先标签」打开（策略）
-    //   2) 其他页面：一律按「设置的优先标签」打开（策略 > 服务端混合默认），不强制。
+    //        - 多个来源已安装 → 按「设置的优先标签/应用优先级」打开（策略）
+    //   2) 其他页面：
+    //        - 仅一个来源已安装 → 默认展示已装版本（详情页按安装状态优先，保证可直接打开）
+    //        - 都安装/都未安装 → 按「标签优先显示策略/应用优先级」打开
     // 注：forceViewingOrigin 仅用于「已安装页 + 唯一安装来源」这一显式安装类型场景，
-    //     其余情况都不强制，交由详情页按用户标签策略重算。
+    //     其余情况都不强制，交由详情页按安装状态/用户标签策略重算。
     let forceOrigin: "spark" | "apm" | undefined = undefined;
     if (fromInstalled) {
       const installedOrigins = (app as Record<string, unknown>).origins as
@@ -310,7 +315,7 @@ const openDetail = async (app: App | OpenDetailInput) => {
       finalApp.viewingOrigin = forceOrigin;
       finalApp.forceViewingOrigin = true;
     } else if (sparkInstalled && !apmInstalled) {
-      // 仅 Spark 安装（其他页面）：默认回退展示已装版本，不强制（仍受用户策略覆盖）
+      // 仅 Spark 安装（其他页面）：默认回退展示已装版本，不强制（详情页会按安装状态优先）
       finalApp.viewingOrigin = "spark";
     } else if (apmInstalled && !sparkInstalled) {
       finalApp.viewingOrigin = "apm";
@@ -322,6 +327,10 @@ const openDetail = async (app: App | OpenDetailInput) => {
         finalApp.sparkApp || finalApp,
       );
     }
+
+    // 已拿到安装状态时直接写入全局状态，避免详情页先按“都未安装”闪一下再切到已装版本
+    currentAppSparkInstalled.value = sparkInstalled;
+    currentAppApmInstalled.value = apmInstalled;
   }
 
   const displayAppForScreenshots =
@@ -345,9 +354,11 @@ const openDetail = async (app: App | OpenDetailInput) => {
   });
   showModal.value = true;
 
-  currentAppSparkInstalled.value = false;
-  currentAppApmInstalled.value = false;
-  checkAppInstalled(finalApp);
+  if (!installedStateKnown) {
+    currentAppSparkInstalled.value = false;
+    currentAppApmInstalled.value = false;
+    checkAppInstalled(finalApp);
+  }
   if (
     isLoggedIn.value &&
     favoriteFolders.value.length === 0 &&

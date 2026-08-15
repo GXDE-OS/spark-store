@@ -15,6 +15,8 @@
    - `loong64` 架构下尊重 `--no-spark` 启动参数，不再硬编码覆盖。
    - `openDownloadedApp` 的 IPC 调用补充 `.catch` 错误处理。
 
+7. **应用详情默认展开已安装版本**：打开应用详情时，若本地只安装了 Spark / APM 中的某一版本，则默认展开该已装来源（例如 WeChat 默认 APM，但本机只装 Spark 版时默认展开 Spark）；若两版都已安装，则按优先级/标签策略展示。
+
 相关提交：`1d9d25d6`、`c75938aa`、`39a358bb`、`51473cac`、`cf0e72ff`、`b0d60737`、`d3705ed4`。
 
 ## [1.1.1](https://github.com/elysia-best/apm-app-store/compare/v1.1.0...v1.1.1) (2026-02-17)
