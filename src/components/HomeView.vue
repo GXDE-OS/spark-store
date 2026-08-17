@@ -37,7 +37,7 @@
         alt="星火应用商店"
         class="h-32 w-32 mb-6 opacity-90"
       />
-      <h1 class="text-2xl font-bold text-slate-800 dark:text-slate-200 mb-2">
+      <h1 class="text-sm font-bold text-slate-800 dark:text-slate-200 mb-2">
         {{
           storeFilter === "apm"
             ? "欢迎来到星火应用商店 (Amber PM)"
