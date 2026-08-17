@@ -15,6 +15,12 @@ const logger = pino({ name: "install-manager" });
 // 包名白名单：仅允许合法包名字符，杜绝命令注入（spawn 用 shell:false 仍须校验）。
 const PKGNAME_PATTERN = /^[a-zA-Z0-9._+-]+$/;
 
+// 文件名（.deb）白名单：按 dpkg 规则允许包名/版本号合法字符。
+// 含 epoch 冒号（steam-launcher_1:1.0.0.87_amd64.deb）与排序标记 ~（1.0~beta），
+// 以及字母数字、. _ + -。路径遍历由下方 basename/".." 检查兜底。
+// 注意字符组内 : 与 ~ 须用 \- 等转义字符隔离，避免形成正则区间（如 [:~] 会误匹配大量符号）。
+const FILENAME_PATTERN = /^[A-Za-z0-9._+:\-~]+$/;
+
 // 解析并校验应用类 IPC 的 payload（可能是旧版字符串或对象）。
 // 返回规范化后的 { pkgname, origin }，pkgname 非法时返回 null。
 const parseAppPayload = (
@@ -326,7 +332,7 @@ export const addInstallTask = async (
     return false;
   }
 
-  // 包名/文件名白名单校验：防止路径遍历（如 ../../）或非法字符进入下载目录与安装命令构建
+  // 包名白名单校验：杜绝命令注入（spawn shell:false 仍须校验，且包名不含路径字符）。
   if (!PKGNAME_PATTERN.test(pkgname)) {
     logger.warn(`addInstallTask invalid pkgname: ${pkgname}`);
     webContents?.send("install-complete", {
@@ -342,8 +348,11 @@ export const addInstallTask = async (
     });
     return false;
   }
-  if (filename && !PKGNAME_PATTERN.test(filename)) {
-    logger.warn(`addInstallTask invalid filename: ${filename}`);
+  // 文件名（.deb）白名单校验：允许 Debian 包合法字符（含 epoch 冒号），并拒绝路径遍历
+  //（"/" 与 ".." 段），防止写入下载目录之外的位置。
+  if (filename) {
+    if (!FILENAME_PATTERN.test(filename) || filename.includes("..") || path.basename(filename) !== filename) {
+      logger.warn(`addInstallTask invalid filename: ${filename}`);
     webContents?.send("install-complete", {
       id,
       success: false,
@@ -356,6 +365,7 @@ export const addInstallTask = async (
       }),
     });
     return false;
+    }
   }
 
   // metalinkUrl 来自渲染端（由目录 filename / 主进程解析的 downloadUrl 拼成）。
