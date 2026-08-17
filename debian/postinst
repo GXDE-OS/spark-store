@@ -55,9 +55,12 @@ case "$1" in
 
 		# Start upgrade detect service
 		systemctl daemon-reload
-		systemctl enable spark-update-notifier
-		systemctl start spark-update-notifier
-
+		# systemctl enable spark-update-notifier
+		# systemctl start spark-update-notifier
+		
+		# like apt-daily.timer
+		systemctl enable spark-update-notifier.timer
+		systemctl start spark-update-notifier.timer
 
 		# Update certain caches
 cp -fv /opt/spark-store/extras/store.spark-app.spark-store.policy /usr/share/polkit-1/actions/store.spark-app.spark-store.policy
