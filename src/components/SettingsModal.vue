@@ -164,56 +164,6 @@
             </div>
           </div>
 
-          <!-- 字体大小（字号档位：小 / 标准 / 大 / 特大） -->
-          <div
-            class="rounded-2xl border border-slate-200/60 bg-slate-50/50 px-4 py-4 dark:border-slate-800/60 dark:bg-slate-800/50"
-          >
-            <div class="flex items-start gap-3">
-              <div
-                class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-pink-100 text-pink-600 dark:bg-pink-900/30 dark:text-pink-400"
-              >
-                <i class="fas fa-font"></i>
-              </div>
-              <div class="min-w-0 flex-1">
-                <p
-                  class="text-sm font-medium text-slate-800 dark:text-slate-200"
-                >
-                  字体大小
-                </p>
-                <p class="text-xs text-slate-500 dark:text-slate-400">
-                  调整全局界面字体大小（仅字号）
-                </p>
-                <div
-                  class="mt-3 inline-flex w-full overflow-hidden rounded-lg border border-slate-200 dark:border-slate-700"
-                  role="radiogroup"
-                  aria-label="字体大小"
-                >
-                  <button
-                    v-for="opt in fontSizeOptions"
-                    :key="opt.value"
-                    type="button"
-                    role="radio"
-                    :aria-checked="fontSize === opt.value"
-                    class="flex-1 px-2 py-1.5 text-xs font-medium transition-colors"
-                    :class="
-                      fontSize === opt.value
-                        ? 'bg-brand text-white'
-                        : 'bg-white text-slate-500 hover:bg-slate-100 dark:bg-slate-700 dark:text-slate-400 dark:hover:bg-slate-600'
-                    "
-                    @click="selectFontSize(opt.value)"
-                  >
-                    {{ opt.label }}
-                  </button>
-                </div>
-                <p
-                  class="mt-2 text-[0.6875rem] text-slate-400 dark:text-slate-500"
-                >
-                  预览：星火应用商店 Spark Store 123
-                </p>
-              </div>
-            </div>
-          </div>
-
           <!-- 界面缩放（整体缩放：图标 / 间距 / 布局等比变化） -->
           <div
             class="rounded-2xl border border-slate-200/60 bg-slate-50/50 px-4 py-4 dark:border-slate-800/60 dark:bg-slate-800/50"
@@ -281,10 +231,6 @@ import {
   type TagPriorityStrategy,
 } from "../global/tagPriority";
 import {
-  getFontSize,
-  setFontSize,
-  FONT_SIZE_OPTIONS,
-  type FontSizeOption,
   getUiScale,
   setUiScale,
   uiScaleToFactor,
@@ -312,9 +258,6 @@ const strategyOptions: Array<{ value: TagPriorityStrategy; label: string }> = [
   { value: "apm", label: "APM 优先" },
 ];
 
-// 字体大小档位选项（小 / 标准 / 大 / 特大）
-const fontSizeOptions = FONT_SIZE_OPTIONS;
-
 // 界面缩放档位选项（90% / 100% / 110% / 125% / 150%）
 const uiScaleOptions = UI_SCALE_OPTIONS;
 
@@ -329,19 +272,6 @@ const loadTagPriority = () => {
 const selectStrategy = (value: TagPriorityStrategy) => {
   tagPriorityStrategy.value = value;
   setTagPriorityStrategy(value);
-};
-
-// 字体大小档位（仅字号，不含整体缩放/字体族）
-const fontSize = ref<FontSizeOption>("medium");
-
-const loadFontSize = () => {
-  fontSize.value = getFontSize();
-};
-
-// 选择并保存字号档位（立即应用到 html，全局 rem 字号类联动）
-const selectFontSize = (value: FontSizeOption) => {
-  fontSize.value = value;
-  setFontSize(value);
 };
 
 // 界面整体缩放档位（Electron setZoomFactor，连图标/间距/布局等比变化）
@@ -422,7 +352,6 @@ watch(
     if (newVal) {
       loadSettings();
       loadTagPriority();
-      loadFontSize();
       loadUiScale();
     }
   },

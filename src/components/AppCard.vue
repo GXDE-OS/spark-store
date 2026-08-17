@@ -39,20 +39,20 @@
         <div class="flex shrink-0 gap-1">
           <span
             v-if="showMergedBadge"
-            class="rounded-md px-1.5 py-0.5 text-[0.625rem] font-bold uppercase tracking-wider shadow-sm bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400"
+            class="rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider shadow-sm bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400"
           >
             SPARK/APM
           </span>
           <template v-else>
             <span
               v-if="showSparkBadge"
-              class="rounded-md px-1.5 py-0.5 text-[0.625rem] font-bold uppercase tracking-wider shadow-sm bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400"
+              class="rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider shadow-sm bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400"
             >
               Spark
             </span>
             <span
               v-if="showApmBadge"
-              class="rounded-md px-1.5 py-0.5 text-[0.625rem] font-bold uppercase tracking-wider shadow-sm bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400"
+              class="rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider shadow-sm bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400"
             >
               APM
             </span>
@@ -60,7 +60,7 @@
         </div>
         <span
           v-if="downloadCount"
-          class="ml-auto shrink-0 text-[0.625rem] text-slate-400 dark:text-slate-500"
+          class="ml-auto shrink-0 text-[10px] text-slate-400 dark:text-slate-500"
           >{{ formatDownloads(downloadCount) }}</span
         >
       </div>
@@ -72,7 +72,7 @@
       </div>
       <div
         class="truncate leading-tight text-slate-500 dark:text-slate-400"
-        :class="compact ? 'text-[0.6875rem]' : 'text-xs'"
+        :class="compact ? 'text-[11px]' : 'text-xs'"
       >
         {{ description || "\u00A0" }}
       </div>

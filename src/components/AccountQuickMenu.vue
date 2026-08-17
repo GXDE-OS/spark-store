@@ -52,10 +52,10 @@ const emit = defineEmits<{
   display: flex;
   width: 100%;
   align-items: center;
-  gap: 0.75rem;
+  gap: 12px;
   min-width: 0;
-  border-radius: 0.75rem;
-  padding: 0.625rem 0.75rem;
+  border-radius: 12px;
+  padding: 10px 12px;
   text-align: left;
   font-size: 0.875rem;
   font-weight: 500;

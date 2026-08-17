@@ -34,17 +34,17 @@
         </div>
         <span
           v-if="app.origin === 'spark'"
-          class="rounded-md bg-orange-100 px-1.5 py-0.5 text-[0.625rem] font-bold uppercase tracking-wider text-orange-600 dark:bg-orange-900/30 dark:text-orange-400"
+          class="rounded-md bg-orange-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-orange-600 dark:bg-orange-900/30 dark:text-orange-400"
           >Spark</span
         >
         <span
           v-else
-          class="rounded-md bg-blue-100 px-1.5 py-0.5 text-[0.625rem] font-bold uppercase tracking-wider text-blue-600 dark:bg-blue-900/30 dark:text-blue-400"
+          class="rounded-md bg-blue-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-blue-600 dark:bg-blue-900/30 dark:text-blue-400"
           >APM</span
         >
         <span
           v-if="showDownload && downloadCount"
-          class="ml-auto shrink-0 text-[0.625rem] text-slate-400 dark:text-slate-500"
+          class="ml-auto shrink-0 text-[10px] text-slate-400 dark:text-slate-500"
           >{{ formatDownloads(downloadCount) }}</span
         >
       </div>

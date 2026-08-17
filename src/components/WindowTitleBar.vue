@@ -20,7 +20,7 @@
       />
       <span class="truncate text-base font-semibold">星火应用商店</span>
       <span
-        class="rounded-full border border-orange-400 bg-orange-50 px-2 py-0.5 text-[0.625rem] font-semibold text-orange-600 dark:border-amber-400/70 dark:bg-amber-400/10 dark:text-amber-300 dark:shadow-[0_0_8px_rgba(251,191,36,0.4)]"
+        class="rounded-full border border-orange-400 bg-orange-50 px-2 py-0.5 text-[10px] font-semibold text-orange-600 dark:border-amber-400/70 dark:bg-amber-400/10 dark:text-amber-300 dark:shadow-[0_0_8px_rgba(251,191,36,0.4)]"
         >社区版</span
       >
     </div>
