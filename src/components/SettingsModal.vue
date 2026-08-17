@@ -206,7 +206,7 @@
                   </button>
                 </div>
                 <p
-                  class="mt-2 text-[11px] text-slate-400 dark:text-slate-500"
+                  class="mt-2 text-[0.6875rem] text-slate-400 dark:text-slate-500"
                 >
                   预览：星火应用商店 Spark Store 123
                 </p>

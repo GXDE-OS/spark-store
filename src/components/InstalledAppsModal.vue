@@ -48,15 +48,15 @@
                   <span
                     class="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-amber-400 to-orange-500 text-white shadow-sm shadow-amber-500/30"
                   >
-                    <i class="fas fa-box-open text-[12px]"></i>
+                    <i class="fas fa-box-open text-[0.75rem]"></i>
                   </span>
                   <div class="flex flex-col leading-tight">
                     <span
-                      class="text-[15px] font-bold tabular-nums text-amber-700 dark:text-amber-300"
+                      class="text-[0.9375rem] font-bold tabular-nums text-amber-700 dark:text-amber-300"
                       >{{ apmCount }}</span
                     >
                     <span
-                      class="text-[10px] font-medium uppercase tracking-wider text-amber-600/80 dark:text-amber-400/80"
+                      class="text-[0.625rem] font-medium uppercase tracking-wider text-amber-600/80 dark:text-amber-400/80"
                       >APM</span
                     >
                   </div>
@@ -80,15 +80,15 @@
                   <span
                     class="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-sky-400 to-blue-500 text-white shadow-sm shadow-sky-500/30"
                   >
-                    <i class="fas fa-bolt text-[12px]"></i>
+                    <i class="fas fa-bolt text-[0.75rem]"></i>
                   </span>
                   <div class="flex flex-col leading-tight">
                     <span
-                      class="text-[15px] font-bold tabular-nums text-sky-700 dark:text-sky-300"
+                      class="text-[0.9375rem] font-bold tabular-nums text-sky-700 dark:text-sky-300"
                       >{{ sparkCount }}</span
                     >
                     <span
-                      class="text-[10px] font-medium uppercase tracking-wider text-sky-600/80 dark:text-sky-400/80"
+                      class="text-[0.625rem] font-medium uppercase tracking-wider text-sky-600/80 dark:text-sky-400/80"
                       >Spark</span
                     >
                   </div>
@@ -112,15 +112,15 @@
                   <span
                     class="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-slate-500 to-slate-700 text-white shadow-sm dark:from-slate-400 dark:to-slate-600"
                   >
-                    <i class="fas fa-cubes text-[12px]"></i>
+                    <i class="fas fa-cubes text-[0.75rem]"></i>
                   </span>
                   <div class="flex flex-col leading-tight">
                     <span
-                      class="text-[15px] font-bold tabular-nums text-slate-900 dark:text-white"
+                      class="text-[0.9375rem] font-bold tabular-nums text-slate-900 dark:text-white"
                       >{{ totalCount }}</span
                     >
                     <span
-                      class="text-[10px] font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400"
+                      class="text-[0.625rem] font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400"
                       >总数</span
                     >
                   </div>
@@ -259,7 +259,7 @@
                       :data-testid="
                         o === 'apm' ? 'origin-tag-apm' : 'origin-tag-spark'
                       "
-                      class="rounded-md px-2 py-0.5 text-[11px] font-semibold"
+                      class="rounded-md px-2 py-0.5 text-[0.6875rem] font-semibold"
                       :class="
                         o === 'apm'
                           ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400'
@@ -271,7 +271,7 @@
                     </span>
                     <span
                       v-if="app.isDependency"
-                      class="rounded-md bg-rose-100 px-2 py-0.5 text-[11px] font-semibold text-rose-600 dark:bg-rose-500/20 dark:text-rose-400"
+                      class="rounded-md bg-rose-100 px-2 py-0.5 text-[0.6875rem] font-semibold text-rose-600 dark:bg-rose-500/20 dark:text-rose-400"
                     >
                       依赖项
                     </span>

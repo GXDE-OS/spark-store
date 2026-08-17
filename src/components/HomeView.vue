@@ -62,7 +62,7 @@
               storeFilter === "apm" ? "星火应用商店 (Amber PM)" : "星火应用商店"
             }}
           </h1>
-          <p class="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">
+          <p class="text-[0.625rem] text-slate-500 dark:text-slate-400 mt-0.5">
             探索丰富的应用，发现更多精彩内容
           </p>
         </div>
@@ -108,12 +108,12 @@
             </div>
             <div class="mt-1.5 px-1">
               <div
-                class="text-[13px] font-semibold text-slate-900 dark:text-white group-hover:text-brand dark:group-hover:text-brand transition-colors"
+                class="text-[0.8125rem] font-semibold text-slate-900 dark:text-white group-hover:text-brand dark:group-hover:text-brand transition-colors"
               >
                 {{ link.name }}
               </div>
               <div
-                class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-1"
+                class="text-[0.6875rem] text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-1"
               >
                 {{ link.more }}
               </div>

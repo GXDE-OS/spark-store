@@ -42,25 +42,25 @@
           {{ item.displayName }}
         </p>
         <span
-          class="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-200"
+          class="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[0.625rem] font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-200"
         >
           {{ sourceLabel }}
         </span>
         <span
           v-if="item.ignored === true"
-          class="shrink-0 rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-semibold text-slate-500 dark:bg-slate-800 dark:text-slate-300"
+          class="shrink-0 rounded-full bg-slate-200 px-2 py-0.5 text-[0.625rem] font-semibold text-slate-500 dark:bg-slate-800 dark:text-slate-300"
         >
           已忽略
         </span>
         <span
           v-else-if="item.held === true && !forced"
-          class="shrink-0 rounded-full bg-amber-200 px-2 py-0.5 text-[10px] font-semibold text-amber-700 dark:bg-amber-500/20 dark:text-amber-200"
+          class="shrink-0 rounded-full bg-amber-200 px-2 py-0.5 text-[0.625rem] font-semibold text-amber-700 dark:bg-amber-500/20 dark:text-amber-200"
         >
           已锁定
         </span>
         <span
           v-else-if="item.held === true && forced"
-          class="shrink-0 rounded-full bg-amber-500 px-2 py-0.5 text-[10px] font-semibold text-white dark:bg-amber-500"
+          class="shrink-0 rounded-full bg-amber-500 px-2 py-0.5 text-[0.625rem] font-semibold text-white dark:bg-amber-500"
         >
           将强制
         </span>
@@ -83,19 +83,17 @@
       v-if="item.ignored !== true && !task"
       class="flex shrink-0 flex-col items-end gap-0.5"
     >
-      <span class="text-[11px] font-semibold text-brand dark:text-amber-300">{{
-        timeLabel
-      }}</span>
-      <span class="text-[10px] text-slate-400">{{ sizeLabel }}</span>
+      <span
+        class="text-[0.6875rem] font-semibold text-brand dark:text-amber-300"
+        >{{ timeLabel }}</span
+      >
+      <span class="text-[0.625rem] text-slate-400">{{ sizeLabel }}</span>
     </div>
-    <div
-      v-else-if="!task"
-      class="flex shrink-0 flex-col items-end gap-0.5"
-    >
-      <span class="text-[11px] font-semibold text-slate-400">{{
+    <div v-else-if="!task" class="flex shrink-0 flex-col items-end gap-0.5">
+      <span class="text-[0.6875rem] font-semibold text-slate-400">{{
         timeLabel
       }}</span>
-      <span class="text-[10px] text-slate-400">{{ sizeLabel }}</span>
+      <span class="text-[0.625rem] text-slate-400">{{ sizeLabel }}</span>
     </div>
 
     <!-- 强制安装开关：仅对被系统锁定（held）的包显示 -->
@@ -118,7 +116,7 @@
           :class="forced ? 'translate-x-[16px]' : 'translate-x-[2px]'"
         ></span>
       </button>
-      <span class="text-[10px] text-slate-400">强制</span>
+      <span class="text-[0.625rem] text-slate-400">强制</span>
     </div>
 
     <button
@@ -181,7 +179,8 @@ defineEmits<{
 
 // 被锁定且未强制时，复选框禁用（与「已忽略」一样不可被选中）
 const isSelectionLocked = computed(
-  () => props.item.ignored === true || (props.item.held === true && !props.forced),
+  () =>
+    props.item.ignored === true || (props.item.held === true && !props.forced),
 );
 
 const normalizeIconSrc = (icon: string): string => {

@@ -8,7 +8,7 @@
     "
   >
     <span
-      class="rounded px-1.5 py-0.5 text-[10px] font-bold uppercase"
+      class="rounded px-1.5 py-0.5 text-[0.625rem] font-bold uppercase"
       :class="
         origin === 'spark'
           ? 'bg-orange-100 dark:bg-orange-900/30'
