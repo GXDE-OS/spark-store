@@ -344,6 +344,7 @@ import ReviewUserProfileModal from "./components/ReviewUserProfileModal.vue";
 import WindowTitleBar from "./components/WindowTitleBar.vue";
 import SubmitterWindow from "./components/SubmitterWindow.vue";
 import { initTagPriorityStrategy } from "./global/tagPriority";
+import { initFontSize } from "./global/displaySettings";
 import {
   FLARUM_BASE_URL,
   FLARUM_REGISTER_URL,
@@ -1052,6 +1053,8 @@ onMounted(async () => {
   // 应用启动即锁定标签优先显示策略的真实持久化值，避免依赖详情页挂载顺序
   // 导致先读到内存默认值 "auto" 再懒加载的竞态窗口。
   initTagPriorityStrategy();
+  // 恢复并应用持久化的字体大小档位（仅字号），避免渲染瞬间默认字号闪烁。
+  initFontSize();
   initTheme();
   updateCenterStore.bind();
 
