@@ -342,7 +342,9 @@ const openDetail = async (app: App | OpenDetailInput) => {
 
   currentApp.value = finalApp;
   currentScreenIndex.value = 0;
-  // 截图以后端 img_urls 为候选并探测真实存在性；异步进行，详情页先打开不阻塞。
+  // 先清空截图，避免详情页渲染时残留上一个应用的图片（新图需异步探测后才填充）。
+  screenshots.value = [];
+  // 截图按固定路径拼接 screen_1~5.png 并探测真实存在性；异步进行，详情页先打开不阻塞。
   // 每次打开取消上一轮探测，避免陈旧结果覆盖当前应用。
   if (screenshotAbortController) screenshotAbortController.abort();
   screenshotAbortController = new AbortController();
@@ -439,26 +441,25 @@ const checkScreenshotExists = async (
   }
 };
 
-// 截图来源以后端 img_urls 为候选（权威意图列表），但后端元数据可能"声明 N 张实存 M 张"
-// （如飞书声明 5 张仅上传 3 张）。因此对候选逐一探测存在性，仅保留真实可用的 URL，
-// 既保证"实际有几张就预览几张"，又兜底过滤后端脏数据导致的空白页。
-// 探测结果经内存缓存复用，同一应用多次打开不再重复请求。
+// 截图候选 URL 一律按固定规则前端拼接，最多 5 张（screen_1~5.png），并对每张探测真实存在性，
+// 仅保留真实可用的 URL，保证"实际有几张就预览几张"。
+// 注意：以下拼接路径（APM_STORE_BASE_URL / finalArch / category / pkgname / screen_N.png）
+// 直接对应服务器静态资源布局，属于权威路径，禁止修改或替换为 app.img_urls 等其它来源，
+// 否则会导致截图全部 404（历史已踩坑：后端 img_urls 不准确）。
 const loadScreenshots = async (app: App, signal?: AbortSignal) => {
-  const raw = app.img_urls as unknown;
-  let candidates: string[] = [];
-  if (Array.isArray(raw)) {
-    candidates = raw as string[];
-  } else if (typeof raw === "string" && raw.length > 0) {
-    try {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) candidates = parsed as string[];
-    } catch {
-      candidates = [];
-    }
+  if (!app.category || app.category === "unknown") {
+    screenshots.value = [];
+    return;
   }
-  candidates = candidates.filter(
-    (u): u is string => typeof u === "string" && u.length > 0,
-  );
+  const arch = window.apm_store.arch || "amd64";
+  const finalArch = app.origin === "spark" ? `${arch}-store` : `${arch}-apm`;
+
+  const candidates: string[] = [];
+  for (let i = 1; i <= 5; i++) {
+    candidates.push(
+      `${APM_STORE_BASE_URL}/${finalArch}/${app.category}/${app.pkgname}/screen_${i}.png`,
+    );
+  }
 
   // 先按缓存/同步填充已知结果，未知项异步探测；避免详情页打开后长时间空白
   const results = await Promise.all(
