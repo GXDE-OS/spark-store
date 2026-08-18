@@ -14,6 +14,7 @@
       @toggle-theme="toggleTheme"
       @toggle-sidebar="isSidebarOpen = !isSidebarOpen"
       @spk-link="handleSpkLink"
+      :is-maximized="isMaximized"
     />
 
     <div class="flex min-h-0 flex-1 flex-col lg:flex-row">
@@ -546,6 +547,11 @@ const isDarkTheme = computed(() => {
   return themeMode.value === "dark";
 });
 
+const isMaximized = ref(false)
+const updateIsMaximizedState = async () => {
+  const state = await window.windowControls.state()
+  isMaximized.value = state === 'maximized'
+}
 const isSubmitterView = ref(false);
 
 // 启动参数 --no-apm => 仅 Spark；--no-spark => 仅 APM；由主进程 IPC 提供
@@ -923,6 +929,8 @@ const handleWindowResize = () => {
   saveBoundsTimer = window.setTimeout(() => {
     void window.ipcRenderer.invoke("save-window-bounds");
   }, 400);
+
+  updateIsMaximizedState()
 };
 
 // —— 以下为可复用的事件/IPC 监听处理器（命名函数，便于 onUnmounted 统一移除）——

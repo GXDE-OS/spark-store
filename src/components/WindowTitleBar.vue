@@ -75,30 +75,28 @@
       <div class="mx-1 h-6 w-px bg-slate-300/70 dark:bg-slate-700/70"></div>
       <button
         type="button"
-        class="rounded-md px-3 py-1.5 text-base transition hover:bg-slate-200/80 dark:hover:bg-slate-800"
+        class="fas fa-window-minimize rounded-md px-3 py-1.5 text-base transition hover:bg-slate-200/80 dark:hover:bg-slate-800"
         aria-label="最小化"
         title="最小化"
         @click="minimize"
       >
-        −
       </button>
       <button
         type="button"
-        class="rounded-md px-3 py-1.5 text-base transition hover:bg-slate-200/80 dark:hover:bg-slate-800"
+        class="fas rounded-md px-3 py-1.5 text-base transition hover:bg-slate-200/80 dark:hover:bg-slate-800"
+        :class="isMaximized ? 'fa-window-restore' : 'fa-window-maximize'"
         aria-label="最大化或还原"
         title="最大化或还原"
         @click="toggleMaximize"
       >
-        □
       </button>
       <button
         type="button"
-        class="rounded-md px-3 py-1 text-sm transition hover:bg-red-500 hover:text-white"
+        class="fas fa-times rounded-md px-3 py-1.5 text-base transition hover:bg-red-500 hover:text-white"
         aria-label="关闭"
         title="关闭"
         @click="close"
       >
-        ×
       </button>
     </div>
   </header>
@@ -110,6 +108,7 @@ import ThemeToggle from "./ThemeToggle.vue";
 defineProps<{
   searchQuery: string;
   themeMode: "light" | "dark" | "auto";
+  isMaximized: boolean
 }>();
 
 const emit = defineEmits<{

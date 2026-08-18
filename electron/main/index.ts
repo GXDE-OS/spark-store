@@ -876,6 +876,14 @@ app.whenReady().then(() => {
   });
 });
 
+ipcMain.handle('window:state', () => {
+  const win = BrowserWindow.getFocusedWindow()
+  if (!win) return 'normal'
+  if (win.isMaximized()) return 'maximized'
+  if (win.isMinimized()) return 'minimized'
+  return 'normal'
+})
+
 // New window example arg: new windows url
 // ipcMain.handle('open-win', (_, arg) => {
 //   const childWindow = new BrowserWindow({

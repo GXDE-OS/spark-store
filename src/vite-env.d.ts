@@ -39,6 +39,7 @@ interface WindowControlBridge {
   minimize: () => void;
   toggleMaximize: () => void;
   close: () => void;
+  state: () => Promise<| 'normal' | 'maximized' | 'minimized'>
 }
 
 // IPC channel type definitions
