@@ -42,7 +42,7 @@
         <button
           v-if="searchQuery"
           type="button"
-          class="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300"
+          class="absolute flex right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300"
           title="清除搜索"
           @click="clearSearch"
         >
