@@ -51,6 +51,7 @@ type WindowControlBridge = {
   minimize: () => void;
   toggleMaximize: () => void;
   close: () => void;
+  state: () => Promise<| 'normal' | 'maximized' | 'minimized'>;
 };
 
 type UpdateCenterStateListener = (snapshot: UpdateCenterSnapshot) => void;
@@ -110,6 +111,7 @@ contextBridge.exposeInMainWorld("windowControls", {
   minimize: () => ipcRenderer.send("window-control-minimize"),
   toggleMaximize: () => ipcRenderer.send("window-control-toggle-maximize"),
   close: () => ipcRenderer.send("window-control-close"),
+  state: () => ipcRenderer.invoke("window:state"),
 } satisfies WindowControlBridge);
 
 contextBridge.exposeInMainWorld("updateCenter", {
