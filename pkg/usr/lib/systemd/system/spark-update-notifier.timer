@@ -2,8 +2,8 @@
 Description=Spark Store update notifier
 
 [Timer]
-OnCalendar=*-*-* 6,18:00
-RandomizedDelaySec=12h
+OnCalendar=*-*-* 6,12,18:00
+RandomizedDelaySec=30m
 Persistent=true
 
 [Install]

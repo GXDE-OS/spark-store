@@ -55,8 +55,8 @@ case "$1" in
 
 		# Start upgrade detect service
 		systemctl daemon-reload
-		# systemctl enable spark-update-notifier
-		# systemctl start spark-update-notifier
+		systemctl enable spark-update-notifier
+		systemctl start spark-update-notifier
 		
 		# like apt-daily.timer
 		systemctl enable spark-update-notifier.timer

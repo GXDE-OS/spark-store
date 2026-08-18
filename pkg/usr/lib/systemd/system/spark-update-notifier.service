@@ -4,7 +4,6 @@ After=apt-daily.service network.target network-online.target systemd-networkd.se
 
 [Service]
 Type=simple
-RemainAfterExit=yes
 ExecStart=/opt/durapps/spark-store/bin/update-upgrade/ss-update-notifier.sh
 Restart=on-failure
 RestartSec=15  # 可以设置为更长的重试间隔，比如 15 秒或 30 秒
