@@ -71,7 +71,7 @@ const selectCategory = (category: string) => {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
-  padding: 0.75rem 0;
+  padding: 12px 0;
 }
 
 .category-pill {
@@ -81,7 +81,7 @@ const selectCategory = (category: string) => {
   white-space: nowrap;
   padding: 0.375rem 0.875rem;
   border-radius: 9999px;
-  font-size: 0.8125rem;
+  font-size: 13px;
   font-weight: 500;
   color: #64748b;
   background: #f1f5f9;
@@ -126,7 +126,7 @@ const selectCategory = (category: string) => {
 }
 
 .category-pill-count {
-  font-size: 0.6875rem;
+  font-size: 11px;
   font-weight: 600;
   opacity: 0.75;
 }

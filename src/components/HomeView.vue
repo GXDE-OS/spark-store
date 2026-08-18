@@ -192,7 +192,7 @@ const onLinkClick = (link: HomeLink) => {
 @media (max-width: 640px) {
   .auto-fit-grid {
     grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-    gap: 0.75rem;
+    gap: 12px;
   }
 }
 </style>

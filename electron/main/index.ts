@@ -170,6 +170,18 @@ ipcMain.handle("save-window-bounds", (): boolean => {
   return true;
 });
 
+// 渲染端（设置页）切换界面整体缩放系数，经此实时应用到主窗口。
+// factor 限定在 0.5~3 之间，避免极端值导致界面不可用。
+ipcMain.handle("set-zoom-factor", (_event, factor: unknown): boolean => {
+  if (typeof factor !== "number" || !Number.isFinite(factor)) return false;
+  const clamped = Math.min(3, Math.max(0.5, factor));
+  if (win && !win.isDestroyed()) {
+    win.webContents.setZoomFactor(clamped);
+    return true;
+  }
+  return false;
+});
+
 ipcMain.handle("get-app-version", (): string => getAppVersion());
 ipcMain.handle("get-system-info", (): { distro: string } => getSystemInfo());
 
@@ -307,6 +319,8 @@ interface WindowState {
   x?: number;
   y?: number;
   maximized?: boolean;
+  /** 界面整体缩放系数（Electron webContents.setZoomFactor），默认 1 */
+  zoomFactor?: number;
 }
 
 function getWindowStatePath(): string {
@@ -375,7 +389,14 @@ function flushSaveBounds(): void {
   }
   if (win && !win.isDestroyed()) {
     const { width, height, x, y } = win.getBounds();
-    saveWindowState({ width, height, x, y, maximized: win.isMaximized() });
+    saveWindowState({
+      width,
+      height,
+      x,
+      y,
+      maximized: win.isMaximized(),
+      zoomFactor: win.webContents.getZoomFactor(),
+    });
   }
 }
 function scheduleSaveBounds(winInstance: BrowserWindow): void {
@@ -389,6 +410,7 @@ function scheduleSaveBounds(winInstance: BrowserWindow): void {
       x,
       y,
       maximized: winInstance.isMaximized(),
+      zoomFactor: winInstance.webContents.getZoomFactor(),
     });
   }, 400);
 }
@@ -437,6 +459,17 @@ async function createWindow() {
     },
   });
   win = mainWindow;
+
+  // 启动即应用持久化的界面缩放系数（默认 1 = 100%）。
+  // 必须在 loadURL/loadFile 前设置，使首帧即按目标缩放渲染，避免闪烁。
+  const savedZoom =
+    typeof saved.zoomFactor === "number" &&
+    saved.zoomFactor >= 0.5 &&
+    saved.zoomFactor <= 3
+      ? saved.zoomFactor
+      : 1;
+  mainWindow.webContents.setZoomFactor(savedZoom);
+  logger.info({ zoomFactor: savedZoom }, "已应用界面缩放系数");
 
   // 设计意图（非缺陷，勿改为自动恢复 maximized）：
   // 启动时不自动恢复最大化状态。原因——最大化窗口在多数屏幕上 bounds 会超过

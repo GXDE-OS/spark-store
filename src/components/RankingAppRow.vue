@@ -77,7 +77,8 @@ const iconFailed = ref(false);
 
 const iconPath = computed(() => {
   const arch = window.apm_store.arch || "amd64";
-  const finalArch = props.app.origin === "spark" ? `${arch}-store` : `${arch}-apm`;
+  const finalArch =
+    props.app.origin === "spark" ? `${arch}-store` : `${arch}-apm`;
   return `${APM_STORE_BASE_URL}/${finalArch}/${props.app.category}/${props.app.pkgname}/icon.png`;
 });
 

@@ -83,15 +83,13 @@
       v-if="item.ignored !== true && !task"
       class="flex shrink-0 flex-col items-end gap-0.5"
     >
-      <span class="text-[11px] font-semibold text-brand dark:text-amber-300">{{
-        timeLabel
-      }}</span>
+      <span
+        class="text-[11px] font-semibold text-brand dark:text-amber-300"
+        >{{ timeLabel }}</span
+      >
       <span class="text-[10px] text-slate-400">{{ sizeLabel }}</span>
     </div>
-    <div
-      v-else-if="!task"
-      class="flex shrink-0 flex-col items-end gap-0.5"
-    >
+    <div v-else-if="!task" class="flex shrink-0 flex-col items-end gap-0.5">
       <span class="text-[11px] font-semibold text-slate-400">{{
         timeLabel
       }}</span>
@@ -181,7 +179,8 @@ defineEmits<{
 
 // 被锁定且未强制时，复选框禁用（与「已忽略」一样不可被选中）
 const isSelectionLocked = computed(
-  () => props.item.ignored === true || (props.item.held === true && !props.forced),
+  () =>
+    props.item.ignored === true || (props.item.held === true && !props.forced),
 );
 
 const normalizeIconSrc = (icon: string): string => {

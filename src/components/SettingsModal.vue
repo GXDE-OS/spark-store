@@ -13,7 +13,7 @@
       @click.self="closeModal"
     >
       <div
-        class="relative w-full max-w-md overflow-hidden rounded-3xl border border-white/10 bg-white/95 shadow-2xl dark:border-slate-800 dark:bg-slate-900"
+        class="relative flex max-h-[calc(100vh-2rem)] w-full max-w-md flex-col overflow-hidden rounded-3xl border border-white/10 bg-white/95 shadow-2xl dark:border-slate-800 dark:bg-slate-900"
       >
         <!-- 标题栏 -->
         <div
@@ -35,8 +35,8 @@
           </button>
         </div>
 
-        <!-- 设置内容 -->
-        <div class="p-6 space-y-4">
+        <!-- 设置内容（可滚动，标题/底部固定） -->
+        <div class="flex-1 overflow-y-auto p-6 space-y-4">
           <!-- 更新检测开关 -->
           <div
             class="flex items-center justify-between rounded-2xl border border-slate-200/60 bg-slate-50/50 px-4 py-4 dark:border-slate-800/60 dark:bg-slate-800/50"
@@ -163,6 +163,51 @@
               </div>
             </div>
           </div>
+
+          <!-- 界面缩放（整体缩放：图标 / 间距 / 布局等比变化） -->
+          <div
+            class="rounded-2xl border border-slate-200/60 bg-slate-50/50 px-4 py-4 dark:border-slate-800/60 dark:bg-slate-800/50"
+          >
+            <div class="flex items-start gap-3">
+              <div
+                class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-teal-100 text-teal-600 dark:bg-teal-900/30 dark:text-teal-400"
+              >
+                <i class="fas fa-search-plus"></i>
+              </div>
+              <div class="min-w-0 flex-1">
+                <p
+                  class="text-sm font-medium text-slate-800 dark:text-slate-200"
+                >
+                  界面缩放
+                </p>
+                <p class="text-xs text-slate-500 dark:text-slate-400">
+                  整体放大或缩小界面（图标、间距、布局等比变化）
+                </p>
+                <div
+                  class="mt-3 inline-flex w-full overflow-hidden rounded-lg border border-slate-200 dark:border-slate-700"
+                  role="radiogroup"
+                  aria-label="界面缩放"
+                >
+                  <button
+                    v-for="opt in uiScaleOptions"
+                    :key="opt.value"
+                    type="button"
+                    role="radio"
+                    :aria-checked="uiScale === opt.value"
+                    class="flex-1 px-2 py-1.5 text-xs font-medium transition-colors"
+                    :class="
+                      uiScale === opt.value
+                        ? 'bg-brand text-white'
+                        : 'bg-white text-slate-500 hover:bg-slate-100 dark:bg-slate-700 dark:text-slate-400 dark:hover:bg-slate-600'
+                    "
+                    @click="selectUiScale(opt.value)"
+                  >
+                    {{ opt.label }}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
         <!-- 底部提示 -->
@@ -185,6 +230,13 @@ import {
   setTagPriorityStrategy,
   type TagPriorityStrategy,
 } from "../global/tagPriority";
+import {
+  getUiScale,
+  setUiScale,
+  uiScaleToFactor,
+  UI_SCALE_OPTIONS,
+  type UiScaleOption,
+} from "../global/displaySettings";
 
 const props = defineProps<{
   show: boolean;
@@ -206,6 +258,9 @@ const strategyOptions: Array<{ value: TagPriorityStrategy; label: string }> = [
   { value: "apm", label: "APM 优先" },
 ];
 
+// 界面缩放档位选项（90% / 100% / 110% / 125% / 150%）
+const uiScaleOptions = UI_SCALE_OPTIONS;
+
 const tagPriorityStrategy = ref<TagPriorityStrategy>("auto");
 
 // 加载标签优先显示策略（从持久化读取）
@@ -217,6 +272,24 @@ const loadTagPriority = () => {
 const selectStrategy = (value: TagPriorityStrategy) => {
   tagPriorityStrategy.value = value;
   setTagPriorityStrategy(value);
+};
+
+// 界面整体缩放档位（Electron setZoomFactor，连图标/间距/布局等比变化）
+const uiScale = ref<UiScaleOption>("100");
+
+const loadUiScale = () => {
+  uiScale.value = getUiScale();
+};
+
+// 选择并保存界面缩放档位（立即经 IPC 应用到主窗口）
+const selectUiScale = async (value: UiScaleOption) => {
+  uiScale.value = value;
+  setUiScale(value);
+  try {
+    await window.ipcRenderer.invoke("set-zoom-factor", uiScaleToFactor(value));
+  } catch (error) {
+    console.error("应用界面缩放失败:", error);
+  }
 };
 
 const settings = ref<Settings>({
@@ -279,6 +352,7 @@ watch(
     if (newVal) {
       loadSettings();
       loadTagPriority();
+      loadUiScale();
     }
   },
 );

@@ -153,12 +153,10 @@ const formatDownloads = (n?: number): string => {
 
 // 排名徽标配色（前 3 名金/银/铜，其余灰色）
 const rankClass = computed(() => {
-  if (props.rank === 1)
-    return "bg-amber-400 text-white shadow-amber-400/40";
+  if (props.rank === 1) return "bg-amber-400 text-white shadow-amber-400/40";
   if (props.rank === 2)
     return "bg-slate-300 text-slate-700 shadow-slate-400/40";
-  if (props.rank === 3)
-    return "bg-amber-600 text-white shadow-amber-600/40";
+  if (props.rank === 3) return "bg-amber-600 text-white shadow-amber-600/40";
   return "bg-slate-500/90 text-white shadow-slate-500/30";
 });
 
