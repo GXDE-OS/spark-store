@@ -1,34 +1,22 @@
 #!/bin/bash
 
-# 显示进度条并执行命令（支持 garma / zenity）
+# 显示进度条并执行命令（使用 zenity）
 run_with_progress() {
     local title="$1"
     local text="$2"
     local cmd="$3"
 
     # 检测可用的对话框工具
-    local tool=""
-    if command -v garma &> /dev/null; then
-        tool="garma"
-    elif command -v zenity &> /dev/null; then
-        tool="zenity"
-    else
-        echo "警告：未找到 garma 或 zenity，无法显示进度条。直接执行命令..." >&2
+    if ! command -v zenity &> /dev/null; then
+        echo "警告：未找到 zenity，无法显示进度条。直接执行命令..." >&2
         eval "$cmd"
         return $?
     fi
 
-    # 根据工具启动进度条
+    # 启动 zenity 进度条
     local progress_pid
-    if [[ "$tool" == "garma" ]]; then
-        # garma 的进度条用法（假设 --progress --pulsate 可用）
-        garma --progress --pulsate --title="$title" --text="$text" --no-cancel 2>/dev/null &
-        progress_pid=$!
-    else
-        # zenity 进度条 pulsate 模式
-        zenity --progress --pulsate --title="$title" --text="$text" --no-cancel 2>/dev/null &
-        progress_pid=$!
-    fi
+    zenity --progress --pulsate --title="$title" --text="$text" --no-cancel 2>/dev/null &
+    progress_pid=$!
 
     # 执行实际命令
     eval "$cmd"
@@ -120,17 +108,13 @@ case "$command_type" in
             title="确认卸载"
             text="正在准备卸载: $packages\n\n若这是您下达的卸载指令，请选择确认继续卸载"
 
-            # 优先尝试 garma，其次 zenity
-            if command -v garma &> /dev/null; then
-                garma --question --title="$title" --text="$text" \
-                      --ok-label="确认卸载" --cancel-label="取消" --width=400
-                confirmed=$?
-            elif command -v zenity &> /dev/null; then
+            # 使用 zenity 确认
+            if command -v zenity &> /dev/null; then
                 zenity --question --title="$title" --text="$text" \
                        --ok-label="确认卸载" --cancel-label="取消" --width=400
                 confirmed=$?
             else
-                echo "错误：未找到 garma 或 zenity，无法显示确认对话框。卸载操作已拒绝。"
+                echo "错误：未找到 zenity，无法显示确认对话框。卸载操作已拒绝。"
                 exit 1
             fi
 
@@ -148,17 +132,13 @@ case "$command_type" in
             title="确认安装"
             text="正在准备安装: $packages\n\n若这是您下达的安装指令，请选择确认继续安装"
 
-            # 优先尝试 garma，其次 zenity
-            if command -v garma &> /dev/null; then
-                garma --question --title="$title" --text="$text" \
-                      --ok-label="确认安装" --cancel-label="取消" --width=400
-                confirmed=$?
-            elif command -v zenity &> /dev/null; then
+            # 使用 zenity 确认
+            if command -v zenity &> /dev/null; then
                 zenity --question --title="$title" --text="$text" \
                        --ok-label="确认安装" --cancel-label="取消" --width=400
                 confirmed=$?
             else
-                echo "错误：未找到 garma 或 zenity，无法显示确认对话框。安装操作已拒绝。"
+                echo "错误：未找到 zenity，无法显示确认对话框。安装操作已拒绝。"
                 exit 1
             fi
 
