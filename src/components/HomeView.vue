@@ -12,7 +12,7 @@
       class="flex flex-1 flex-col items-center justify-center text-slate-500 dark:text-slate-400"
     >
       <i class="fas fa-spinner fa-spin text-2xl mb-3"></i>
-      <span class="text-sm">正在加载首页内容…</span>
+      <span class="text-base">正在加载首页内容…</span>
     </div>
     <div
       v-else-if="error"
@@ -37,14 +37,14 @@
         alt="星火应用商店"
         class="h-32 w-32 mb-6 opacity-90"
       />
-      <h1 class="text-sm font-bold text-slate-800 dark:text-slate-200 mb-2">
+      <h1 class="text-2xl font-bold text-slate-800 dark:text-slate-200 mb-2">
         {{
           storeFilter === "apm"
             ? "欢迎来到星火应用商店 (Amber PM)"
             : "欢迎来到星火应用商店"
         }}
       </h1>
-      <p class="text-sm text-slate-500 dark:text-slate-400">
+      <p class="text-base text-slate-500 dark:text-slate-400">
         {{
           storeFilter === "apm"
             ? "探索丰富的应用，发现更多精彩内容"
@@ -57,12 +57,12 @@
       <!-- ============ 区域1 · 精选（两行网格 4×2，静态不滚动） ============ -->
       <section class="shrink-0">
         <div class="mb-4">
-          <h1 class="text-sm font-bold text-slate-800 dark:text-slate-200">
+          <h1 class="text-2xl font-bold text-slate-800 dark:text-slate-200">
             {{
               storeFilter === "apm" ? "星火应用商店 (Amber PM)" : "星火应用商店"
             }}
           </h1>
-          <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+          <p class="text-base text-slate-500 dark:text-slate-400 mt-0.5">
             探索丰富的应用，发现更多精彩内容
           </p>
         </div>

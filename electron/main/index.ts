@@ -506,21 +506,13 @@ async function createWindow() {
     logger.info("Renderer process is ready.");
   });
 
-  // 仅允许可信域名的 https 链接通过浏览器打开，避免钓鱼/恶意站。
-  // 协议前缀 + 域名后缀白名单双重校验；非法/无效 URL 一律拒绝。
-  const ALLOWED_EXTERNAL_HOSTS = [
-    "spark-app.store",
-    "gitee.com",
-    "bbs.spark-app.store",
-    "spark-app.cn",
-  ];
+  // 外部链接统一交给系统默认浏览器打开。
+  // 仅限制协议为 http/https，避免 file:/javascript: 等危险协议被打开；
+  // 不再限制域名，保证应用官网与首页推荐的任意链接均可正常访问。
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     try {
       const parsed = new URL(url);
-      if (
-        parsed.protocol === "https:" &&
-        ALLOWED_EXTERNAL_HOSTS.some((h) => parsed.hostname === h || parsed.hostname.endsWith(`.${h}`))
-      ) {
+      if (parsed.protocol === "http:" || parsed.protocol === "https:") {
         shell.openExternal(url);
       }
     } catch {
