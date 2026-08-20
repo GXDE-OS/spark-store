@@ -19,9 +19,12 @@
         alt="星火应用商店"
       />
       <span class="truncate text-base font-semibold">星火应用商店</span>
-      <span
-        class="rounded-full border border-orange-400 bg-orange-50 px-2 py-0.5 text-[10px] font-semibold text-orange-600 dark:border-amber-400/70 dark:bg-amber-400/10 dark:text-amber-300 dark:shadow-[0_0_8px_rgba(251,191,36,0.4)]"
-        >社区版</span
+      <button
+        type="button"
+        class="cursor-pointer rounded-full border border-orange-400 bg-orange-50 px-2 py-0.5 text-[10px] font-semibold text-orange-600 transition hover:bg-orange-100 dark:border-amber-400/70 dark:bg-amber-400/10 dark:text-amber-300 dark:shadow-[0_0_8px_rgba(251,191,36,0.4)] dark:hover:bg-amber-400/20"
+        title="了解星火专业版"
+        @click="openCommercial"
+        >社区版</button
       >
     </div>
 
@@ -147,6 +150,10 @@ const handleInput = (event: Event) => {
 
 const clearSearch = () => {
   emit("update:searchQuery", "");
+};
+
+const openCommercial = () => {
+  window.open("https://www.spark-app.store/commercial/", "_blank");
 };
 
 const minimize = () => {
