@@ -78,7 +78,7 @@
       <div class="mx-1 h-6 w-px bg-slate-300/70 dark:bg-slate-700/70"></div>
       <button
         type="button"
-        class="fas fa-window-minimize rounded-md px-3 py-1.5 text-base transition hover:bg-slate-200/80 dark:hover:bg-slate-800"
+        class="fas fa-window-minimize rounded-md px-3 py-1.5 text-base transition text-slate-500 hover:bg-slate-200/80 dark:hover:bg-slate-800"
         aria-label="最小化"
         title="最小化"
         @click="minimize"
@@ -86,7 +86,7 @@
       </button>
       <button
         type="button"
-        class="fas rounded-md px-3 py-1.5 text-base transition hover:bg-slate-200/80 dark:hover:bg-slate-800"
+        class="fas rounded-md px-3 py-1.5 text-base transition text-slate-500 hover:bg-slate-200/80 dark:hover:bg-slate-800"
         :class="isMaximized ? 'fa-window-restore' : 'fa-window-maximize'"
         aria-label="最大化或还原"
         title="最大化或还原"
@@ -95,7 +95,7 @@
       </button>
       <button
         type="button"
-        class="fas fa-times rounded-md px-3 py-1.5 text-base transition hover:bg-red-500 hover:text-white"
+        class="fas fa-times rounded-md px-3 py-1.5 text-base transition text-slate-500 hover:bg-red-500 hover:text-white"
         aria-label="关闭"
         title="关闭"
         @click="close"
